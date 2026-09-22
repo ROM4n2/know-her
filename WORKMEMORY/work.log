@@ -90,3 +90,7 @@ vault-exec Wave 1 结项：Task-1（supply-map.md，经一轮返修）与 Task-2
 ### 2026-09-22 22:55 | mimo-v2.6-pro__hermes-agent | DECISION
 Caps: filesystem-read, filesystem-write, shell-exec
 D9（Task-3 判据预注册冻结）：缺口判据三态矩阵（GO ≥60% / 有条件 GO 30–60% / NO-GO <30%，等号归 GO）+ 三要件定义（来源可追溯 / 审核透明 / 非营销导流）已冻结——判据区（冻结声明前 10888 字节）sha256 = e3d8d7999c8d1b62d77a57760a28b5cfce8d4146ec166b4e08f18de1778a310e，冻结时刻 2026-09-22 22:43:05 CST；Maker-Checker 独立复算哈希一致（PASS）。Why：判据先于取证冻结防动机性推理；取证期间改判据 = 计划作废重跑。阈值为默认值；调整窗口开至 SERP 取证开始前，届时调整需重新预注册。
+
+### 2026-09-22 23:07 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D10（判据口径修正 + 第一次重新预注册）：gap-criteria §② query 集口径「真实中文检索词」→「真人式检索词（中文为主，允许英文/中英混行，对应海外华人次级情境〔用户拍板〕）」；新判据区 sha256 = 1b7c134ceb3eabdd536d842aac207c37b0c9e98f04de8b387d5592ef771d11df（10982 字节），重冻结时刻 2026-09-22 23:03:52 CST；首冻哈希 e3d8d799…310e 留档于冻结声明历史行。Why：让冻结法条与已拍板现实（海外华人次级情境）及"禁止声称用户真实搜索"红线字面对齐，取证勾稽不留字面漏洞；取证尚未开始，零作废成本。阈值调整窗口（10~20 条 / 1366×768 / 60% / 30%）于重冻结时点关闭。
