@@ -1,0 +1,91 @@
+{
+  "version": "1.0.0",
+  "plan_file": "docs/plans/implementation_plan.md",
+  "created_at": "2026-09-22T22:09:12.787366",
+  "last_updated": "2026-09-22T22:38:12.186770",
+  "total_tasks": 8,
+  "completed_count": 2,
+  "active_task_id": "Task-3",
+  "tasks": [
+    {
+      "id": "Task-1",
+      "title": "既有供给清单 [Role: Researcher / Evidence Collector]",
+      "status": "completed",
+      "implementer": "TDD",
+      "commit_hash": "736413c",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-22T22:10:05.922776",
+      "completed_at": "2026-09-22T22:38:11.964800"
+    },
+    {
+      "id": "Task-2",
+      "title": "核心用户画像草案 + 用户拍板 [Role: Researcher] 〔含 Human Gate〕",
+      "status": "completed",
+      "implementer": "TDD",
+      "commit_hash": "599d74a",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-22T22:10:06.024540",
+      "completed_at": "2026-09-22T22:38:12.074666"
+    },
+    {
+      "id": "Task-3",
+      "title": "判据预注册（GO/NO-GO 阈值冻结）[Role: Analyst] 〔冻结点〕",
+      "status": "in_progress",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": "2026-09-22T22:38:12.185770",
+      "completed_at": null
+    },
+    {
+      "id": "Task-4",
+      "title": "query 清单设计（10–20 条）[Role: Researcher]",
+      "status": "pending",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "Task-5",
+      "title": "SERP 取证组 A（query #1–⌈N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 6/7 并行安全〕",
+      "status": "pending",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "Task-6",
+      "title": "SERP 取证组 B（query ⌈N/3⌉+1–⌈2N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 5/7 并行安全〕",
+      "status": "pending",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "Task-7",
+      "title": "SERP 取证组 C（query ⌈2N/3⌉+1–N）[Role: Researcher / Evidence Collector] 〔与 Task 5/6 并行安全〕",
+      "status": "pending",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "Task-8",
+      "title": "缺口声明与裁决汇总（VALIDATION.md）[Role: Analyst / Integrator] 〔含 Human Gate〕",
+      "status": "pending",
+      "implementer": "TDD",
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
+    }
+  ]
+}

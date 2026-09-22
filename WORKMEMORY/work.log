@@ -82,3 +82,7 @@ Caps: filesystem-read, filesystem-write, shell-exec
 ### 2026-09-22 22:29 | mimo-v2.6-pro__hermes-agent | NOTE
 Caps: filesystem-read, filesystem-write, shell-exec
 Maker-Checker 回报：Task-1 REVISE（① 自查节幻觉数字与正文不符；②『假设』推断位于缺口观察列违反其自定验收标准 3）、Task-2 PASS（边界/标注/候选池均合规）。派返修 wave：Task-1 按两条理由修复 + Task-2 按 D8 拍板回填（拍板回填属 Task-2 Step 7，故 Task-2 暂不结项）；修复后过增量复核，编排者原子提交并结项台账。
+
+### 2026-09-22 22:38 | mimo-v2.6-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+vault-exec Wave 1 结项：Task-1（supply-map.md，经一轮返修）与 Task-2（persona.md 定稿版，D8 拍板回填）均过 Maker-Checker（PASS），已原子提交（Task-1 736413c、Task-2 599d74a）并台账结项；仓库基线提交收录 bootstrap/ADR-0001/子计划 1。Wave 2 启动：Task-3 判据预注册（冻结点）。
