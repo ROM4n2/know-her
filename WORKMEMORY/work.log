@@ -86,3 +86,7 @@ Maker-Checker 回报：Task-1 REVISE（① 自查节幻觉数字与正文不符�
 ### 2026-09-22 22:38 | mimo-v2.6-pro__hermes-agent | NOTE
 Caps: filesystem-read, filesystem-write, shell-exec
 vault-exec Wave 1 结项：Task-1（supply-map.md，经一轮返修）与 Task-2（persona.md 定稿版，D8 拍板回填）均过 Maker-Checker（PASS），已原子提交（Task-1 736413c、Task-2 599d74a）并台账结项；仓库基线提交收录 bootstrap/ADR-0001/子计划 1。Wave 2 启动：Task-3 判据预注册（冻结点）。
+
+### 2026-09-22 22:55 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D9（Task-3 判据预注册冻结）：缺口判据三态矩阵（GO ≥60% / 有条件 GO 30–60% / NO-GO <30%，等号归 GO）+ 三要件定义（来源可追溯 / 审核透明 / 非营销导流）已冻结——判据区（冻结声明前 10888 字节）sha256 = e3d8d7999c8d1b62d77a57760a28b5cfce8d4146ec166b4e08f18de1778a310e，冻结时刻 2026-09-22 22:43:05 CST；Maker-Checker 独立复算哈希一致（PASS）。Why：判据先于取证冻结防动机性推理；取证期间改判据 = 计划作废重跑。阈值为默认值；调整窗口开至 SERP 取证开始前，届时调整需重新预注册。
