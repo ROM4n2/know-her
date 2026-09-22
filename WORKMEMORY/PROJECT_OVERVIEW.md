@@ -1,0 +1,20 @@
+# PROJECT_OVERVIEW — know-her
+
+> 60 秒项目 primer。新 agent 的第二读（读完 work.log 事件流之前先建立全局认知）。
+> 维护规则：bootstrap 时由 agent 从代码库提炼生成初稿；此后每次 WORK_END / 交接后刷新。
+
+## 这是什么项目
+
+know-her —— 一个依托 GitHub 开放协作的**妇科与性健康科普知识库**。核心原则（来自 IDEA.md，2026-09-22 版）：不转载全文，默认外链+短摘要，权威来源优先，来源/许可/审核人/审核日期/更新状态透明可追溯；GitHub Actions 自动任务只做发现和整理候选，**不经人工审核不发布**（审核链：来源核验 → 版权检查 → 医学准确性审核 → 敏感度审核）；社区可提交资料/纠错/翻译，但必须审核后才进正式内容；只做科普，不做诊断、处方或个体化医疗建议，敏感内容带年龄提示、免责声明、紧急就医提示；隐私优先，不收集病例或可识别个人信息；**静态站点部署，无后端数据库**；内容定期复审标过期。定位：可信、开放、尊重多元文化的中文/多语言健康知识库。技术栈方向已按 D2 定为现成组件集（Astro content collections + Zod、Pagefind、lychee-action 等，详见 `docs/adr/ADR-0001.md`），**尚未实施（零代码）**。
+
+## 当前状态
+
+- **方向已切换**：2026-09-22 21:12 用户重写 IDEA.md——旧「双语语音陪伴记录应用」方向作废，改为上述健康科普知识库。新文件原误写入 `D:\Code\lover-instance\IDEA.md`（untracked，无数据丢失），21:21 经用户拍板同步回本仓库（sha256 `b92ce46d…` 一致后删除副本）。
+- 概念阶段：零代码、无 README、无 commit；bootstrap 产物（hooks、锚点、WORKMEMORY）已 stage 未 commit。
+- 架构评审已收尾（2026-09-22）：vault-grill 4 席面板 24 条发现 → Frontier 7 题全部拍板（D1–D7，DECISION 事件在 work.log），双镜共识落 `docs/adr/ADR-0001.md`。
+- 待办：执行 `docs/plans/implementation_plan.md`（子计划 1，/vault-exec；首件产出 `VALIDATION.md`，裁决 NO-GO 则转策展路线）→ 医学审核人招募（未就位前内容按 D4 降级标记"未获医学复审"）→ 子计划 2+（D2 组件集落地，待 D1 裁决后编制）。
+
+## 高频坑（踩过的雷区）
+
+- 现象：bootstrap.ps1 直接跑会跳过 hook 安装（"Not a git repository"）→ 根因：脚本要求 `.git` 已存在 → 解法：先 `git init` 再跑脚本（本次已如此执行）。
+- 现象：改了"IDEA 文件"但目标仓库里的内容纹丝不动 → 根因：文件被写进了另一个项目目录（lover-instance），编辑器里开着的不是本仓库 → 解法：改关键文档后核对 `stat mtime` + 内容归属，确认改动真的落在预期路径，别假设"改了就是改了"。

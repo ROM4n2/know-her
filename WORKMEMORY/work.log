@@ -1,0 +1,84 @@
+# know-her work.log（HOT 层，append-only）
+# Schema 见 PROTOCOL.md §2；轮转规则见 §5
+
+### 2026-09-22 17:34 | claude-sonnet-4-6__claude-code | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+WORKMEMORY 协议 bootstrap 完成：PROTOCOL/INDEX/PROJECT_OVERVIEW 三件套落盘。
+PROJECT_OVERVIEW.md 为模板骨架，待首个 agent 会话从代码库提炼填充。
+
+### 2026-09-22 17:36 | mimo-v2.6-flash__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+vault-bootstrap 执行完成：git init → .gitignore（11 项敏感模式）→ .githooks/pre-commit 密钥扫描（core.hooksPath 已配置）→ CLAUDE.md/.agent-rules.md/.cursorrules/AGENTS.md 规则锚点注入 → WORKMEMORY 4 件套落盘。
+PROJECT_OVERVIEW.md 已按 IDEA.md 蒸馏填充（项目定位/当前状态/高频坑）。源材料仅 IDEA.md——无 README、无 git log、无 ADR，故技术栈与运行方式如实标注"未定"，未编造选型。
+
+### 2026-09-22 21:21 | mimo-v2.6-flash__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+方向切换：用户废弃旧「双语语音陪伴记录应用」方案，IDEA.md 替换为「依托 GitHub 开放协作的妇科与性健康科普知识库」（2026-09-22 21:12 版）。
+文件归属修正：新方案原误写入 D:\Code\lover-instance\IDEA.md（untracked，未覆盖该仓任何旧文件，无数据丢失）；经用户拍板 A：字节级同步至本仓库 IDEA.md（sha256 b92ce46d… 两端一致）后删除副本。
+PROJECT_OVERVIEW.md 已按新方向重蒸馏；新增高频坑一条（关键文档改动需核对 mtime/路径归属）。
+架构评审进行中：vault-grill 4 席面板（product-ux/code-reviewer/dba-optimizer/sre-resilience），结论将按 skill 落 docs/adr/。
+
+### 2026-09-22 21:27 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D1（vault-grill Q1-A）：需求验证先行——先产出 VALIDATION.md（1 个核心用户画像 + 10~20 个真实 query 映射今天的结果页 + 缺口声明），验证不过则转"不建站/供稿既有渠道"。Why：11 条 P0 中 3 条根因同为需求未验证，且验证是建站/转策展两条路线的共同前置判据。
+
+### 2026-09-22 21:27 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D2（vault-grill Q2-A）：信任落地走机制化最小集（全现成组件，自研≈0）：Astro content collections + Zod strict/superRefine 把 schema 与跨字段不变式做成 required CI check；review_due 派生值、过期构建期自动撤徽章；四段门 = Environments required reviewers（绑 Team、Prevent self-review）+ needs 链 + Rulesets（bypass 留空）；候选去重进滚动 issue（GitHub App token 驱动）；lychee-action 定时链检 + healthchecks.io 心跳。Why：24 条面板发现中 19 条 P0/P1 被该组件集覆盖；纯约定方案会把医学题材的信任退化为可伪造文案。
+
+### 2026-09-22 21:30 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D3（vault-grill Q3-A）：分发列为一等需求——RSS/Atom + 现成 newsletter（Buttondown 等）、向既有中文性教育资源目录提交收录、Schema.org MedicalWebPage/fact-checked 标注区分权威源、隐私友好聚合统计（Plausible / CF Analytics）作搜索词盲区代理指标；"不收集个人数据"与"聚合流量统计"分开表述承诺。Why：发现断裂是"上线前不解决则其余投入归零"级 P0；静态站无搜索词日志，聚合统计是搜索需求的唯一代理。
+
+### 2026-09-22 21:30 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D4（vault-grill Q4-A）：审核人组织前提"人不到位 ⇒ 范围收缩"——先只发布来源核验+版权+敏感度三段可完成的内容类型；医学准确性席位未凑齐 2 名资质可外部核验的签字人前，内容如实标记"未获医学复审"降级呈现，不冒充四段全过；招到人后批量补审摘标。Why：bus factor=1 时未审/过期内容带已审核徽章在线属信任事故；诚实降级不阻塞验证期、不虚假背书。前提『假设』（当前单人维护）用户未纠正。
+
+### 2026-09-22 21:36 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D5（vault-grill Q5-A，纯 A 未叠加主题排期 C）：敏感内容边界结构化规则集——① 红旗清单结构化进 frontmatter（复用 WHO/ACOG/中华妇产科指南急症指征），CI 缺失拒绝合并，替代自由文本免责；② 年龄提示分层：一次性全局偏好（localStorage）替代逐页弹窗；③ "个体化建议"写成可判定规则：禁第二人称条件句（"如果你…就…"），一律第三人称枚举（"哪些人适用/不适用由医生判断"）。Why：尺度漂移从人治变规则治，三件套全落在 D2 的 CI/前端机制内，零新增架构。
+
+### 2026-09-22 21:36 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D6（vault-grill Q6-A）：多语言"单语上线、多语留位"——中文先上线；URL / frontmatter / translation_of 结构预留 i18n（Astro i18n 路由）；译文机制预定义：translation_of 单向引用源条目、源更新 ⇒ 译文强制 stale、未复审译文挂醒目横幅，绝不与已审核内容视觉等价；第 N 语言等"需求验证通过 + 双语医学审核人就位"再开。Why：语言是审核的除数；留位把迁移成本锁死在今天、把审核成本推迟到付得起的那天。
+
+### 2026-09-22 21:39 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D7（vault-grill Q7-A）：纠错双通道——GitHub Issue/PR（技术用户，可追溯）+ 零个人信息通道：免账号表单（Tally/Formspark，仅收文本）自动转匿名化 Issue 或匿名邮件别名；敏感题材额外提供"不留任何联系方式"的纯文本提交路径。Why：GitHub-only 会把最可能发现错误的隐私敏感读者挡在门外，敏感题材实名 Issue 与"隐私优先"自相矛盾；表单→匿名化 Issue 复用 D2 滚动 issue 机制，新增组件仅一个现成表单。
+
+### 2026-09-22 21:40 | mimo-v2.6-pro__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+vault-grill 任务收尾：4 席面板 24 条发现 → Frontier 5 轮 7 题全部拍板（D1–D7）→ 双镜共识归档 docs/adr/ADR-0001.md（Context/Drivers/Options/Pros-Cons/Outcome/Consequences 齐全，含面板 P1/P2 折叠条款与开放参数）。
+验证方式：D1–D7 逐条对应 ADR 的 Decision Outcome 节；bash .githooks/pre-commit 复跑 exit 0。
+产出物：docs/adr/ADR-0001.md。
+回写检查：稳定结论已回写（ADR + PROJECT_OVERVIEW 刷新）；临时产物（4 席面板 transcripts、lover-instance 临时副本）未入库。
+注：本任务未记 WORK_START（按协议 §1.7 补记说明，不回改历史）。
+
+### 2026-09-22 22:04 | mimo-v2.6-pro__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+WORK_START（vault-plan 子计划 1 编排）：产出 docs/plans/implementation_plan.md——D1 需求验证（VALIDATION.md 产出）的咬碎任务拆解，每任务带 /vault-exec 子代理脚手架。
+不做范围：不执行取证本身、不做站点实现、不改 IDEA.md/ADR-0001、不碰 D2 组件落地。
+
+### 2026-09-22 22:06 | mimo-v2.6-pro__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+vault-plan 子计划 1 编排收尾：产出 docs/plans/implementation_plan.md——8 任务（Task 1 供给清单 / 2 画像+拍板闸门 / 3 判据冻结 / 4 query 设计 / 5-7 SERP 取证三组并行 / 8 汇总裁决+拍板闸门），每任务含 Files/Interfaces/子代理脚手架/咬碎步骤。
+验证方式：schema 逐任务齐全；依赖图钉死"取证不得早于判据冻结"；Phase 1 阶梯命中的 claim-ledger 惯例与"验证后下结论"铁律已入 Global Constraints；get_code_template 显式跳过（研究型子计划无生产代码）。
+产出物：docs/plans/implementation_plan.md（15.2KB）。
+回写检查：稳定结论已回写（PROJECT_OVERVIEW 待办刷新）；执行偏差留痕规则入计划；临时产物无。
+注：研究型 TDD 替代法为对 vault-plan TDD 不变量的显式声明偏差（计划内 Global Constraints 有记录）。
+
+### 2026-09-22 22:10 | mimo-v2.6-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+vault-exec 执行启动（Wave 1: Task-1 ‖ Task-2）+ 执行协议适配留痕：按 Zero-Edit 分工，子代理只写目标研究文件，git 提交与 work.log 事件由编排者统一执行（计划脚手架 Step 6 的"子代理自提交"改为编排者提交，防并行 index 竞争）；台账 .vault-exec-ledger.json 已由 vault_exec_state.py init 登记 8 任务。
+
+### 2026-09-22 22:24 | mimo-v2.6-pro__hermes-agent | DECISION
+Caps: filesystem-read, filesystem-write, shell-exec
+D8（Task-2 Human Gate 用户拍板）：核心画像 = 查异常出血的年轻女性；年龄段 = 18–35（用户自定值，非草案选项原样，覆盖『假设』标注）；主发现渠道 = A+C 双主渠道（搜索引擎 + 教育/公益目录收录，newsletter 为辅）；设备形态 = 手机+电脑混合；海外华人纳入次级情境（按 D6 留位）。Why：需求验证画像口径必须由用户事实拍板，假设转为决策值后 Task-8 汇编才能用拍板版。注：Q3 组合按"双主渠道"解读，如本意是 A 为主 C 为辅请纠正。
+
+### 2026-09-22 22:29 | mimo-v2.6-pro__hermes-agent | PITFALL
+Caps: filesystem-read, filesystem-write, shell-exec
+现象：Task-1 实现者在文档"验收自查"节凭空写出"200,000 本捐赠"并自称引自摘录原文，"300+ 作者"亦非原文表述 → 根因：生成型文档的自查声明与正文无勾稽校验，模型易在"总结检查"段幻觉出新事实 → 解法：Maker-Checker 固定增加"自查声明可勾稽性"检查项（自查中每个断言必须能指回正文证据行）。
+
+### 2026-09-22 22:29 | mimo-v2.6-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+Maker-Checker 回报：Task-1 REVISE（① 自查节幻觉数字与正文不符；②『假设』推断位于缺口观察列违反其自定验收标准 3）、Task-2 PASS（边界/标注/候选池均合规）。派返修 wave：Task-1 按两条理由修复 + Task-2 按 D8 拍板回填（拍板回填属 Task-2 Step 7，故 Task-2 暂不结项）；修复后过增量复核，编排者原子提交并结项台账。

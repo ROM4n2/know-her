@@ -1,0 +1,13 @@
+# Sensitive credentials & secrets
+config.yaml
+config.yml
+config.local.yaml
+.env
+.env.*
+*.env
+*.secret
+*.pem
+*.key
+*.local.json
+credentials.json
+
