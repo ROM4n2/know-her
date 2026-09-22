@@ -94,3 +94,11 @@ D9（Task-3 判据预注册冻结）：缺口判据三态矩阵（GO ≥60% / �
 ### 2026-09-22 23:07 | mimo-v2.6-pro__hermes-agent | DECISION
 Caps: filesystem-read, filesystem-write, shell-exec
 D10（判据口径修正 + 第一次重新预注册）：gap-criteria §② query 集口径「真实中文检索词」→「真人式检索词（中文为主，允许英文/中英混行，对应海外华人次级情境〔用户拍板〕）」；新判据区 sha256 = 1b7c134ceb3eabdd536d842aac207c37b0c9e98f04de8b387d5592ef771d11df（10982 字节），重冻结时刻 2026-09-22 23:03:52 CST；首冻哈希 e3d8d799…310e 留档于冻结声明历史行。Why：让冻结法条与已拍板现实（海外华人次级情境）及"禁止声称用户真实搜索"红线字面对齐，取证勾稽不留字面漏洞；取证尚未开始，零作废成本。阈值调整窗口（10~20 条 / 1366×768 / 60% / 30%）于重冻结时点关闭。
+
+### 2026-09-22 23:15 | mimo-v2.6-pro__hermes-agent | PITFALL
+Caps: filesystem-read, filesystem-write, shell-exec
+现象：计划把知乎/小红书站内搜索列为"可无痕复现的公开 SERP"取证渠道，实测匿名访问撞登录重定向与风控拦截（知乎 403、小红书 error_code=300012）→ 根因：未做匿名可达性实测就假设站内搜索可无痕复现 → 解法：SERP 取证渠道先过匿名可达性实测再入白名单，站内搜索一律降级为搜索引擎 site: 限定替代。
+
+### 2026-09-22 23:15 | mimo-v2.6-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15 条 query（意图 5/5/5，敏感高 6/低 9），6 行渠道改 site: 限定取证（偏差留痕：计划例举的知乎/小红书站内搜索实测不可匿名复现，替换为 必应 site:zhihu.com / site:xiaohongshu.com）。取证波启动：Task-5/6/7 并行（各 5 条 query）；gap-criteria（冻结 1b7c134c…11df）自此只读，判据/阈值调整窗口正式关闭。

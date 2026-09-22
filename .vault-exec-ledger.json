@@ -2,10 +2,10 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/implementation_plan.md",
   "created_at": "2026-09-22T22:09:12.787366",
-  "last_updated": "2026-09-22T22:55:02.127515",
+  "last_updated": "2026-09-22T23:15:21.311873",
   "total_tasks": 8,
-  "completed_count": 3,
-  "active_task_id": "Task-4",
+  "completed_count": 4,
+  "active_task_id": "Task-7",
   "tasks": [
     {
       "id": "Task-1",
@@ -40,41 +40,41 @@
     {
       "id": "Task-4",
       "title": "query 清单设计（10–20 条）[Role: Researcher]",
-      "status": "in_progress",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
+      "commit_hash": "f10cf82",
+      "reviewer_verdict": "PASS",
       "started_at": "2026-09-22T22:55:02.127515",
-      "completed_at": null
+      "completed_at": "2026-09-22T23:15:20.965039"
     },
     {
       "id": "Task-5",
       "title": "SERP 取证组 A（query #1–⌈N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 6/7 并行安全〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-22T23:15:21.072759",
       "completed_at": null
     },
     {
       "id": "Task-6",
       "title": "SERP 取证组 B（query ⌈N/3⌉+1–⌈2N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 5/7 并行安全〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-22T23:15:21.185065",
       "completed_at": null
     },
     {
       "id": "Task-7",
       "title": "SERP 取证组 C（query ⌈2N/3⌉+1–N）[Role: Researcher / Evidence Collector] 〔与 Task 5/6 并行安全〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-22T23:15:21.311873",
       "completed_at": null
     },
     {
