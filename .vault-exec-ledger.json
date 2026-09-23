@@ -2,29 +2,29 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/architecture_scaffold_plan.md",
   "created_at": "2026-09-23T22:06:46.000784",
-  "last_updated": "2026-09-23T22:06:46.000784",
+  "last_updated": "2026-09-23T22:12:02.087826",
   "total_tasks": 7,
-  "completed_count": 0,
-  "active_task_id": null,
+  "completed_count": 1,
+  "active_task_id": "Task-2",
   "tasks": [
     {
       "id": "Task-1",
       "title": "Astro 5 + TypeScript 项目初始化 [Role: Scaffolder]",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "ebf3046",
+      "reviewer_verdict": "scaffold-self-verified",
+      "started_at": "2026-09-23T22:06:54.438835",
+      "completed_at": "2026-09-23T22:12:01.982001"
     },
     {
       "id": "Task-2",
       "title": "Zod Content Schema（内容契约）[Role: Schema Architect] 〔核心门禁〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-23T22:12:02.087826",
       "completed_at": null
     },
     {

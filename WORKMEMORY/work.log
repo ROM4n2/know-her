@@ -111,3 +111,4 @@ vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15
 [WORK_END] 2026-09-23T14:23:35+08:00|model=mimo-v2.6-pro__hermes-agent|vault-exec 需求验证子计划 8/8 完成。回写检查：稳定结论已全部入库（docs/ 9 文件 + 62 张截图证据），临时产物（scratch/浏览器工作区）不入库。Human Gate 待用户拍板 GO/有条件 GO/NO-GO。
 [DECISION] 2026-09-23T18:42:46+08:00|model=mimo-v2.6-pro__hermes-agent|D11（Human Gate 拍板）：采纳敏感性口径的**有条件 GO + 补证计划**。理由（用户选 A）：不把环境产物当需求证据用，但也不因取证通道瘸腿否定已观察到的 5/5 有效行缺口；10 行〔不可得规则产物〕（#2/#3/#5/#7/#8/#10/#11/#12/#14/#15）待正常出口环境补证重跑后按 §②.2 重推档位。补证期间判据 gap-criteria（1b7c134c…）继续只读。
 [NOTE] 2026-09-23T22:00:35+08:00|model=gemini-3.8-flash-high|因本地网络出口伪 SERP/DNS 异常未排除，用户决定暂缓补证执行；项目维持「有条件 GO」挂起状态，内容构建暂不启动。
+[WORK_START] 2026-09-23T22:05:03+08:00|model=claude-sonnet-4-6|scope=架构与工程准备子计划（Astro 5 + Zod Schema + CI 四段门禁 + 词条模板）|不做范围：补证取证、医学内容录入、newsletter 实际接入、数据库、任何个人信息收集功能。
