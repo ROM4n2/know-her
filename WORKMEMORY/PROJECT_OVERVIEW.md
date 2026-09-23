@@ -12,7 +12,7 @@ know-her —— 一个依托 GitHub 开放协作的**妇科与性健康科普知
 - **方向已切换**：2026-09-22 21:12 用户重写 IDEA.md——旧「双语语音陪伴记录应用」方向作废，改为上述健康科普知识库。新文件原误写入 `D:\Code\lover-instance\IDEA.md`（untracked，无数据丢失），21:21 经用户拍板同步回本仓库（sha256 `b92ce46d…` 一致后删除副本）。
 - 概念阶段：零代码、无 README、无 commit；bootstrap 产物（hooks、锚点、WORKMEMORY）已 stage 未 commit。
 - 架构评审已收尾（2026-09-22）：vault-grill 4 席面板 24 条发现 → Frontier 7 题全部拍板（D1–D7，DECISION 事件在 work.log），双镜共识落 `docs/adr/ADR-0001.md`。
-- 待办：执行 `docs/plans/implementation_plan.md`（子计划 1，/vault-exec；首件产出 `VALIDATION.md`，裁决 NO-GO 则转策展路线）→ 医学审核人招募（未就位前内容按 D4 降级标记"未获医学复审"）→ 子计划 2+（D2 组件集落地，待 D1 裁决后编制）。
+- 需求验证子计划 8/8 完成，用户拍板 D11=有条件 GO + 补证计划（敏感性口径），待补证执行后重推档位；项目未进入内容构建。后续待办：执行补证计划（`docs/VALIDATION.md` §⑤.5）→ 重推档位 → 医学审核人招募（未就位前内容按 D4 降级标记"未获医学复审"）→ 子计划 2+（D2 组件集落地，待补证重推后编制）。
 
 ## 高频坑（踩过的雷区）
 
