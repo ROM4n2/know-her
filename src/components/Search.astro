@@ -1,0 +1,43 @@
+---
+/**
+ * Pagefind 静态搜索组件。
+ * 构建后 astro-pagefind 会把索引与 UI 资源写入 `<base>/pagefind/`。
+ * 开发模式（astro dev）下该目录尚无索引，搜索不可用属预期行为。
+ */
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+export interface Props {
+  /** 占位提示文案 */
+  placeholder?: string;
+}
+
+const { placeholder = '搜索文章…' } = Astro.props;
+---
+
+<link rel="stylesheet" href={`${base}pagefind/pagefind-ui.css`} />
+<div id="site-search" data-pagefind-ignore></div>
+
+<script is:inline define:vars={{ base }}>
+  window.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.PagefindUI !== 'function') {
+      console.warn('[search] PagefindUI 未加载（是否已执行构建？）');
+      return;
+    }
+    new window.PagefindUI({
+      element: '#site-search',
+      bundlePath: base + 'pagefind/',
+      showImages: false,
+      showSubResults: true,
+      translations: {
+        placeholder: '搜索文章…',
+        zero_results: '未找到与「{{ query }}」相关的内容',
+        many_results: '找到 {{ count }} 条结果',
+        one_result: '找到 {{ count }} 条结果',
+        searching: '正在搜索…',
+      },
+    });
+  });
+</script>
+<script is:inline src={`${base}pagefind/pagefind-ui.js`} defer></script>

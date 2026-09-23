@@ -9,6 +9,7 @@
 		"@astrojs/check": "^0.9.10",
 		"@tailwindcss/vite": "^4.3.3",
 		"astro": "^7.3.3",
+		"astro-pagefind": "^2.0.1",
 		"tailwindcss": "^4.3.3",
 		"typescript": "^5.8.3",
 		"zod": "^4.6.5"
