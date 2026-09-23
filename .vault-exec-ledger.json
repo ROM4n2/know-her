@@ -2,10 +2,10 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/architecture_scaffold_plan.md",
   "created_at": "2026-09-23T22:06:46.000784",
-  "last_updated": "2026-09-23T23:03:19.775876",
+  "last_updated": "2026-09-23T23:03:51.694519",
   "total_tasks": 7,
   "completed_count": 5,
-  "active_task_id": null,
+  "active_task_id": "Task-7",
   "tasks": [
     {
       "id": "Task-1",
@@ -60,21 +60,21 @@
     {
       "id": "Task-6",
       "title": "GitHub Actions CI（门禁 + 链检）[Role: DevOps Engineer] 〔D2 D7〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-23T23:03:51.572938",
       "completed_at": null
     },
     {
       "id": "Task-7",
       "title": "RSS + Schema.org 分发标注 [Role: Distribution Engineer] 〔D3〕",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-23T23:03:51.694519",
       "completed_at": null
     }
   ]

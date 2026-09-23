@@ -1,0 +1,98 @@
+name: Lychee Link Check
+
+# 外链巡检（ADR-0001 D2：lychee-action 定时链检）
+# 零 secrets 原则：不引用任何 secrets.*
+on:
+  schedule:
+    # 每周日 03:00 UTC（北京时间 11:00）
+    - cron: "0 3 * * 0"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # PR 模式：只检本次变动文件，走缓存
+  pr-links:
+    name: PR 变动文件链检
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore lychee cache
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: lychee-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            lychee-${{ runner.os }}-
+
+      - name: Collect changed markdown files
+        id: changed
+        run: |
+          git diff --name-only --diff-filter=ACMR \
+            "origin/${{ github.base_ref }}...HEAD" -- '*.md' '*.mdx' \
+            > changed.txt || true
+          if [ -s changed.txt ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changed markdown files:" && cat changed.txt
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No markdown files changed."
+          fi
+
+      - name: Run lychee on changed files
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --cache --max-cache-age 1d $(cat changed.txt)
+          fail: true
+          jobSummary: true
+
+  # schedule / 手动：全量巡检，失败开 issue
+  full-links:
+    name: 全量外链巡检
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore lychee cache
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: lychee-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            lychee-${{ runner.os }}-
+
+      - name: Run lychee (full)
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --cache --max-cache-age 1d './**/*.md' './**/*.mdx'
+          fail: false
+          jobSummary: true
+          output: ./lychee-report.md
+
+      - name: Create issue on broken links
+        if: steps.lychee.outputs.exit_code != '0'
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --cache --max-cache-age 1d './**/*.md' './**/*.mdx'
+          fail: true
+          createIssue: true
+          issueFilename: ./lychee-report.md

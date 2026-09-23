@@ -1,0 +1,52 @@
+name: 新来源提报
+description: 提报值得收录的权威科普来源（机构、指南、综述等）。
+title: "[新来源] "
+labels: ["source", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提报。**本表单不要求姓名、邮箱或任何联系方式**，提交内容为匿名公开记录。
+  - type: input
+    id: source-title
+    attributes:
+      label: 来源标题
+      description: 文档、指南或机构的正式名称。
+      placeholder: 例如：WHO《……》指南
+    validations:
+      required: true
+  - type: input
+    id: source-url
+    attributes:
+      label: 来源 URL
+      description: 指向原始来源的链接。
+      placeholder: https://
+    validations:
+      required: true
+  - type: dropdown
+    id: source-type
+    attributes:
+      label: 来源类型
+      options:
+        - 国际组织指南（WHO、UNFPA 等）
+        - 国家级指南/专家共识
+        - 专业学会指南（ACOG、RCOG 等）
+        - 教科书/系统综述
+        - 权威机构科普页面
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 推荐理由
+      description: 为什么该来源权威、可信、值得收录。
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我确认本 Issue 不含任何姓名、联系方式或个人病史信息。
+          required: true

@@ -15,6 +15,12 @@ const { title = 'know-her' } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="know-her 妇科与性健康科普知识库"
+      href="/rss.xml"
+    />
     <slot name="head" />
   </head>
   <body class="flex min-h-screen flex-col bg-white text-gray-900">

@@ -1,0 +1,43 @@
+name: 内容纠错
+description: 发现内容错误、表述不当或失效链接？无需留下任何个人信息即可提交。
+title: "[纠错] "
+labels: ["correction", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的反馈。**本表单不要求姓名、邮箱或任何联系方式**，提交内容为匿名公开记录。
+
+        本表单用于科普内容纠错，**不接受也不需要任何个人病史、症状描述或医疗咨询**。
+        如有紧急症状，请立即就医或拨打 120。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述
+      description: 请描述发现的问题所在位置（词条标题/链接）及具体错误内容。
+      placeholder: 例如：《……》词条中"……"的表述与来源不一致，应为"……"。
+    validations:
+      required: true
+  - type: input
+    id: source-url
+    attributes:
+      label: 来源 URL
+      description: 支持你判断的权威来源链接（如有）。
+      placeholder: https://
+    validations:
+      required: false
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 改进建议
+      description: 你建议如何修改（可留空）。
+      placeholder: 建议改为"……"。
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我确认本 Issue 不含任何姓名、联系方式或个人病史信息。
+          required: true
