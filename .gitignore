@@ -11,3 +11,8 @@ config.local.yaml
 *.local.json
 credentials.json
 
+
+# Astro build outputs
+dist/
+node_modules/
+.astro/
