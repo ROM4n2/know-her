@@ -105,3 +105,5 @@ vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15
 [STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-6/7 结项（b140396/33d0c0d）：SERP 取证组 B/C 经一轮 REVISE→返修→增量复核 PASS。教训：同文档并存 g=2 与 g=5 双口径不可机械复算，须显式并列「机械口径/敏感性口径」逐行加总；无验证物精确断言一律降级（本批降级 10+ 处断言、5 处断链存档引用），禁补造。
 [PITFALL] 2026-09-23T13:39:09+08:00|model=mimo-v2.6-pro__hermes-agent|现象：批量攒稿型取证代理被 provider 内容策略掐断（content_policy_blocked），56 分钟成果尽失 → 根因：敏感页面正文进模型上下文 + 报告攒到最后一次写 → 解法：逐条即时落盘、正文不进上下文（curl+元信号提取）、截图短标签化。
 [PITFALL] 2026-09-23T13:39:09+08:00|model=mimo-v2.6-pro__hermes-agent|现象：必应 site: 返回与 query 无关伪 SERP（生造词对照实验证实）、Google reCAPTCHA+DNS 异常、百度桌面 wappass 墙 → 根因：取证出口反自动化降级，取得非真实 SERP → 解法：取证前先做出口健康检查（生造词对照实验），证据按「有效观察支撑/不可得规则产物」分层，裁决用机械/敏感性双口径防 R 系统性偏高。
+[STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-5 结项：组 A 一轮 REVISE（复核者逐张开图判读揪出截图归属错误与漏录广告条目）→返修 36 处→增量复核 PASS。教训：复用截图必须逐张核对搜索框检索词归属；视口表述以 PNG IHDR 实测为准（14 张均 1366×768）；截图内自述与归属标注形式要对称。非阻断记录：serp-1-1-2 无搜索框未挂〔归属存疑〕标签（披露充分）。
+[STEP] 2026-09-23T13:56:12+08:00|model=mimo-v2.6-pro__hermes-agent|启动 Task-8（VALIDATION.md 汇编）：双口径裁决（机械/敏感性）+ 证据层级分层 + 缺失信息汇总 + 用户拍板矩阵（GO/有条件 GO/NO-GO，含 D1 转策展路线出口），Human Gate 交用户。
