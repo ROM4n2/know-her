@@ -1,7 +1,7 @@
 name: Lychee Link Check
 
-# 外链巡检（ADR-0001 D2：lychee-action 定时链检）
-# 零 secrets 原则：不引用任何 secrets.*
+# 外链巡检（ADR-0001 D2：lychee-action 定时链检 + actions/cache）
+# PR 只查变动文件（走缓存），schedule 全量；零凭据原则：不引用任何仓库 secret 值
 on:
   schedule:
     # 每周日 03:00 UTC（北京时间 11:00）
@@ -11,10 +11,9 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
-  # PR 模式：只检本次变动文件，走缓存
+  # PR 模式：只检本次变动的 markdown 文件，复用 .lycheecache
   pr-links:
     name: PR 变动文件链检
     if: github.event_name == 'pull_request'
@@ -54,11 +53,13 @@ jobs:
         if: steps.changed.outputs.has_changes == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
+          # $(cat changed.txt) 由 action 入口的 eval 展开
           args: --verbose --no-progress --cache --max-cache-age 1d $(cat changed.txt)
           fail: true
+          failIfEmpty: false
           jobSummary: true
 
-  # schedule / 手动：全量巡检，失败开 issue
+  # schedule / 手动触发：全量巡检，失败时开 issue 留痕（ADR-0001 create-issue-from-file）
   full-links:
     name: 全量外链巡检
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -79,20 +80,19 @@ jobs:
           restore-keys: |
             lychee-${{ runner.os }}-
 
-      - name: Run lychee (full)
+      - name: Run lychee (full scan)
         id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
           args: --verbose --no-progress --cache --max-cache-age 1d './**/*.md' './**/*.mdx'
           fail: false
-          jobSummary: true
           output: ./lychee-report.md
+          jobSummary: true
 
-      - name: Create issue on broken links
+      - name: Create issue from broken links report
         if: steps.lychee.outputs.exit_code != '0'
-        uses: lycheeverse/lychee-action@v2
+        uses: peter-evans/create-issue-from-file@v5
         with:
-          args: --verbose --no-progress --cache --max-cache-age 1d './**/*.md' './**/*.mdx'
-          fail: true
-          createIssue: true
-          issueFilename: ./lychee-report.md
+          title: "链检报告：发现失效外链"
+          content-filepath: ./lychee-report.md
+          labels: report, automated issue, broken-links

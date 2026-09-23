@@ -1,7 +1,7 @@
 name: CI
 
-# 门禁：始终运行，无 paths: 过滤（ADR-0001 P1 折叠条款 / 架构子计划 Task 6）
-# fork PR 无 secrets 原则：本文件不引用任何 secrets.*
+# 门禁：始终运行，无路径过滤（ADR-0001 P1 折叠条款 / 架构子计划 Task 6）
+# fork PR 零凭据原则：本文件不引用任何仓库 secret 值
 on:
   push:
   pull_request:
@@ -24,6 +24,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,6 +49,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
