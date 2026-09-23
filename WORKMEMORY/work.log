@@ -107,3 +107,5 @@ vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15
 [PITFALL] 2026-09-23T13:39:09+08:00|model=mimo-v2.6-pro__hermes-agent|现象：必应 site: 返回与 query 无关伪 SERP（生造词对照实验证实）、Google reCAPTCHA+DNS 异常、百度桌面 wappass 墙 → 根因：取证出口反自动化降级，取得非真实 SERP → 解法：取证前先做出口健康检查（生造词对照实验），证据按「有效观察支撑/不可得规则产物」分层，裁决用机械/敏感性双口径防 R 系统性偏高。
 [STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-5 结项：组 A 一轮 REVISE（复核者逐张开图判读揪出截图归属错误与漏录广告条目）→返修 36 处→增量复核 PASS。教训：复用截图必须逐张核对搜索框检索词归属；视口表述以 PNG IHDR 实测为准（14 张均 1366×768）；截图内自述与归属标注形式要对称。非阻断记录：serp-1-1-2 无搜索框未挂〔归属存疑〕标签（披露充分）。
 [STEP] 2026-09-23T13:56:12+08:00|model=mimo-v2.6-pro__hermes-agent|启动 Task-8（VALIDATION.md 汇编）：双口径裁决（机械/敏感性）+ 证据层级分层 + 缺失信息汇总 + 用户拍板矩阵（GO/有条件 GO/NO-GO，含 D1 转策展路线出口），Human Gate 交用户。
+[STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-8 结项：VALIDATION.md 终审 REVISE（3 处引用归属失实：时间戳通则化、自造编号、⑩一致原话）→返修→机械核验零残留→按复核者预授权转 PASS。三读裁决待拍板：机械 g=15→GO；敏感性 g′=5→有条件 GO；严格 g′=4→NO-GO。
+[WORK_END] 2026-09-23T14:23:35+08:00|model=mimo-v2.6-pro__hermes-agent|vault-exec 需求验证子计划 8/8 完成。回写检查：稳定结论已全部入库（docs/ 9 文件 + 62 张截图证据），临时产物（scratch/浏览器工作区）不入库。Human Gate 待用户拍板 GO/有条件 GO/NO-GO。
