@@ -1,91 +1,81 @@
 {
   "version": "1.0.0",
-  "plan_file": "docs/plans/implementation_plan.md",
-  "created_at": "2026-09-22T22:09:12.787366",
-  "last_updated": "2026-09-23T14:23:35.347319",
-  "total_tasks": 8,
-  "completed_count": 8,
+  "plan_file": "docs/plans/architecture_scaffold_plan.md",
+  "created_at": "2026-09-23T22:06:46.000784",
+  "last_updated": "2026-09-23T22:06:46.000784",
+  "total_tasks": 7,
+  "completed_count": 0,
   "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
-      "title": "既有供给清单 [Role: Researcher / Evidence Collector]",
-      "status": "completed",
+      "title": "Astro 5 + TypeScript 项目初始化 [Role: Scaffolder]",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "736413c",
-      "reviewer_verdict": "PASS",
-      "started_at": "2026-09-22T22:10:05.922776",
-      "completed_at": "2026-09-22T22:38:11.964800"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-2",
-      "title": "核心用户画像草案 + 用户拍板 [Role: Researcher] 〔含 Human Gate〕",
-      "status": "completed",
+      "title": "Zod Content Schema（内容契约）[Role: Schema Architect] 〔核心门禁〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "599d74a",
-      "reviewer_verdict": "PASS",
-      "started_at": "2026-09-22T22:10:06.024540",
-      "completed_at": "2026-09-22T22:38:12.074666"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-3",
-      "title": "判据预注册（GO/NO-GO 阈值冻结）[Role: Analyst] 〔冻结点〕",
-      "status": "completed",
+      "title": "核心 UI 组件（免责声明、降级横幅、红旗卡）[Role: Frontend Builder] 〔D2 D4 D5〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "0de3e61",
-      "reviewer_verdict": "PASS",
-      "started_at": "2026-09-22T22:38:12.185770",
-      "completed_at": "2026-09-22T22:55:02.011731"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-4",
-      "title": "query 清单设计（10–20 条）[Role: Researcher]",
-      "status": "completed",
+      "title": "Pagefind 静态搜索集成 [Role: Search Integrator] 〔D2 D3〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "f10cf82",
-      "reviewer_verdict": "PASS",
-      "started_at": "2026-09-22T22:55:02.127515",
-      "completed_at": "2026-09-22T23:15:20.965039"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-5",
-      "title": "SERP 取证组 A（query #1–⌈N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 6/7 并行安全〕",
-      "status": "completed",
+      "title": "词条内容模板（标准骨架）[Role: Content Architect] 〔D4 D5〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "114ccac",
-      "reviewer_verdict": "maker-checker-REVISE-fix-delta-PASS",
-      "started_at": "2026-09-22T23:15:21.072759",
-      "completed_at": "2026-09-23T13:56:12.216244"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-6",
-      "title": "SERP 取证组 B（query ⌈N/3⌉+1–⌈2N/3⌉）[Role: Researcher / Evidence Collector] 〔与 Task 5/7 并行安全〕",
-      "status": "completed",
+      "title": "GitHub Actions CI（门禁 + 链检）[Role: DevOps Engineer] 〔D2 D7〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "b140396",
-      "reviewer_verdict": "maker-checker-REVISE-fix-delta-PASS",
-      "started_at": "2026-09-22T23:15:21.185065",
-      "completed_at": "2026-09-23T13:39:09.250239"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     },
     {
       "id": "Task-7",
-      "title": "SERP 取证组 C（query ⌈2N/3⌉+1–N）[Role: Researcher / Evidence Collector] 〔与 Task 5/6 并行安全〕",
-      "status": "completed",
+      "title": "RSS + Schema.org 分发标注 [Role: Distribution Engineer] 〔D3〕",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "33d0c0d",
-      "reviewer_verdict": "maker-checker-REVISE-fix-delta-PASS",
-      "started_at": "2026-09-22T23:15:21.311873",
-      "completed_at": "2026-09-23T13:39:09.353975"
-    },
-    {
-      "id": "Task-8",
-      "title": "缺口声明与裁决汇总（VALIDATION.md）[Role: Analyst / Integrator] 〔含 Human Gate〕",
-      "status": "completed",
-      "implementer": "TDD",
-      "commit_hash": "73559a7",
-      "reviewer_verdict": "maker-checker-REVISE-fix-PASS",
-      "started_at": "2026-09-23T13:56:12.324512",
-      "completed_at": "2026-09-23T14:23:35.347319"
+      "commit_hash": null,
+      "reviewer_verdict": null,
+      "started_at": null,
+      "completed_at": null
     }
   ]
 }
