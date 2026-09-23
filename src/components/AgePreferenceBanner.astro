@@ -1,0 +1,43 @@
+---
+---
+<div
+  id="age-preference-banner"
+  class="border-b border-blue-200 bg-blue-50 p-3 text-center text-sm text-blue-900"
+  role="region"
+  aria-label="年龄确认提示"
+>
+  <p class="inline">
+    ⏰ 本站包含妇科与性健康科普内容，请确认您已满 18 周岁。
+  </p>
+  <button
+    type="button"
+    id="age-preference-confirm"
+    class="ml-3 rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700"
+  >
+    我已知晓
+  </button>
+</div>
+<script is:inline>
+  (function () {
+    var KEY = 'know_her_age_confirmed';
+    var banner = document.getElementById('age-preference-banner');
+    var button = document.getElementById('age-preference-confirm');
+    if (!banner || !button) return;
+    try {
+      if (localStorage.getItem(KEY) !== null) {
+        banner.hidden = true;
+        return;
+      }
+    } catch (e) {
+      /* localStorage 不可用时保持提示带可见，不阻断阅读 */
+    }
+    button.addEventListener('click', function () {
+      try {
+        localStorage.setItem(KEY, 'true');
+      } catch (e) {
+        /* 写入失败也照样隐藏，不重复纠缠用户 */
+      }
+      banner.hidden = true;
+    });
+  })();
+</script>

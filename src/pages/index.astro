@@ -1,13 +1,17 @@
 ---
+import Base from '../layouts/Base.astro';
+import Search from '../components/Search.astro';
 ---
-<!DOCTYPE html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>know-her</title>
-  </head>
-  <body>
-    <p>know-her 妇科与性健康科普知识库（建设中）</p>
-  </body>
-</html>
+<Base title="know-her">
+  <Fragment slot="head">
+    <meta
+      name="description"
+      content="know-her 妇科与性健康科普知识库（建设中）"
+    />
+  </Fragment>
+  <h1 class="text-2xl font-bold">know-her</h1>
+  <p class="mt-2 text-gray-700">know-her 妇科与性健康科普知识库（建设中）</p>
+  <section class="mt-6" aria-label="站内搜索">
+    <Search />
+  </section>
+</Base>

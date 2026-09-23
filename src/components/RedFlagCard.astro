@@ -1,0 +1,22 @@
+---
+interface Props {
+  flags: string[];
+}
+
+const { flags } = Astro.props;
+---
+{
+  flags.length > 0 && (
+    <section
+      class="border-l-4 border-red-600 bg-red-50 p-4 text-red-900"
+      role="alert"
+    >
+      <h2 class="font-semibold">❗ 以下情况请立即就医</h2>
+      <ul class="mt-2 list-disc space-y-1 pl-5">
+        {flags.map((flag) => (
+          <li>{flag}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
