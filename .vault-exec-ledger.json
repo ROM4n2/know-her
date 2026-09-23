@@ -2,10 +2,10 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/architecture_scaffold_plan.md",
   "created_at": "2026-09-23T22:06:46.000784",
-  "last_updated": "2026-09-23T22:12:02.087826",
+  "last_updated": "2026-09-23T23:03:19.775876",
   "total_tasks": 7,
-  "completed_count": 1,
-  "active_task_id": "Task-2",
+  "completed_count": 5,
+  "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
@@ -20,42 +20,42 @@
     {
       "id": "Task-2",
       "title": "Zod Content Schema（内容契约）[Role: Schema Architect] 〔核心门禁〕",
-      "status": "in_progress",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
+      "commit_hash": "c8bc641",
+      "reviewer_verdict": "self-GREEN-RED-verified",
       "started_at": "2026-09-23T22:12:02.087826",
-      "completed_at": null
+      "completed_at": "2026-09-23T22:29:41.910426"
     },
     {
       "id": "Task-3",
       "title": "核心 UI 组件（免责声明、降级横幅、红旗卡）[Role: Frontend Builder] 〔D2 D4 D5〕",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "4c76029",
+      "reviewer_verdict": "subagent-self-verified",
+      "started_at": "2026-09-23T22:29:42.038022",
+      "completed_at": "2026-09-23T23:03:19.533628"
     },
     {
       "id": "Task-4",
       "title": "Pagefind 静态搜索集成 [Role: Search Integrator] 〔D2 D3〕",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "c6b6d21",
+      "reviewer_verdict": "subagent-self-verified",
+      "started_at": "2026-09-23T22:29:42.175007",
+      "completed_at": "2026-09-23T23:03:19.655535"
     },
     {
       "id": "Task-5",
       "title": "词条内容模板（标准骨架）[Role: Content Architect] 〔D4 D5〕",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "ea202dc",
+      "reviewer_verdict": "subagent-self-verified",
+      "started_at": "2026-09-23T22:29:42.319853",
+      "completed_at": "2026-09-23T23:03:19.775876"
     },
     {
       "id": "Task-6",
