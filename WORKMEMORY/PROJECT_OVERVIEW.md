@@ -23,7 +23,8 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
   1. `src/content.config.ts`：轻量科普博客 Schema（`contraception` 避孕、`pleasure` 愉悦、`body` 身体、`intimacy` 亲密四大主题）；
   2. 交互升级：首页分类实时客户端筛选、一句话导读卡片流、文章详情页醒目原出处直达跳转；
   3. 已上线 10 篇精选权威科普导读（涵盖避孕套误区、紧急避孕药、短效口服避孕药COC、阴蒂解剖与愉悦冰山、人体润滑剂选型、女性自慰与性心理、月经四大客观指标、异常出血诱因、HPV疫苗与宫颈筛查、FRIES知情同意法则）；所有外链 100% 在线探测 200 OK；
-  4. 生产流水线打通：GitHub Actions CI 校验通过，Deploy to GitHub Pages 自动化发布通过，线上 `https://rom4n2.github.io/know-her/` 实测 200 OK，CSS/JS 资源与 Pagefind 索引正常。
+  4. 生产流水线打通：GitHub Actions CI 校验通过，Deploy to GitHub Pages 自动化发布通过，线上 `https://rom4n2.github.io/know-her/` 实测 200 OK，CSS/JS 资源与 Pagefind 索引正常；
+  5. 每日任务与互动闭环上线：首页置顶「今日精选科普 + 每日一答 30 秒速测」组件（确定性积日轮换、localStorage 连续打卡记天数）；配置 `.github/workflows/daily-routine.yml` 每天北京时间 08:00 定时全库外链 200 探针巡检并播报；CLI 支持 `pnpm curate:today` 查看每日排期。
 
 ## 高频坑（踩过的雷区）
 
