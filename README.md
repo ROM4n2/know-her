@@ -5,6 +5,7 @@
 [![CI](https://github.com/ROM4n2/know-her/actions/workflows/ci.yml/badge.svg)](https://github.com/ROM4n2/know-her/actions/workflows/ci.yml)
 [![Deploy to GitHub Pages](https://github.com/ROM4n2/know-her/actions/workflows/deploy.yml/badge.svg)](https://github.com/ROM4n2/know-her/actions/workflows/deploy.yml)
 [![Daily Routine](https://github.com/ROM4n2/know-her/actions/workflows/daily-routine.yml/badge.svg)](https://github.com/ROM4n2/know-her/actions/workflows/daily-routine.yml)
+[![Pipeline B Harvester](https://github.com/ROM4n2/know-her/actions/workflows/harvest-candidates.yml/badge.svg)](https://github.com/ROM4n2/know-her/actions/workflows/harvest-candidates.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-rose.svg)](LICENSE)
 [![Astro](https://img.shields.io/badge/Astro-7.x-BC52EE.svg)](https://astro.build)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4.svg)](https://tailwindcss.com)
@@ -93,6 +94,9 @@ pnpm curate:links
 
 # 查看今日精选排期与今日速测题目
 pnpm curate:today
+
+# 扫描权威信源并抽取最新候选篇目 (Pipeline B 抓取器)
+pnpm curate:harvest --dry-run
 
 # 快速创建一篇新词条草稿模板
 python scripts/curate.py new \

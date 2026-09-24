@@ -356,9 +356,21 @@ def create_draft_pr(candidate: dict) -> bool:
         commit_msg = f"feat(curate): 自动生成候选导读草稿《{candidate['title']}》"
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
 
-        # Git push
+        # Git push (带重试机制，防止网络抖动)
         print(f"  ⬆️ 正在推送分支 {branch_name} 至远端 GitHub...")
-        subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+        pushed = False
+        for attempt in range(1, 4):
+            try:
+                subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+                pushed = True
+                break
+            except subprocess.CalledProcessError:
+                print(f"  ⚠️ git push 第 {attempt} 次失败，等待重试...")
+                import time
+                time.sleep(2)
+
+        if not pushed:
+            raise RuntimeError("git push failed after 3 attempts")
 
         # PR Body
         pr_body = f"""## 🌸 每日自动化候选导读草稿提交 (Pipeline B)

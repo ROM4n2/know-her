@@ -16,3 +16,4 @@ credentials.json
 dist/
 node_modules/
 .astro/
+.vscode/
