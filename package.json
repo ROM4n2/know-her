@@ -1,9 +1,16 @@
 {
+	"name": "know-her",
+	"version": "1.0.0",
+	"type": "module",
+	"packageManager": "pnpm@11.5.1",
 	"scripts": {
 		"dev": "astro dev",
 		"build": "astro build",
 		"preview": "astro preview",
-		"check": "astro check"
+		"check": "astro check",
+		"curate": "python scripts/curate.py",
+		"curate:list": "python scripts/curate.py list",
+		"curate:check": "python scripts/curate.py check"
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.10",
