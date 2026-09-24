@@ -2,39 +2,39 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/content_pilot_plan.md",
   "created_at": "2026-09-24T19:28:43.267568",
-  "last_updated": "2026-09-24T19:28:43.267568",
+  "last_updated": "2026-09-24T19:41:28.154983",
   "total_tasks": 4,
-  "completed_count": 0,
-  "active_task_id": null,
+  "completed_count": 1,
+  "active_task_id": "Task-3",
   "tasks": [
     {
       "id": "Task-1",
       "title": "词条详情页路由与组件装配 [Role: Frontend Builder]",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "0ec00d2",
+      "reviewer_verdict": "subagent-smoke-verified",
+      "started_at": "2026-09-24T19:28:49.443549",
+      "completed_at": "2026-09-24T19:41:27.947999"
     },
     {
       "id": "Task-2",
       "title": "首批试点词条 1 — 异常子宫出血的识别与就医时机 [Role: Content Specialist]",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-24T19:41:28.053155",
       "completed_at": null
     },
     {
       "id": "Task-3",
       "title": "首批试点词条 2 — 正常月经周期的四大客观指标 [Role: Content Specialist]",
-      "status": "pending",
+      "status": "in_progress",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": null,
-      "started_at": null,
+      "started_at": "2026-09-24T19:41:28.154983",
       "completed_at": null
     },
     {
