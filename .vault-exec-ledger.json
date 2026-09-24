@@ -2,10 +2,10 @@
   "version": "1.0.0",
   "plan_file": "docs/plans/content_pilot_plan.md",
   "created_at": "2026-09-24T19:28:43.267568",
-  "last_updated": "2026-09-24T19:41:28.154983",
+  "last_updated": "2026-09-24T20:13:17.954700",
   "total_tasks": 4,
-  "completed_count": 1,
-  "active_task_id": "Task-3",
+  "completed_count": 4,
+  "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
@@ -20,32 +20,32 @@
     {
       "id": "Task-2",
       "title": "首批试点词条 1 — 异常子宫出血的识别与就医时机 [Role: Content Specialist]",
-      "status": "in_progress",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
+      "commit_hash": "c7f3e4f",
+      "reviewer_verdict": "self-zod-check-PASS",
       "started_at": "2026-09-24T19:41:28.053155",
-      "completed_at": null
+      "completed_at": "2026-09-24T20:05:22.204333"
     },
     {
       "id": "Task-3",
       "title": "首批试点词条 2 — 正常月经周期的四大客观指标 [Role: Content Specialist]",
-      "status": "in_progress",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
+      "commit_hash": "8dca8fb",
+      "reviewer_verdict": "self-zod-check-PASS",
       "started_at": "2026-09-24T19:41:28.154983",
-      "completed_at": null
+      "completed_at": "2026-09-24T20:05:22.318166"
     },
     {
       "id": "Task-4",
       "title": "全链路端到端构建、静态检索与 RSS 综合验收 [Role: QA & Integrator]",
-      "status": "pending",
+      "status": "completed",
       "implementer": "TDD",
-      "commit_hash": null,
-      "reviewer_verdict": null,
-      "started_at": null,
-      "completed_at": null
+      "commit_hash": "8dca8fb",
+      "reviewer_verdict": "e2e-acceptance-ALL-PASS",
+      "started_at": "2026-09-24T20:05:22.439147",
+      "completed_at": "2026-09-24T20:13:17.954700"
     }
   ]
 }
