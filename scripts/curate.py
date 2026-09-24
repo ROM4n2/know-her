@@ -150,6 +150,53 @@ def cmd_check_links(args):
         print(f"\n⚠️ 发现 {errors} 处无效或 404 外链，请按照真实出处修复后再发布。")
         sys.exit(1)
 
+def cmd_daily(args):
+    files = [f for f in os.listdir(ARTICLES_DIR) if f.endswith(".mdx") and not f.startswith("_")]
+    if not files:
+        print("❌ 暂无可推荐的文章")
+        sys.exit(1)
+
+    article_list = []
+    for fname in files:
+        fpath = os.path.join(ARTICLES_DIR, fname)
+        with open(fpath, "r", encoding="utf-8") as f:
+            meta, _ = parse_frontmatter(f.read())
+        meta["id"] = fname[:-4]
+        article_list.append(meta)
+
+    # 按发布时间倒序排序（与 Astro 页面加载顺序一致）
+    article_list.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+
+    if args.date:
+        d = datetime.date.fromisoformat(args.date)
+    else:
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        bj_time = now_utc + datetime.timedelta(hours=8)
+        d = bj_time.date()
+
+    day_of_year = d.timetuple().tm_yday
+    idx = day_of_year % len(article_list)
+    today_article = article_list[idx]
+
+    cat = CATEGORY_NAMES.get(today_article.get("category", ""), today_article.get("category", "未知"))
+    print(f"📅 【{d.isoformat()}】今日精选科普排期：\n")
+    print(f"   文章 ID:   {today_article['id']}")
+    print(f"   标    题:   {today_article.get('title')}")
+    print(f"   分    类:   [{cat}]")
+    print(f"   出    处:   {today_article.get('source_name')}")
+    print(f"   外    链:   {today_article.get('source_url')}")
+    print(f"   核心导读:   {today_article.get('summary')}\n")
+
+    url = today_article.get("source_url", "")
+    print(f"🌐 探测今日精选原出处外链可达性...")
+    req = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"✅ [{resp.status} OK] 今日精选外链正常可达！\n")
+    except Exception as e:
+        print(f"❌ 今日精选外链异常: {e}\n")
+        sys.exit(1)
+
 def cmd_new(args):
     slug = args.id
     if not slug.endswith(".mdx"):
@@ -217,6 +264,10 @@ def main():
     # check-links
     subparsers.add_parser("check-links", help="在线探测所有词条原出处外链可达性")
 
+    # daily
+    daily_p = subparsers.add_parser("daily", help="查看今日精选推荐与外链探测")
+    daily_p.add_argument("--date", help="指定日期 YYYY-MM-DD（默认今天）")
+
     # new
     new_p = subparsers.add_parser("new", help="创建新文章草稿模板")
     new_p.add_argument("--id", required=True, help="文件 slug（如 contraception-iud-basics）")
@@ -234,6 +285,8 @@ def main():
         cmd_check(args)
     elif args.command == "check-links":
         cmd_check_links(args)
+    elif args.command == "daily":
+        cmd_daily(args)
     elif args.command == "new":
         cmd_new(args)
     else:

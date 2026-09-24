@@ -1,0 +1,251 @@
+---
+/**
+ * DailyCard.astro — 首页「今日精选 & 每日 30 秒速测打卡」组件
+ */
+import type { CollectionEntry } from 'astro:content';
+import type { QuizItem } from '../data/dailyQuiz';
+import { CATEGORIES, type CategoryKey } from '../consts';
+
+interface Props {
+  article: CollectionEntry<'articles'>;
+  quiz?: QuizItem;
+}
+
+const { article, quiz } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+const cat = CATEGORIES[article.data.category as CategoryKey] ?? {
+  label: article.data.category,
+  cls: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+// 当前北京时间日期文字
+const todayStr = new Intl.DateTimeFormat('zh-CN', {
+  month: 'long',
+  day: 'numeric',
+  weekday: 'narrow',
+}).format(new Date());
+---
+
+<section
+  class="relative mb-10 overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-orange-50/40 p-6 sm:p-7 shadow-xs"
+  aria-label="每日任务与今日精选"
+>
+  {/* 顶部标签栏 */}
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-rose-100/60 pb-3">
+    <div class="flex items-center gap-2">
+      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-600 text-white text-xs font-bold shadow-xs">
+        📅
+      </span>
+      <div>
+        <h2 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+          今日精选科普
+          <span class="text-xs font-normal text-rose-600">({todayStr})</span>
+        </h2>
+      </div>
+    </div>
+
+    {/* 打卡天数徽章 */}
+    <div
+      id="checkin-badge"
+      class="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 shadow-2xs"
+    >
+      <span>✨</span>
+      <span>连续探索 <strong id="streak-num" class="text-rose-600">1</strong> 天</span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    {/* 左侧：今日精选导读 */}
+    <div class="lg:col-span-6 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-2 text-xs">
+          <span class:list={['rounded-full border px-2.5 py-0.5 font-medium', cat.cls]}>
+            {cat.label}
+          </span>
+          <span class="text-gray-400">来源：{article.data.source_name}</span>
+        </div>
+
+        <h3 class="text-xl font-bold tracking-tight text-gray-900 hover:text-rose-600 transition-colors leading-snug">
+          <a href={`${base}articles/${article.id}/`}>
+            {article.data.title}
+          </a>
+        </h3>
+
+        <p class="mt-2.5 text-sm text-gray-600 leading-relaxed line-clamp-3">
+          {article.data.summary}
+        </p>
+      </div>
+
+      <div class="mt-5 pt-3">
+        <a
+          href={`${base}articles/${article.id}/`}
+          class="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-rose-600 transition-colors"
+        >
+          <span>查阅今日精选完整导读</span>
+          <span>→</span>
+        </a>
+      </div>
+    </div>
+
+    {/* 右侧：每日 30 秒知情速测卡 */}
+    {quiz && (
+      <div
+        id="quiz-container"
+        class="lg:col-span-6 rounded-2xl border border-rose-100 bg-white/90 p-5 shadow-2xs backdrop-blur-xs flex flex-col justify-between"
+        data-correct-index={quiz.correctIndex}
+        data-article-id={article.id}
+      >
+        <div>
+          <div class="flex items-center justify-between text-xs font-semibold text-rose-700 mb-2.5">
+            <span class="flex items-center gap-1">
+              <span>🎯</span> 每日一答 · 30秒知情速测
+            </span>
+            <span id="quiz-status" class="text-gray-400 font-normal">点击选项答题打卡</span>
+          </div>
+
+          <p class="text-sm font-bold text-gray-800 leading-snug mb-3">
+            {quiz.question}
+          </p>
+
+          <div class="space-y-2" id="quiz-options">
+            {quiz.options.map((option, idx) => (
+              <button
+                type="button"
+                data-index={idx}
+                class="quiz-btn w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-left text-xs font-medium text-gray-700 hover:border-rose-300 hover:bg-rose-50/50 transition-all cursor-pointer flex items-start gap-2"
+              >
+                <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-400 mt-0.5">
+                  {String.fromCharCode(65 + idx)}
+                </span>
+                <span>{option}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 答题后揭晓的权威解释面板 */}
+        <div id="quiz-explanation" class="hidden mt-3 rounded-xl border p-3 text-xs leading-relaxed">
+          <div class="font-bold mb-1 flex items-center gap-1.5" id="explanation-title">
+            <span>💡</span> 权威医学原理解析
+          </div>
+          <p id="explanation-text" class="text-gray-600">
+            {quiz.explanation}
+          </p>
+        </div>
+      </div>
+    )}
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    var quizContainer = document.getElementById('quiz-container');
+    if (!quizContainer) return;
+
+    var correctIdx = parseInt(quizContainer.dataset.correctIndex, 10);
+    var options = quizContainer.querySelectorAll('.quiz-btn');
+    var explanation = document.getElementById('quiz-explanation');
+    var explanationTitle = document.getElementById('explanation-title');
+    var quizStatus = document.getElementById('quiz-status');
+    var streakNum = document.getElementById('streak-num');
+
+    // 格式化今日日期 YYYY-MM-DD
+    var today = new Date().toISOString().slice(0, 10);
+    var STREAK_KEY = 'know_her_streak';
+    var LAST_DATE_KEY = 'know_her_last_date';
+    var LAST_QUIZ_KEY = 'know_her_last_quiz_' + today;
+
+    // 读取连续打卡天数
+    var savedStreak = parseInt(localStorage.getItem(STREAK_KEY) || '1', 10);
+    var lastDate = localStorage.getItem(LAST_DATE_KEY);
+
+    if (lastDate) {
+      var diffDays = Math.floor((new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
+      if (diffDays > 1) {
+        // 中断了，重置为 1
+        savedStreak = 1;
+        localStorage.setItem(STREAK_KEY, '1');
+      }
+    }
+    if (streakNum) streakNum.textContent = savedStreak;
+
+    // 检查今日是否已答题
+    var recordedAnswer = localStorage.getItem(LAST_QUIZ_KEY);
+    if (recordedAnswer !== null) {
+      applyResult(parseInt(recordedAnswer, 10));
+    }
+
+    options.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (quizContainer.dataset.answered === 'true') return;
+        var chosen = parseInt(btn.dataset.index, 10);
+        localStorage.setItem(LAST_QUIZ_KEY, chosen.toString());
+
+        // 计算打卡
+        if (lastDate !== today) {
+          if (lastDate) {
+            var diff = Math.floor((new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
+            if (diff === 1) {
+              savedStreak += 1;
+            } else {
+              savedStreak = 1;
+            }
+          } else {
+            savedStreak = 1;
+          }
+          localStorage.setItem(STREAK_KEY, savedStreak.toString());
+          localStorage.setItem(LAST_DATE_KEY, today);
+          if (streakNum) streakNum.textContent = savedStreak;
+        }
+
+        applyResult(chosen);
+      });
+    });
+
+    function applyResult(chosenIdx) {
+      quizContainer.dataset.answered = 'true';
+      var isCorrect = chosenIdx === correctIdx;
+
+      options.forEach(function (b) {
+        var idx = parseInt(b.dataset.index, 10);
+        b.classList.remove('hover:border-rose-300', 'hover:bg-rose-50/50', 'cursor-pointer');
+        b.disabled = true;
+
+        if (idx === correctIdx) {
+          b.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-900', 'font-semibold');
+        } else if (idx === chosenIdx && !isCorrect) {
+          b.classList.add('border-rose-300', 'bg-rose-50', 'text-rose-800');
+        } else {
+          b.classList.add('opacity-50');
+        }
+      });
+
+      if (explanation) {
+        explanation.classList.remove('hidden');
+        if (isCorrect) {
+          explanation.classList.add('border-emerald-200', 'bg-emerald-50/60');
+          if (explanationTitle) {
+            explanationTitle.innerHTML = '<span>🎉 回答正确！</span> 权威医学原理解析';
+            explanationTitle.classList.add('text-emerald-800');
+          }
+        } else {
+          explanation.classList.add('border-rose-200', 'bg-rose-50/60');
+          if (explanationTitle) {
+            explanationTitle.innerHTML = '<span>💡 认知突破！</span> 权威医学原理解析';
+            explanationTitle.classList.add('text-rose-800');
+          }
+        }
+      }
+
+      if (quizStatus) {
+        quizStatus.textContent = '今日已打卡 ✅';
+        quizStatus.classList.remove('text-gray-400');
+        quizStatus.classList.add('text-emerald-600', 'font-semibold');
+      }
+    }
+  })();
+</script>

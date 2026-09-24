@@ -2,7 +2,9 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import Search from '../components/Search.astro';
+import DailyCard from '../components/DailyCard.astro';
 import { CATEGORIES, SITE_TITLE, SITE_DESCRIPTION, type CategoryKey } from '../consts';
+import { DAILY_QUIZZES, getTodayIndex } from '../data/dailyQuiz';
 
 const entries: CollectionEntry<'articles'>[] = await getCollection('articles');
 const articles = entries
@@ -15,6 +17,11 @@ const articles = entries
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
   : `${import.meta.env.BASE_URL}/`;
+
+// 确定性计算今日主推词条与关联每日速测
+const todayIdx = getTodayIndex(articles.length);
+const featuredArticle = articles[todayIdx] ?? articles[0];
+const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefined;
 ---
 
 <Base title={SITE_TITLE} description={SITE_DESCRIPTION}>
@@ -30,6 +37,9 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       避开伪科学与营销套路。每日精选权威科普文章导读，涵盖避孕技巧、愉悦提升、生理机制与亲密沟通。
     </p>
   </section>
+
+  {/* 今日精选科普与每日速测打卡 */}
+  {featuredArticle && <DailyCard article={featuredArticle} quiz={todayQuiz} />}
 
   {/* 搜索 */}
   <section class="mb-8" aria-label="站内检索">
