@@ -1,0 +1,51 @@
+[
+  {
+    "id": "who-fact-sheets",
+    "name": "世界卫生组织 (WHO) 实况报道",
+    "entry_url": "https://www.who.int/zh/news-room/fact-sheets",
+    "base_url": "https://www.who.int",
+    "link_pattern": "/zh/news-room/fact-sheets/detail/([a-zA-Z0-9-]+)",
+    "keywords": [
+      "避孕", "月经", "人乳头瘤", "HPV", "性传播", "宫颈", "生殖", "性健康", 
+      "人工流产", "安全套", "衣原体", "淋病", "梅毒", "生殖道感染", "家庭生育规划"
+    ],
+    "category_map": {
+      "避孕": "contraception",
+      "安全套": "contraception",
+      "家庭生育规划": "contraception",
+      "人工流产": "contraception",
+      "月经": "body",
+      "宫颈": "body",
+      "HPV": "body",
+      "生殖": "body",
+      "性传播": "body",
+      "性健康": "pleasure"
+    },
+    "default_category": "body"
+  },
+  {
+    "id": "msd-women-health",
+    "name": "默沙东诊疗手册大众版 女性健康",
+    "entry_url": "https://www.msdmanuals.cn/home/women-s-health-issues",
+    "base_url": "https://www.msdmanuals.cn",
+    "link_pattern": "/home/women-s-health-issues/([a-zA-Z0-9-]+/[a-zA-Z0-9-]+)",
+    "keywords": [
+      "避孕", "月经", "阴道", "阴蒂", "性交", "润滑", "痛经", "子宫", "出血",
+      "排卵", "绝经", "盆腔", "念珠菌", "宫颈", "性反应", "性高潮"
+    ],
+    "category_map": {
+      "避孕": "contraception",
+      "阴蒂": "pleasure",
+      "性交": "pleasure",
+      "润滑": "pleasure",
+      "性高潮": "pleasure",
+      "性反应": "pleasure",
+      "月经": "body",
+      "痛经": "body",
+      "出血": "body",
+      "阴道": "body",
+      "子宫": "body"
+    },
+    "default_category": "body"
+  }
+]

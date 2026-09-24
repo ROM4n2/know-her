@@ -11,7 +11,8 @@
 		"curate:list": "python scripts/curate.py list",
 		"curate:check": "python scripts/curate.py check",
 		"curate:links": "python scripts/curate.py check-links",
-		"curate:today": "python scripts/curate.py daily"
+		"curate:today": "python scripts/curate.py daily",
+		"curate:harvest": "python scripts/curate_harvester.py"
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.10",
