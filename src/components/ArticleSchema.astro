@@ -1,133 +1,67 @@
 ---
 /**
- * ArticleSchema.astro — Schema.org MedicalWebPage + ClaimReview 结构化数据
- *
- * 接收 article frontmatter（src/content.config.ts Zod schema）作为 Props，
- * 输出 JSON-LD <script type="application/ld+json">。
- *
- * 布局符合：
- *  - Schema.org MedicalWebPage（医学网页主体）
- *  - Schema.org ClaimReview（对来源原文主张的复核标注）
+ * ArticleSchema.astro — Schema.org Article 结构化数据（含原文溯源）
  */
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 
 interface Props {
-  /** 正文首个 H1（frontmatter 无 title 字段，由调用方传入） */
   title: string;
-  /** 页面 canonical URL（绝对地址） */
   url: string;
-  /** 短摘要（外链+短摘要模式，可选） */
-  summary?: string;
-
-  /** ---- 以下为 article frontmatter 字段（src/content.config.ts） ---- */
+  summary: string;
+  pubDate: Date;
+  category: string;
+  tags: string[];
   source_url: string;
-  source_snapshot_date: string;
-  source_snapshot_hash?: string;
-  review_status: 'draft' | 'in_review' | 'published' | 'stale';
-  review_date?: string;
-  review_interval_months: number;
-  reviewed_source: boolean;
-  reviewed_copyright: boolean;
-  reviewed_medical: boolean;
-  reviewed_sensitivity: boolean;
-  red_flags: string[];
-  has_individual_advice: false;
-  lang: 'zh-CN' | 'en';
-  translation_of?: string;
+  source_name: string;
+  author?: string;
+  is_full_text: boolean;
 }
 
 const {
   title,
   url,
   summary,
+  pubDate,
+  category,
+  tags,
   source_url,
-  source_snapshot_date,
-  source_snapshot_hash,
-  review_status,
-  review_date,
-  review_interval_months,
-  reviewed_source,
-  reviewed_copyright,
-  reviewed_medical,
-  reviewed_sensitivity,
-  red_flags,
-  has_individual_advice,
-  lang,
-  translation_of,
+  source_name,
+  author,
+  is_full_text,
 } = Astro.props;
 
 const siteUrl = Astro.site ?? new URL('https://know-her.pages.dev');
-const effectiveDate = review_date ?? source_snapshot_date;
+const isoDate = pubDate.toISOString();
 
 const payload = {
   '@context': 'https://schema.org',
-  '@type': 'MedicalWebPage',
+  '@type': 'Article',
   '@id': url,
   url,
-  name: title,
-  description: summary ?? SITE_DESCRIPTION,
-  inLanguage: lang,
-  datePublished: effectiveDate,
-  dateModified: effectiveDate,
+  headline: title,
+  description: summary || SITE_DESCRIPTION,
+  datePublished: isoDate,
+  dateModified: isoDate,
+  inLanguage: 'zh-CN',
   isPartOf: {
     '@type': 'WebSite',
     name: SITE_TITLE,
     url: siteUrl.origin,
   },
-  mainEntity: {
-    '@type': 'Article',
-    headline: title,
-    url,
-    datePublished: effectiveDate,
-    dateModified: effectiveDate,
-    inLanguage: lang,
-    author: {
-      '@type': 'Organization',
-      name: SITE_TITLE,
-      url: siteUrl.origin,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: SITE_TITLE,
-      url: siteUrl.origin,
-    },
-    isAccessibleForFree: true,
-    ...(!has_individual_advice && {
-      medicalAudience: { '@type': 'Patient', audienceType: '患者与公众' },
-    }),
+  author: {
+    '@type': 'Person',
+    name: author || source_name || SITE_TITLE,
   },
-  // ClaimReview：对来源原文主张的透明复核标注
-  claimReviewed: {
-    '@type': 'Claim',
-    name: title,
-    url: source_url,
-    text: summary ?? title,
+  publisher: {
+    '@type': 'Organization',
+    name: SITE_TITLE,
+    url: siteUrl.origin,
   },
-  ...(source_snapshot_hash && { version: source_snapshot_hash }),
-  // 急症红旗清单（MedicalWebPage 主内容）
-  ...(red_flags.length > 0 && {
-    mainContentOfPage: {
-      '@type': 'WebPageElement',
-      name: '急症红旗清单',
-      description: red_flags.join('；'),
-    },
-  }),
-  // 审核四段状态（透明可追溯元数据）
-  additionalProperty: [
-    { '@type': 'PropertyValue', name: 'review_status', value: review_status },
-    { '@type': 'PropertyValue', name: 'source_snapshot_date', value: source_snapshot_date },
-    { '@type': 'PropertyValue', name: 'reviewed_source', value: String(reviewed_source) },
-    { '@type': 'PropertyValue', name: 'reviewed_copyright', value: String(reviewed_copyright) },
-    { '@type': 'PropertyValue', name: 'reviewed_medical', value: String(reviewed_medical) },
-    { '@type': 'PropertyValue', name: 'reviewed_sensitivity', value: String(reviewed_sensitivity) },
-    { '@type': 'PropertyValue', name: 'has_individual_advice', value: String(has_individual_advice) },
-    ...(review_interval_months
-      ? [{ '@type': 'PropertyValue', name: 'review_interval_months', value: String(review_interval_months) }]
-      : []),
-    ...(translation_of
-      ? [{ '@type': 'PropertyValue', name: 'translation_of', value: translation_of }]
-      : []),
-  ],
+  isBasedOn: source_url,
+  keywords: tags.join(','),
+  articleSection: category,
+  isAccessibleForFree: true,
+  creativeWorkStatus: is_full_text ? 'FullText' : 'CuratedDigest',
 };
 
 const jsonLd = JSON.stringify(payload).replace(/</g, '\\u003c');

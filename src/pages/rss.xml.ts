@@ -5,23 +5,22 @@ import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 
 export async function GET(context: APIContext) {
   const articles = await getCollection('articles');
-  const published = articles.filter(
-    (entry: CollectionEntry<'articles'>) =>
-      entry.data.review_status === 'published',
-  );
+  const valid = articles
+    .filter((entry: CollectionEntry<'articles'>) => !entry.id.startsWith('_'))
+    .sort(
+      (a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) =>
+        b.data.pubDate.getTime() - a.data.pubDate.getTime(),
+    );
 
   return rss({
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     site: context.site ?? 'https://know-her.pages.dev',
-    items: published.map((article: CollectionEntry<'articles'>) => ({
-      // 标题取正文首个 H1（frontmatter 无 title 字段），此处回退到 slug
-      title: article.id,
+    items: valid.map((article: CollectionEntry<'articles'>) => ({
+      title: article.data.title,
       link: `/articles/${article.id}/`,
-      pubDate: article.data.review_date
-        ? new Date(`${article.data.review_date}T00:00:00Z`)
-        : undefined,
-      description: `来源：${article.data.source_url}（快照 ${article.data.source_snapshot_date}）`,
+      pubDate: article.data.pubDate,
+      description: article.data.summary,
       customData: `<dc:source><![CDATA[${article.data.source_url}]]></dc:source>`,
     })),
     customData: '<language>zh-CN</language>',
