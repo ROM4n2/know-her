@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-09-24T16:00:00Z",
+  "last_updated": "2026-09-24T16:21:10.358023+00:00",
   "processed_urls": [
     "https://www.msdmanuals.cn/home/women-s-health-issues/menstrual-disorders-and-abnormal-uterine-bleeding/abnormal-uterine-bleeding-aub",
     "https://www.who.int/zh/news-room/fact-sheets/detail/cervical-cancer",
@@ -12,7 +12,8 @@
     "https://www.msdmanuals.cn/home/women-s-health-issues/biology-of-the-female-reproductive-system/menstrual-cycle",
     "https://www.msdmanuals.cn/home/special-subjects/sexuality/sexuality",
     "https://www.msdmanuals.cn/home/women-s-health-issues/sexual-function-and-dysfunction-in-women/genito-pelvic-pain-penetration-disorder",
-    "https://example.com/authoritative-article"
+    "https://example.com/authoritative-article",
+    "https://www.who.int/zh/news-room/fact-sheets/detail/condoms"
   ],
   "rejected_urls": []
 }
