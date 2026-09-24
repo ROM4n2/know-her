@@ -42,9 +42,20 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
   month: 'long',
   day: 'numeric',
 });
+
+// 计算字数与预计导读耗时
+const charCount = (entry.body ?? '').replace(/\s+/g, '').length;
+const readMinutes = Math.max(1, Math.ceil(charCount / 300));
 ---
 
-<Base title={`${data.title} | know-her`} description={data.summary}>
+<Base
+  title={`${data.title} | know-her`}
+  description={data.summary}
+  type="article"
+  pubDate={data.pubDate}
+  author={data.author ?? data.source_name}
+  tags={data.tags}
+>
   <Fragment slot="head">
     <link rel="canonical" href={url} />
     <ArticleSchema
@@ -64,16 +75,26 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
   <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
     <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
     <span>/</span>
-    <span class="text-gray-600">{categoryInfo.label}</span>
+    <a href={`${base}categories/${data.category}/`} class="hover:text-rose-600 transition-colors font-medium text-gray-600">
+      {categoryInfo.label}
+    </a>
+    <span>/</span>
+    <span class="text-gray-400 truncate max-w-[200px] sm:max-w-xs">{data.title}</span>
   </nav>
 
   <header class="mb-8">
     <div class="flex flex-wrap items-center gap-2 mb-3">
-      <span class:list={['rounded-full border px-2.5 py-0.5 text-xs font-medium', categoryInfo.cls]}>
+      <a
+        href={`${base}categories/${data.category}/`}
+        class:list={['rounded-full border px-2.5 py-0.5 text-xs font-medium hover:opacity-80 transition-opacity', categoryInfo.cls]}
+      >
         {categoryInfo.label}
-      </span>
+      </a>
       <span class="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs text-gray-500">
         {data.is_full_text ? '📖 全文收录' : '💡 精选导读'}
+      </span>
+      <span class="rounded-full border border-rose-100 bg-rose-50/60 px-2.5 py-0.5 text-xs text-rose-700">
+        ⏱️ 导读约 {readMinutes} 分钟
       </span>
     </div>
 
@@ -91,12 +112,25 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
           <span>原作者：{data.author}</span>
         </>
       )}
+      <span>·</span>
+      <span>字数约 {charCount} 字</span>
     </div>
 
-    {/* 推荐理由 / 核心看点 Callout */}
+    {/* 推荐理由 / 核心看点 Callout + 复制按钮 */}
     <div class="mt-6 rounded-xl border border-rose-100 bg-rose-50/50 p-4 text-sm text-gray-700 leading-relaxed">
-      <div class="flex items-center gap-1.5 font-semibold text-rose-800 mb-1">
-        <span>✨</span> 核心导读与看点
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="flex items-center gap-1.5 font-semibold text-rose-800">
+          <span>✨</span> 核心导读与看点
+        </div>
+        <button
+          type="button"
+          id="copy-summary-btn"
+          class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 shadow-2xs hover:bg-rose-100/60 transition-all cursor-pointer"
+          title="复制本篇导读要点卡片发送给朋友"
+        >
+          <span id="copy-btn-icon">📋</span>
+          <span id="copy-btn-text">复制要点卡片</span>
+        </button>
       </div>
       <p>{data.summary}</p>
     </div>
@@ -152,6 +186,27 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
       </a>
     </div>
   </footer>
+
+  <script is:inline define:vars={{ shareTitle: data.title, shareSummary: data.summary, shareSource: data.source_name, shareCategory: categoryInfo.label, shareUrl: url }}>
+    document.getElementById('copy-summary-btn')?.addEventListener('click', async () => {
+      const text = `🌸【know-her 科普速览】《${shareTitle}》\n🏷️ 专题：${shareCategory} · 权威来源：${shareSource}\n\n💡 核心看点：\n${shareSummary}\n\n🔗 完整导读与出处直达：\n${shareUrl}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        const btnText = document.getElementById('copy-btn-text');
+        const btnIcon = document.getElementById('copy-btn-icon');
+        if (btnText && btnIcon) {
+          btnText.textContent = '已复制！';
+          btnIcon.textContent = '✅';
+          setTimeout(() => {
+            btnText.textContent = '复制要点卡片';
+            btnIcon.textContent = '📋';
+          }, 2000);
+        }
+      } catch (err) {
+        alert('复制失败，请手动选择文字进行复制。');
+      }
+    });
+  </script>
 </Base>
 
 <style>

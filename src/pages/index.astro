@@ -41,31 +41,53 @@ const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefine
   {/* 今日精选科普与每日速测打卡 */}
   {featuredArticle && <DailyCard article={featuredArticle} quiz={todayQuiz} />}
 
-  {/* 搜索 */}
-  <section class="mb-8" aria-label="站内检索">
-    <Search placeholder="搜索避孕、高潮、月经、愉悦技巧、知情同意…" />
+  {/* 搜索与随机漫游 */}
+  <section class="mb-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3" aria-label="站内检索与随机漫游">
+    <div class="flex-1">
+      <Search placeholder="搜索避孕、高潮、月经、愉悦技巧、知情同意…" />
+    </div>
+    <button
+      type="button"
+      id="random-explore-btn"
+      class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 hover:border-rose-300 transition-all cursor-pointer whitespace-nowrap"
+      title="随机抽一篇科普文章阅读"
+    >
+      <span>🎲</span>
+      <span>随便逛逛</span>
+    </button>
   </section>
 
   {/* 分类快捷筛选 */}
   <section class="mb-8" aria-label="主题分类">
-    <div class="flex flex-wrap items-center gap-2 text-xs" id="category-filter-bar">
-      <span class="text-gray-400 mr-1">分类：</span>
-      <button
-        type="button"
-        data-filter="all"
-        class="category-btn active rounded-full border border-gray-900 bg-gray-900 px-3.5 py-1 font-medium text-white transition-all cursor-pointer"
-      >
-        全部
-      </button>
-      {Object.entries(CATEGORIES).map(([key, item]) => (
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex flex-wrap items-center gap-2" id="category-filter-bar">
+        <span class="text-gray-400 mr-1">分类：</span>
         <button
           type="button"
-          data-filter={key}
-          class="category-btn rounded-full border border-gray-200 bg-white px-3.5 py-1 font-medium text-gray-600 hover:border-gray-300 transition-all cursor-pointer"
+          data-filter="all"
+          class="category-btn active rounded-full border border-gray-900 bg-gray-900 px-3.5 py-1 font-medium text-white transition-all cursor-pointer"
         >
-          {item.label}
+          全部
         </button>
-      ))}
+        {Object.entries(CATEGORIES).map(([key, item]) => (
+          <button
+            type="button"
+            data-filter={key}
+            class="category-btn rounded-full border border-gray-200 bg-white px-3.5 py-1 font-medium text-gray-600 hover:border-gray-300 transition-all cursor-pointer"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <a
+        id="active-category-page-link"
+        href="#"
+        data-base={base}
+        class="hidden text-xs text-rose-600 hover:text-rose-700 font-medium hover:underline items-center gap-1"
+      >
+        <span>查看专题独立页</span>
+        <span>↗</span>
+      </a>
     </div>
   </section>
 
@@ -178,7 +200,38 @@ const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefine
         if (noMatchAlert) {
           noMatchAlert.classList.toggle('hidden', visibleCount > 0);
         }
+
+        // 更新“查看专题独立页”链接
+        const activeLink = document.getElementById('active-category-page-link') as HTMLAnchorElement | null;
+        if (activeLink) {
+          const base = activeLink.dataset.base ?? '/';
+          if (filter && filter !== 'all') {
+            activeLink.href = `${base}categories/${filter}/`;
+            activeLink.classList.remove('hidden');
+            activeLink.classList.add('inline-flex');
+          } else {
+            activeLink.classList.add('hidden');
+            activeLink.classList.remove('inline-flex');
+          }
+        }
       });
     });
+
+    // 🎲 随便逛逛：随机抽取一篇文章跳转
+    const randomBtn = document.getElementById('random-explore-btn');
+    if (randomBtn) {
+      randomBtn.addEventListener('click', () => {
+        const articleLinks: string[] = [];
+        articleCards.forEach((card) => {
+          const link = card.querySelector('a')?.getAttribute('href');
+          if (link) articleLinks.push(link);
+        });
+
+        if (articleLinks.length > 0) {
+          const target = articleLinks[Math.floor(Math.random() * articleLinks.length)];
+          window.location.href = target;
+        }
+      });
+    }
   </script>
 </Base>

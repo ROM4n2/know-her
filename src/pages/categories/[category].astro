@@ -1,0 +1,192 @@
+---
+/**
+ * 独立分类专题页 /categories/[category]/
+ * 提供深层直达链接、SEO 友好元数据与专注分类阅读流
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Search from '../../components/Search.astro';
+import { CATEGORIES, type CategoryKey } from '../../consts';
+
+export async function getStaticPaths() {
+  const categoryKeys = Object.keys(CATEGORIES) as CategoryKey[];
+  const allArticles: CollectionEntry<'articles'>[] = await getCollection('articles');
+
+  return categoryKeys.map((catKey) => {
+    const filtered = allArticles
+      .filter((entry: CollectionEntry<'articles'>) => !entry.id.startsWith('_') && entry.data.category === catKey)
+      .sort((a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+    return {
+      params: { category: catKey },
+      props: {
+        categoryKey: catKey,
+        articles: filtered,
+      },
+    };
+  });
+}
+
+interface Props {
+  categoryKey: CategoryKey;
+  articles: CollectionEntry<'articles'>[];
+}
+
+const { categoryKey, articles } = Astro.props;
+const categoryInfo = CATEGORIES[categoryKey];
+
+const CATEGORY_META: Record<CategoryKey, { title: string; desc: string; icon: string }> = {
+  contraception: {
+    title: '安全避孕专题指南',
+    desc: '倡导科学知情与自主避孕。深入剖析避孕套使用误区、紧急避孕药 72 小时抢救窗口与短效避孕药 (COC) 规律服用常识，破除侥幸心理。',
+    icon: '🛡️',
+  },
+  pleasure: {
+    title: '愉悦探索与性心理',
+    desc: '去羞耻化的两性愉悦指南。从现代解剖学立体认识阴蒂“隐藏冰山”，打破单一插入迷思，掌握润滑剂选型与女性自慰脱敏常识。',
+    icon: '🌸',
+  },
+  body: {
+    title: '生理机制与身体常识',
+    desc: '客观平实地看待身体信号。涵盖 FIGO 月经周期四大指标、排卵期出血、宫颈癌防治与 HPV 疫苗筛查常识，摆脱恐慌焦虑。',
+    icon: '🩸',
+  },
+  intimacy: {
+    title: '亲密沟通与知情同意',
+    desc: '健康平等的两性边界构建。全面拆解联合国教科文组织全面性教育倡导的 FRIES 知情同意黄金法则，拒绝胁迫与模糊边界。',
+    icon: '💬',
+  },
+};
+
+const meta = CATEGORY_META[categoryKey];
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<Base
+  title={`${meta.title} · ${categoryInfo.label} | know-her`}
+  description={meta.desc}
+>
+  {/* 面包屑导航 */}
+  <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
+    <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
+    <span>/</span>
+    <span class="text-gray-400">专题分类</span>
+    <span>/</span>
+    <span class="font-medium text-gray-700">{categoryInfo.label}</span>
+  </nav>
+
+  {/* 专题 Hero Banner */}
+  <header class="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-2xl">{meta.icon}</span>
+      <span class:list={['rounded-full border px-3 py-0.5 text-xs font-semibold', categoryInfo.cls]}>
+        {categoryInfo.label} 专题
+      </span>
+      <span class="text-xs text-gray-400 ml-auto">共 {articles.length} 篇精选</span>
+    </div>
+
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">
+      {meta.title}
+    </h1>
+    <p class="text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+      {meta.desc}
+    </p>
+
+    {/* 其他分类快捷切换 */}
+    <div class="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-gray-400 mr-1">查看其他专题：</span>
+      {Object.entries(CATEGORIES).map(([key, item]) => {
+        if (key === categoryKey) return null;
+        return (
+          <a
+            href={`${base}categories/${key}/`}
+            class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-gray-600 hover:border-rose-300 hover:text-rose-600 transition-colors"
+          >
+            {item.label}
+          </a>
+        );
+      })}
+    </div>
+  </header>
+
+  {/* 搜索 */}
+  <section class="mb-8" aria-label="专题检索">
+    <Search placeholder={`在【${categoryInfo.label}】中搜索关键词…`} />
+  </section>
+
+  {/* 文章列表 */}
+  <section aria-label="专题文章列表">
+    {articles.length > 0 ? (
+      <div class="space-y-4">
+        {articles.map((article) => {
+          const dateStr = article.data.pubDate.toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+          });
+
+          return (
+            <article class="group rounded-2xl border border-gray-100 bg-white p-5 shadow-xs transition-all hover:border-rose-200 hover:shadow-md">
+              <div class="flex flex-wrap items-center gap-2 mb-2 text-xs">
+                <span class:list={['rounded-full border px-2.5 py-0.5 font-medium', categoryInfo.cls]}>
+                  {categoryInfo.label}
+                </span>
+                <span class="text-gray-400">·</span>
+                <span class="text-gray-500">来源：{article.data.source_name}</span>
+                <span class="text-gray-400">·</span>
+                <time class="text-gray-400" datetime={article.data.pubDate.toISOString()}>
+                  {dateStr}
+                </time>
+              </div>
+
+              <h2 class="text-base sm:text-lg font-bold text-gray-900 group-hover:text-rose-600 transition-colors leading-snug">
+                <a href={`${base}articles/${article.id}/`} class="hover:underline">
+                  {article.data.title}
+                </a>
+              </h2>
+
+              <p class="mt-2 text-xs sm:text-sm text-gray-600 line-clamp-2 leading-relaxed">
+                {article.data.summary}
+              </p>
+
+              <div class="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-50 text-xs">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  {article.data.tags.map((tag: string) => (
+                    <span class="rounded bg-gray-50 px-2 py-0.5 text-gray-500">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <a
+                    href={article.data.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-gray-400 hover:text-rose-600 transition-colors"
+                    title="在原出处查阅"
+                  >
+                    原文链接 ↗
+                  </a>
+                  <a
+                    href={`${base}articles/${article.id}/`}
+                    class="font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-0.5"
+                  >
+                    <span>阅读导读</span>
+                    <span>→</span>
+                  </a>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center text-sm text-gray-400">
+        该专题暂未收录文章，正在策展中…
+      </div>
+    )}
+  </section>
+</Base>
