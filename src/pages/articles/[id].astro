@@ -46,6 +46,16 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
 // 计算字数与预计导读耗时
 const charCount = (entry.body ?? '').replace(/\s+/g, '').length;
 const readMinutes = Math.max(1, Math.ceil(charCount / 300));
+
+const tierMap: Record<'A' | 'B' | 'C', { label: string; cls: string }> = {
+  A: { label: 'Tier A 国际金标准', cls: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  B: { label: 'Tier B 临床专科共识', cls: 'bg-blue-50 text-blue-800 border-blue-200' },
+  C: { label: 'Tier C 专业机构科普', cls: 'bg-purple-50 text-purple-800 border-purple-200' },
+};
+const tierInfo = tierMap[(data.evidence_tier as 'A' | 'B' | 'C') ?? 'B'];
+const verifiedDateStr = data.last_verified_at
+  ? data.last_verified_at.toISOString().split('T')[0]
+  : formattedDate;
 ---
 
 <Base
@@ -90,6 +100,13 @@ const readMinutes = Math.max(1, Math.ceil(charCount / 300));
       >
         {categoryInfo.label}
       </a>
+      <a
+        href={`${base}how-we-source/`}
+        class:list={['rounded-full border px-2.5 py-0.5 text-xs font-medium hover:underline', tierInfo.cls]}
+        title="点击查看 know-her 循证分级标准与信源准则"
+      >
+        {tierInfo.label}
+      </a>
       <span class="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs text-gray-500">
         {data.is_full_text ? '📖 全文收录' : '💡 精选导读'}
       </span>
@@ -113,7 +130,13 @@ const readMinutes = Math.max(1, Math.ceil(charCount / 300));
         </>
       )}
       <span>·</span>
-      <span>字数约 {charCount} 字</span>
+      <span title="经真机 HTTP 200 探针与人工质控核验">核验日期：{verifiedDateStr}</span>
+      {data.reviewed_by && (
+        <>
+          <span>·</span>
+          <span>复审：{data.reviewed_by}</span>
+        </>
+      )}
     </div>
 
     {/* 推荐理由 / 核心看点 Callout + 复制按钮 */}
@@ -182,6 +205,22 @@ const readMinutes = Math.max(1, Math.ceil(charCount / 300));
         class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-rose-700 transition-colors"
       >
         <span>前往 {data.source_name} 查阅原文</span>
+        <span>↗</span>
+      </a>
+    </div>
+
+    {/* 读者勘误通道 */}
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500">
+      <div class="flex items-center gap-1">
+        <span>💡 循证医学需要持续纠偏。若发现本篇数据有误或已过时：</span>
+      </div>
+      <a
+        href={`https://github.com/ROM4n2/know-her/issues/new?title=${encodeURIComponent(`[勘误反馈] 《${data.title}》`)}&labels=correction&template=correction.yml`}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-rose-600 font-medium hover:underline inline-flex items-center gap-1"
+      >
+        <span>🐞 提交勘误反馈</span>
         <span>↗</span>
       </a>
     </div>

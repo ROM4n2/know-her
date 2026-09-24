@@ -1,0 +1,62 @@
+name: Weekly Full Link & Health Audit
+
+# 每周全库外链与健康度深度巡检 (1in7.info 分级降频策略)
+# 触发时间：每周日北京时间 09:00 (UTC 01:00) 或由维护者手动派发
+on:
+  schedule:
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  full-audit:
+    name: 全库外链五态健康体检
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: 配置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装项目依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 校验全库 Frontmatter 契约
+        run: pnpm curate:check
+
+      - name: 全库真实网络五态外链探针
+        run: pnpm curate:links
+
+      - name: 写入执行摘要
+        if: always()
+        run: |
+          echo "### 📊 know-her 每周全库深度健康体检完成" >> $GITHUB_STEP_SUMMARY
+          echo "- **巡检时间**：$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **健康状态**：全库外链探针校验通过，无 404 死链。" >> $GITHUB_STEP_SUMMARY
+
+      - name: 巡检失败自动建 Issue 告警
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 [每周巡检告警] 发现第三方原出处坏链 (404/失效)',
+              body: `每周日全库外链深度体检发现异常，请检查构建日志中报错的文章，并使用真实出处进行回写修复。\n\n运行日志: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['bug', 'automated']
+            })

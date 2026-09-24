@@ -1,9 +1,30 @@
 ---
 import { SITE_TITLE } from '../consts';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
 ---
 <footer class="mt-16 border-t border-gray-100 py-8 text-center text-xs text-gray-400">
-  <div class="space-y-2">
+  <div class="space-y-3">
+    <nav class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-gray-500 font-medium">
+      <a href={`${base}how-we-source/`} class="hover:text-rose-600 transition-colors">
+        🛡️ 信源标准与循证分级
+      </a>
+      <span class="text-gray-300">·</span>
+      <a href={`${base}privacy/`} class="hover:text-rose-600 transition-colors">
+        🔒 零隐私收集声明
+      </a>
+      <span class="text-gray-300">·</span>
+      <a href="https://github.com/ROM4n2/know-her" target="_blank" rel="noopener noreferrer" class="hover:text-rose-600 transition-colors">
+        💻 GitHub 开源仓库
+      </a>
+      <span class="text-gray-300">·</span>
+      <a href={`${base}rss.xml`} class="hover:text-rose-600 transition-colors">
+        📡 RSS 订阅
+      </a>
+    </nav>
     <p>{SITE_TITLE} · 倡导科学、自主、知情同意与愉悦探索</p>
-    <p>科普内容仅供知识参考，涉及严重身体不适或疾病诊疗请及时就医。</p>
+    <p class="text-[11px] text-gray-400">科普内容仅供知识参考与常识普及，涉及严重身体不适、妇科病变或处方用药请前往正规公立医院就医。</p>
   </div>
 </footer>

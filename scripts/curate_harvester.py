@@ -156,6 +156,8 @@ def compose_mdx_content(candidate: dict) -> str:
     elif len(summary) > 160:
         summary = summary[:157] + "..."
 
+    evidence_tier = candidate.get("evidence_tier", "A")
+
     mdx = f"""---
 title: "{candidate['title']}"
 pubDate: {today_str}
@@ -163,9 +165,12 @@ summary: "{summary}"
 category: "{candidate['category']}"
 tags:
 {tags_yaml}
+evidence_tier: "{evidence_tier}"
 source_url: "{candidate['source_url']}"
 source_name: "{candidate['source_name']}"
 author: "{candidate['source_name']}"
+reviewed_by: ""
+last_verified_at: {today_str}
 is_full_text: false
 ---
 
@@ -177,13 +182,14 @@ import MedicalDisclaimer from '../../components/MedicalDisclaimer.astro';
 
 两性与生殖健康需要建立在严谨客观的现代医学认知之上。本导读精选自**{candidate['source_name']}**官方发布的权威指引，帮助读者破除恐吓式营销与网络谣言，获取科学、去羞耻化的第一手常识。
 
-## 🔍 核心要点导读速览
+## 🔍 核心要点导读速览（待维护者人工提炼）
 
-1. **客观科学认知**：{candidate['title']}涉及的生理机制与临床常见表现；
-2. **日常自我关注与防范**：如何识别异常信号，掌握科学正确的应对策略与就诊时机；
-3. **避免过度焦虑与误区**：破除道听途说的古老偏方，遵循循证医学指导。
+<!-- ⚠️ 待审必读：合并前请维护者通读原文，提炼 3~4 条真正有医学增量的核心干货，切勿使用套话 -->
+1. **核心机制与客观认知**：<!-- 请在此填入提炼要点 1 -->
+2. **日常自我关注与防范**：<!-- 请在此填入提炼要点 2 -->
+3. **常见误区与就医时机**：<!-- 请在此填入提炼要点 3 -->
 
-## 📖 深入导读
+## 📖 候选摘录背景
 
 {candidate.get('raw_desc', '')}
 
@@ -191,7 +197,7 @@ import MedicalDisclaimer from '../../components/MedicalDisclaimer.astro';
 
 ## 🔗 推荐阅读与原出处直达
 
-想要了解更加详尽的病理机制、临床试验数据与官方防控建议，欢迎点击下方按钮直达官方权威文献：
+想要查阅原文献、临床试验数据与官方防控建议，欢迎点击下方按钮直达官方权威页面：
 """
     return mdx
 
@@ -380,15 +386,15 @@ def create_draft_pr(candidate: dict) -> bool:
 **权威信源**：{candidate['source_name']}
 **原出处链接**：{candidate['source_url']}
 
-### 🔍 自动化探活与校验报告
+### 🔍 自动化探活与静态校验
 - [x] **真实外链探针**：HTTP 200 OK 确认可达
 - [x] **Schema 结构化检查**：符合 `src/content.config.ts` 规范
-- [x] **版权合规性**：遵循 ADR-0002 双轨制（精炼导读 + 原文直达链接，无侵权搬运）
 
-### ✍️ 维护者审阅提示
-- 点击 Files changed 审阅导读文案；
-- 确认无误后点击 **Squash and merge** 或 **Merge pull request**；
-- 合并后将自动触发 GitHub Actions 编译与 Pages 秒级更新发布！
+### ✍️ 维护者人工审阅 Checklist（严禁机器自打勾，合并前必须由人核实）
+- [ ] **原文核实**：点击上述出处链接，确认内容与本篇主题完全匹配；
+- [ ] **人工撰写导读**：已在 Files changed 中填入 3~4 点人工提炼的核心要点，清除了占位提示；
+- [ ] **版权合规核验**：遵循 ADR-0002 双轨制（精炼导读 + 原文直达链接，无侵权搬运）；
+- [ ] **CI 门禁全绿**：Astro 编译与外链真实探测均 PASS。
 """
 
         # gh pr create

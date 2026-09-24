@@ -36,9 +36,9 @@ jobs:
       - name: Frontmatter Check
         run: pnpm curate:check
 
-      - name: Zero-404 Live Links Probe (全库外链探测)
+      - name: Zero-404 Live Links Probe (今日精选外链轻量探测)
         id: link_check
-        run: pnpm curate:links
+        run: python scripts/curate.py check-links --today-only
 
       - name: Today's Featured Pick & Report (今日精选播报)
         run: |
@@ -46,7 +46,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           pnpm curate:today >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **全库外链健康探测通过，零 404 死链。**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **今日主推外链健康探测通过，零 404 死链。**" >> $GITHUB_STEP_SUMMARY
 
       - name: Alert on Failure
         if: failure()

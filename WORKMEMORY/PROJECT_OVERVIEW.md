@@ -27,9 +27,20 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
   5. 每日任务与互动闭环上线：首页置顶「今日精选科普 + 每日一答 30 秒速测」组件（确定性积日轮换、localStorage 连续打卡记天数）；配置 `.github/workflows/daily-routine.yml` 每天北京时间 08:00 定时全库外链 200 探针巡检并播报；CLI 支持 `pnpm curate:today` 查看每日排期；
   6. 开源规范达标：建立高标准 `README.md`、MIT `LICENSE`、`CONTRIBUTING.md` 与 `CODE_OF_CONDUCT.md`，GitHub 社区健康度跃升至 85%+；
   7. Pipeline B 每日自动化扩充工作流打通：开发 `scripts/curate_harvester.py`、`scripts/sources.json` 与 `.github/workflows/harvest-candidates.yml`，每日 08:30 自动扫描 WHO/默沙东权威入口并提交待审 Draft PR，杜绝 404 与凭空捏造，首篇候选 PR #1 已成功合并上线；
-  8. 社交分享与交互体验升级：全站集成 Open Graph 与 Twitter Card 预览卡片（`public/og-card.svg`）；四大分类拥有独立静态路由（`/categories/[category]/`）；文章详情页新增“⏱️ 导读时长预估”与“📋 一键复制精炼要点卡片”；首页新增“🎲 随便逛逛”灵感漫游。
+  8. 社交分享与交互体验升级：全站集成 Open Graph 与 Twitter Card 预览卡片（`public/og-card.svg`）；四大分类拥有独立静态路由（`/categories/[category]/`）；文章详情页新增“⏱️ 导读时长预估”与“📋 一键复制精炼要点卡片”；首页新增“🎲 随便逛逛”灵感漫游；
+  9. 信任基建与循证分级升级（全面吸纳 2026-09-25 竞品调研与可行性审计）：
+     - 清除 Harvester 模板套话病句，彻底重写《安全套科学选用指南》，确立机器探活+人工深读边界；
+     - PR 模板去机器自打勾；清理废弃死代码 `UnreviewedBanner.astro`；
+     - 升级 Schema 支持 `evidence_tier`（Tier A/B/C）、`reviewed_by` 与 `last_verified_at`，全库 11 篇完成严谨分级与复审标注；
+     - 上线「信任两页」：`/how-we-source/`（信源准入清单与循证定义）与 `/privacy/`（零收集三段论与本机打卡记录一键清空）；
+     - SEO 与协议合规：集成 `@astrojs/sitemap` 生成 `sitemap-index.xml` + `robots.txt`，设定 GitHub 仓库 topics 与 homepage，归档 `CONTENT-LICENSE.md`（代码 MIT / 导读 CC BY-SA 4.0 分立）；
+     - 外链探针降频分级：晨检仅探测今日精选（<1秒），新增 `.github/workflows/weekly-full-audit.yml` 每周日五态全量体检；
+     - 文章详情页新增预填 GitHub Issue 勘误闭环通道。
 
 ## 高频坑（踩过的雷区）
+
+- 现象：Pipeline B 自动合成导读产生机械模板病句与假自证 → 根因：大模型盲目将标题插值进固定句式，PR 脚本自己替人勾选版权合规 → 解法：机器只抓取真实候选与元数据生成 TODO 草稿骨架，核心导读由人工通读原文提炼，PR Checklist 默认未勾选强制人工核验。
+- 现象：外链探针频繁扫描导致告警噪音 → 根因：push/daily/weekly 三通道全量重扫 → 解法：分层降频——晨检仅测今日精选，PR 仅测变更文件，全库深度体检降为周度任务，支持 1in7 风格的五态判定。
 
 - 现象：Astro 5/7 与 Tailwind v4 不兼容 → 根因：`@astrojs/tailwind` 不支持 Tailwind v4 → 解法：改用 `@tailwindcss/vite` Vite 插件接入。
 - 现象：TypeScript 7.0 破坏 `@astrojs/check` → 根因：TS 7 移除了 programmatic API → 解法：固定安装 `typescript@5.8.3`。

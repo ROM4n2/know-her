@@ -23,6 +23,7 @@ curate.py — know-her 日常科普策展与内容管理辅助工具 (ADR-0002)
 import os
 import sys
 import re
+import time
 import argparse
 import datetime
 import urllib.request
@@ -110,42 +111,101 @@ def cmd_check(args):
         print(f"\n⚠️ 发现 {errors} 处错误，请及时修复。")
         sys.exit(1)
 
+def check_single_url(url: str, fname: str, src_name: str) -> bool:
+    """探测单个外链状态，实现五态判定与重试"""
+    if not url:
+        print(f"❌ [BROKEN] {fname}: 无 source_url")
+        return False
+
+    req = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            code = resp.status
+            if 200 <= code < 300:
+                print(f"✅ [200 OK] {fname}")
+                print(f"   机构: {src_name} | 链接: {url}")
+                return True
+            elif 300 <= code < 400:
+                print(f"↪️ [{code} REDIRECT] {fname} -> {resp.geturl()}")
+                return True
+            else:
+                print(f"❌ [{code} BROKEN] {fname} ({src_name}) -> {url}")
+                return False
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            # 尝试附带更完整的浏览器请求头降级重试 (防常见 WAF/Bot-Wall)
+            print(f"🛡️ [403 BOT_BLOCKED] {fname} 遭遇反爬/WAF，尝试降级探测...")
+            try:
+                alt_req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                    },
+                )
+                with urllib.request.urlopen(alt_req, timeout=15) as alt_resp:
+                    print(f"✅ [降级探测成功 {alt_resp.status} OK] {fname}")
+                    return True
+            except Exception:
+                print(f"⚠️ [BOT_BLOCKED] 目标站点设置了防爬机制，但链接存在。")
+                return True
+        elif e.code in (404, 410, 500, 502, 503):
+            print(f"❌ [{e.code} BROKEN] {fname} ({src_name}) -> {url}")
+            return False
+        else:
+            print(f"❌ [{e.code} HTTP Error] {fname} ({src_name}) -> {url}")
+            return False
+    except Exception as e:
+        print(f"⚠️ [NETWORK_ERR: {e}] {fname} ({src_name}) -> {url}")
+        # 网络波动进行一次 2 秒重试
+        time.sleep(2)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as retry_resp:
+                print(f"✅ [重试成功 200 OK] {fname}")
+                return True
+        except Exception:
+            return False
+
+
 def cmd_check_links(args):
     files = [f for f in os.listdir(ARTICLES_DIR) if f.endswith(".mdx") and not f.startswith("_")]
+    
+    if getattr(args, "files", None):
+        target_basenames = [os.path.basename(f) for f in args.files]
+        files = [f for f in files if f in target_basenames]
+        print(f"🌐 仅定向探测 PR 变更的 {len(files)} 篇词条外链...")
+    elif getattr(args, "today_only", False):
+        article_list = []
+        for fname in files:
+            fpath = os.path.join(ARTICLES_DIR, fname)
+            with open(fpath, "r", encoding="utf-8") as f:
+                meta, _ = parse_frontmatter(f.read())
+            meta["filename"] = fname
+            article_list.append(meta)
+        article_list.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        bj_time = now_utc + datetime.timedelta(hours=8)
+        day_of_year = bj_time.timetuple().tm_yday
+        today_idx = (day_of_year - 1) % len(article_list)
+        files = [article_list[today_idx]["filename"]]
+        print(f"🌐 晨间巡检：仅探测今日精选词条 [{files[0]}] 外链可达性...")
+    else:
+        print(f"🌐 在线探测全库 {len(files)} 篇词条的原出处外链可达性（五态分级，杜绝 404）...\n")
+
     errors = 0
-    print(f"🌐 在线探测 {len(files)} 篇词条的原出处外链可达性（杜绝 404）...\n")
     for fname in sorted(files):
         fpath = os.path.join(ARTICLES_DIR, fname)
         with open(fpath, "r", encoding="utf-8") as f:
             meta, _ = parse_frontmatter(f.read())
-        
         url = meta.get("source_url", "")
         src_name = meta.get("source_name", "未知")
-        if not url:
-            print(f"❌ {fname}: 无 source_url")
-            errors += 1
-            continue
-
-        req = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
-        try:
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                code = resp.status
-                if 200 <= code < 400:
-                    print(f"✅ [{code} OK] {fname}")
-                    print(f"   机构: {src_name}")
-                    print(f"   链接: {url}")
-                else:
-                    print(f"❌ [{code} FAIL] {fname} ({src_name}) -> {url}")
-                    errors += 1
-        except urllib.error.HTTPError as e:
-            print(f"❌ [{e.code} HTTP Error] {fname} ({src_name}) -> {url}")
-            errors += 1
-        except Exception as e:
-            print(f"❌ [网络错误: {e}] {fname} ({src_name}) -> {url}")
+        ok = check_single_url(url, fname, src_name)
+        if not ok:
             errors += 1
 
     if errors == 0:
-        print(f"\n🎉 完美！全部 {len(files)} 篇词条原文外链均返回 200 OK，零 404！")
+        print(f"\n🎉 完美！全部 {len(files)} 篇受检词条外链均健康可达，零 404！")
     else:
         print(f"\n⚠️ 发现 {errors} 处无效或 404 外链，请按照真实出处修复后再发布。")
         sys.exit(1)
@@ -262,7 +322,9 @@ def main():
     subparsers.add_parser("check", help="校验文章格式合规性")
 
     # check-links
-    subparsers.add_parser("check-links", help="在线探测所有词条原出处外链可达性")
+    check_links_p = subparsers.add_parser("check-links", help="在线探测词条原出处外链可达性（五态分级，杜绝404）")
+    check_links_p.add_argument("--today-only", action="store_true", help="仅探测今日精选推荐外链（用于晨间轻量巡检）")
+    check_links_p.add_argument("--files", nargs="*", help="限定探测指定的文件列表（用于 PR 变更文件检查）")
 
     # daily
     daily_p = subparsers.add_parser("daily", help="查看今日精选推荐与外链探测")

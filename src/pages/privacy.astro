@@ -1,0 +1,128 @@
+---
+/**
+ * /privacy/ — 隐私承诺声明
+ * 借鉴 YouPeriod 零收集三段论（不持有 → 无法被出售/被调取/被泄露）
+ */
+import Base from '../layouts/Base.astro';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<Base
+  title="零个人隐私收集承诺 | know-her"
+  description="know-her 坚决捍卫读者的两性健康隐私。零用户体系、零服务端数据库、零第三方广告追踪，每日速测打卡数据 100% 仅保存在你的本地浏览器中。"
+>
+  <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
+    <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
+    <span>/</span>
+    <span class="text-gray-600">隐私承诺声明</span>
+  </nav>
+
+  <article class="space-y-10">
+    {/* Hero Section */}
+    <header class="border-b border-gray-100 pb-8">
+      <div class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 mb-3">
+        <span>🔒</span> 零收集三段论 · 纯静态架构保障
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight leading-snug">
+        你的两性健康与阅读隐私，属于且仅属于你
+      </h1>
+      <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+        在互联网上检索避孕、妇科症状或性探索常识，不应成为商业广告算法画像读者的工具。know-her 从架构设计之初便确立了<strong>“根本不收集，方能绝对安全”</strong>的根本信条。
+      </p>
+    </header>
+
+    {/* Section 1: 三段论 */}
+    <section class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>🛡️</span> 一、零收集三段论 (Zero-Collection Syllogism)
+      </h2>
+      <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4 text-xs sm:text-sm text-gray-700 leading-relaxed">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="rounded-xl bg-gray-50 p-4 border border-gray-100 text-center">
+            <span class="text-2xl mb-2 block">🚫</span>
+            <div class="font-bold text-gray-900 mb-1">不持有数据</div>
+            <div class="text-xs text-gray-500">我们没有后端业务数据库，不设注册登录与用户表</div>
+          </div>
+          <div class="rounded-xl bg-gray-50 p-4 border border-gray-100 text-center">
+            <span class="text-2xl mb-2 block">🤝</span>
+            <div class="font-bold text-gray-900 mb-1">无法被出售</div>
+            <div class="text-xs text-gray-500">没有任何第三方广告商或数据中介能在此获取你的画像</div>
+          </div>
+          <div class="rounded-xl bg-gray-50 p-4 border border-gray-100 text-center">
+            <span class="text-2xl mb-2 block">🔒</span>
+            <div class="font-bold text-gray-900 mb-1">无法被泄露</div>
+            <div class="text-xs text-gray-500">即使服务器遭受攻击，也绝对没有任何敏感浏览记录可被调取</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Section 2: 细节说明 */}
+    <section class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>🔍</span> 二、具体技术实现细节
+      </h2>
+      <div class="space-y-3 text-xs sm:text-sm">
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 class="font-bold text-gray-900 mb-1">1. 每日 30 秒速测与连续打卡</h3>
+          <p class="text-gray-600 leading-relaxed">
+            首页的「今日速测」答题状态与连续探索打卡天数（如 <code>know_her_streak</code>），<strong>100% 仅保存在你当前设备的浏览器本地存储（localStorage）中</strong>。该数据永远不会发送到任何远端服务器，清除浏览器缓存即可完全抹除。
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 class="font-bold text-gray-900 mb-1">2. 站内检索 (Pagefind)</h3>
+          <p class="text-gray-600 leading-relaxed">
+            know-her 的搜索功能基于 Pagefind 静态搜索引擎构建。当你输入“避孕套”或“月经”时，分词与搜索<strong>完全在你的浏览器本地 WebAssembly 中离线运行</strong>，你的任何搜索关键词均不会作为请求参数提交给后台。
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 class="font-bold text-gray-900 mb-1">3. 零第三方广告与追踪代码</h3>
+          <p class="text-gray-600 leading-relaxed">
+            本站全站零 Google Analytics、零百度统计、零 Meta Pixel、零任何形式的商业跨站 Cookie 追踪。代码完全开源透明，任何人均可在 GitHub 源码中审查我们的依赖。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {/* Section 3: 本地数据管理 */}
+    <section class="space-y-4 border-t border-gray-100 pt-8">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>🧹</span> 三、本地阅读数据自主管理
+      </h2>
+      <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+        你可以随时一键清空保存在当前浏览器中的所有 know-her 打卡与交互记录：
+      </p>
+
+      <div class="rounded-xl border border-gray-200 bg-white p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <div class="font-bold text-gray-900 text-xs sm:text-sm">清空当前浏览器中的本地打卡状态</div>
+          <div class="text-xs text-gray-500 mt-0.5">重置连续探索天数与答题历史记录</div>
+        </div>
+        <button
+          type="button"
+          id="clear-storage-btn"
+          class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap"
+        >
+          立即清除本地记录
+        </button>
+      </div>
+    </section>
+  </article>
+
+  <script is:inline>
+    document.getElementById('clear-storage-btn')?.addEventListener('click', () => {
+      if (confirm('确定要清除保存在本机的 know-her 打卡天数与速测历史吗？')) {
+        localStorage.removeItem('know_her_streak');
+        localStorage.removeItem('know_her_last_quiz_date');
+        localStorage.removeItem('know_her_quiz_records');
+        alert('本地打卡与速测记录已完全清除！');
+        window.location.reload();
+      }
+    });
+  </script>
+</Base>

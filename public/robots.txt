@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rom4n2.github.io/know-her/sitemap-index.xml

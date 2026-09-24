@@ -21,6 +21,12 @@ const articles = defineCollection({
     source_name: z.string(),
     /** 原文作者（可选） */
     author: z.string().optional(),
+    /** 循证证据等级：A (国际公立卫生机构/系统评价) | B (临床指南/专业学会共识) | C (权威机构专业科普) */
+    evidence_tier: z.enum(['A', 'B', 'C']).default('B'),
+    /** 复审人或复审团队（例如 "know-her 策展组"） */
+    reviewed_by: z.string().optional(),
+    /** 最后人工核验/外链探测日期 */
+    last_verified_at: z.coerce.date().optional(),
     /** 是否为开放授权全文收录（默认为 false：策展导读与看点速览） */
     is_full_text: z.boolean().default(false),
   }),

@@ -1,0 +1,163 @@
+---
+/**
+ * /how-we-source/ — 信源标准与循证分级公开声明
+ * 落实 ADR-0002 与 HowToLiveBetter / NHS Service Manual 循证方法论
+ */
+import Base from '../layouts/Base.astro';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<Base
+  title="信源遴选标准与循证分级体系 | know-her"
+  description="know-her 如何确保每一篇科普的科学性与真实性？详尽公开我们的信源准入清单、Tier A/B/C 循证分级标准、零 404 外链硬门禁与人工审阅流程。"
+>
+  <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
+    <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
+    <span>/</span>
+    <span class="text-gray-600">信源标准与循证分级</span>
+  </nav>
+
+  <article class="space-y-10">
+    {/* Hero Section */}
+    <header class="border-b border-gray-100 pb-8">
+      <div class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 mb-3">
+        <span>🛡️</span> 循证科普承诺 · 拒绝伪科学与恐吓营销
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight leading-snug">
+        我们如何遴选信源与核验证据？
+      </h1>
+      <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+        在两性与妇科健康领域，信息的偏误往往会带来巨大的恐慌与不必要的医疗负担。know-her 坚持<strong>“来源可溯、证据分级、人工复核、零死链硬门禁”</strong>的策展标准，透明公开每一项收录原则。
+      </p>
+    </header>
+
+    {/* Section 1: 准入与否决清单 */}
+    <section class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>📋</span> 一、信源准入与一票否决准则
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-2">
+          <div class="font-bold text-emerald-800 flex items-center gap-1.5">
+            <span>✅</span> 优先准入清单 (Whitelisted Sources)
+          </div>
+          <ul class="space-y-1.5 text-gray-700 list-disc pl-4 leading-relaxed">
+            <li><strong>国际权威公共卫生机构</strong>：世界卫生组织（WHO）、联合国教科文组织（UNESCO）、联合国人口基金（UNFPA）；</li>
+            <li><strong>公立与权威临床参考手册</strong>：默沙东诊疗手册（MSD Manual）大众版/专业版、英国国民医疗服务体系（NHS）；</li>
+            <li><strong>国家级专科医学会指南</strong>：中华医学会妇产科学分会临床共识与指南；</li>
+            <li><strong>同行评审顶刊与权威元分析</strong>：Cochrane Library、柳叶刀（The Lancet）等循证医学综述；</li>
+            <li><strong>严肃专业科普平台</strong>：具备严格同行审稿机制的知名科学传播机构（如果壳、丁香医生等）。</li>
+          </ul>
+        </div>
+
+        <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-4 space-y-2">
+          <div class="font-bold text-rose-800 flex items-center gap-1.5">
+            <span>⛔</span> 绝对否决红线 (Strictly Blacklisted)
+          </div>
+          <ul class="space-y-1.5 text-gray-700 list-disc pl-4 leading-relaxed">
+            <li><strong>商业导流与民营医院软文</strong>：带有就医引流、隐性挂号或商业推销目的的内容；</li>
+            <li><strong>带货广告与保健品推荐</strong>：宣称“卵巢保养”、“宫颈排毒”、“缩阴回春”等无医学依据的暴利伪科学；</li>
+            <li><strong>二手洗稿与无源自媒体推文</strong>：未注明第一手文献出处的营销号图文；</li>
+            <li><strong>恐吓焦虑式叙事</strong>：夸大经期生理波动或制造外貌、体味、性心理焦虑的内容；</li>
+            <li><strong>大模型纯脑补生成的二手虚构文本</strong>：严禁未经人工核实的机器生成内容。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    {/* Section 2: 循证分级体系 */}
+    <section class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>📊</span> 二、三级循证分级体系 (Evidence Tiers)
+      </h2>
+      <p class="text-sm text-gray-600 leading-relaxed">
+        借鉴 NHS Service Manual 与循证医学分级原则，know-her 为收录的每一篇科普打上清晰的证据等级标识：
+      </p>
+
+      <div class="space-y-3 text-xs sm:text-sm">
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 font-bold text-xs">
+              Tier A · 国际金标准
+            </span>
+            <span class="text-gray-500 text-xs">最高循证证据</span>
+          </div>
+          <p class="text-gray-700 leading-relaxed">
+            来源于 WHO、UNESCO 发布的全球实况报道与指导纲要，或基于大样本量随机对照试验（RCT）的 Cochrane 系统评价。代表全球医学界对该主题的压倒性共识。
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="rounded-full bg-blue-100 text-blue-800 px-2.5 py-0.5 font-bold text-xs">
+              Tier B · 临床专科共识
+            </span>
+            <span class="text-gray-500 text-xs">权威临床指导</span>
+          </div>
+          <p class="text-gray-700 leading-relaxed">
+            来源于默沙东诊疗手册同行评审条目、国家级专科医学会指南或三甲公立医院临床诊疗规范。具备极高的临床实践指导价值与可靠性。
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="rounded-full bg-purple-100 text-purple-800 px-2.5 py-0.5 font-bold text-xs">
+              Tier C · 专业机构深度科普
+            </span>
+            <span class="text-gray-500 text-xs">可读性与常识普及</span>
+          </div>
+          <p class="text-gray-700 leading-relaxed">
+            来源于果壳、丁香医生等知名科学传播平台或医学作者的原创深度解读，文末有明确参考文献支撑，适合日常生活认知普及。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {/* Section 3: 人机协同与零 404 门禁 */}
+    <section class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>⚙️</span> 三、人机协同流程与 CI 零 404 硬门禁
+      </h2>
+      <div class="rounded-xl border border-gray-200 bg-white p-5 text-xs sm:text-sm text-gray-700 space-y-3 leading-relaxed">
+        <p>
+          为了彻底避免互联网常见的“死链”与大模型“胡言乱语”，know-her 采取严格的人机协同分工：
+        </p>
+        <ol class="space-y-2 list-decimal pl-4">
+          <li><strong>机器只做探路与探活</strong>：自动化管道负责定期扫描权威机构官方入口，执行真机 HTTP 200 探针，提取未收录候选；</li>
+          <li><strong>人工深读与提炼导读</strong>：每一篇上线的导读要点均由维护者通读原文献后手动提炼，坚决禁止使用大模型模板生成套话；</li>
+          <li><strong>GitHub Actions CI 阻断门禁</strong>：在每一次代码提交与网页部署前，CI 必须全量跑通外链探测，一旦出现任何第三方 404 或死链，立即阻断部署。</li>
+        </ol>
+      </div>
+    </section>
+
+    {/* Section 4: 勘误与撤稿 */}
+    <section class="space-y-4 border-t border-gray-100 pt-8">
+      <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <span>🐞</span> 四、严肃勘误与透明撤稿机制
+      </h2>
+      <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">
+        医学认知在不断演进。如果你在阅读中发现任何数据错漏、表述含混或最新循证结论发生改变，请随时通过以下方式向我们反馈：
+      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <a
+          href="https://github.com/ROM4n2/know-her/issues/new?labels=correction&template=correction.yml"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 transition-colors"
+        >
+          <span>提交 GitHub 勘误 Issue</span>
+          <span>↗</span>
+        </a>
+        <a
+          href={`${base}`}
+          class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 transition-colors"
+        >
+          <span>返回首页</span>
+        </a>
+      </div>
+    </section>
+  </article>
+</Base>

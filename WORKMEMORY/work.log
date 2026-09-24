@@ -120,3 +120,9 @@ vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15
 [STEP] 2026-09-24T20:13:18+08:00|model=gemini-3.8-flash-high|Task-2/3/4 结项（c7f3e4f / 8dca8fb）：首批 2 篇试点词条落地（异常子宫出血 abnormal-uterine-bleeding / 正常月经周期四大指标 normal-menstrual-cycle），遵循 D4 降级标记（reviewed_medical: false + UnreviewedBanner 横幅）、无第二人称条件句（全部第三人称枚举）、急症红旗双写 1:1 严格对齐、来源可追溯（MSD / WHO / FIGO）。全链路验收 ALL PASS（check 0 错、build 生成 3 静态路由、dist/rss.xml 包含 2 item、Pagefind 索引 3 页、HTML 包含免责/横幅/红旗卡/JSON-LD）。
 [WORK_END] 2026-09-24T20:13:18+08:00|model=gemini-3.8-flash-high|内容建设与首批试点词条子计划 4/4 完成（详情页路由 /articles/[id]/ + 2 试点词条 + 端到端综合验收）。稳定结论与代码已全部入库，工作树 clean。
 [DECISION] 2026-09-24T21:11:40+08:00|model=gemini-3.8-flash-high|ADR-0002 通过：项目定位重大转型，从严肃医学临床知识库全面转向每日性科普与愉悦分享站（避孕、愉悦、生理、亲密四大分类）。双镜共识：D8 定位转型、D9 双轨内容（策展导读为主+开放全文为辅，零版权风险）、D10 Schema 彻底减负瘦身（移除四段医学审核与强门禁）、D11 双轨生产（极简手工提录+可选候选池）。
+### 2026-09-25T01:52:16+08:00 | glm-5-3-flash-260828__claude-code | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch(mcp)
+竞品调研会话（未记 WORK_START，补记说明）：23 代理工作流完成 6 路生态扫描+3 路瓶颈分析+12 仓库深读+1 综合（364 工具调用，12 深读全部 verified、25 存在性核验全通过）。
+核心结论：中文开源无同模式竞品（唯一直接同类 KnowSex 489★ 同栈）；方法论先例 HowToLiveBetter 14k★/18天；最大风险=触达(github.io 大陆可达性实测三次重置+零SEO)、信任承诺与机制落差(harvester 模板合成病句实锤 contraception-condoms.mdx L26、UnreviewedBanner 死代码实锤)、bus factor=1(53 commits 单作者实锤)。
+产出物：调研报告已交付用户；Inbox 草稿 d:/Obsidian/Coding/99-Inbox/2026-09-25-know-her-竞品调研与可行性.md；P0-P3 行动建议 10 条（含止血 harvester/接线横幅/探测降频/SEO 落地）。
+注：用户尚未对建议拍板，P0 项未执行。

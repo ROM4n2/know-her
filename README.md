@@ -10,9 +10,9 @@
 [![Astro](https://img.shields.io/badge/Astro-7.x-BC52EE.svg)](https://astro.build)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4.svg)](https://tailwindcss.com)
 
-**倡导科学 · 自主知情 · 愉悦探索 · 零伪科学**
+**倡导科学 · 证据分级 · 来源可溯 · 真实链接**
 
-[🌐 访问线上主站](https://rom4n2.github.io/know-her/) · [📡 订阅 RSS 2.0](https://rom4n2.github.io/know-her/rss.xml) · [📖 参与策展指南](CONTRIBUTING.md)
+[🌐 访问线上主站](https://rom4n2.github.io/know-her/) · [🛡️ 信源标准与循证分级](https://rom4n2.github.io/know-her/how-we-source/) · [🔒 零隐私收集声明](https://rom4n2.github.io/know-her/privacy/) · [📡 订阅 RSS 2.0](https://rom4n2.github.io/know-her/rss.xml) · [📖 参与策展指南](CONTRIBUTING.md)
 
 </div>
 
