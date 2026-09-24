@@ -386,6 +386,7 @@ def create_draft_pr(candidate: dict) -> bool:
             "--draft",
             "--title", f"📝 [候选导读] {candidate['title']}",
             "--body", pr_body,
+            "--label", "daily-candidate",
             "--base", "master",
             "--head", branch_name
         ]
