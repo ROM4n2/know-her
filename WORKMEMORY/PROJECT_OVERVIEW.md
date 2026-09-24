@@ -33,3 +33,4 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
 - 现象：文章标签在 TS strict 下报 `implicitly has any type` → 解法：在模板 `.map((tag: string) => ...)` 中显式类型声明。
 - 现象：版权侵权与搬运风险 → 根因：第三方权威文章多为保留版权 → 解法：ADR-0002 确立“策展导读（核心干货提炼 + 原文直达链接）”，合法引用零侵权。
 - 现象：GitHub Pages 项目页样式丢失与链接 404 → 根因：默认根路径 `/` 在项目站点下未对齐二级目录 `/know-her/` → 解法：`astro.config.mjs` 配置 `site: 'https://rom4n2.github.io'` 与 `base: '/know-her'`，内部路由均走 `${import.meta.env.BASE_URL}`。
+- 现象：外链原文 404 或内容不符 → 根因：大模型凭记忆捏造/脑补第三方文章 URL ID（如果壳文章编号、联合国未发布的 path）未在线探测 → 解法：全面换成默沙东/WHO/UNESCO 实测 200 OK 真实链接，`scripts/curate.py` 增加 `check-links` 在线探测，并在 `ci.yml` 和 `deploy.yml` 注入零 404 阻断门禁。
