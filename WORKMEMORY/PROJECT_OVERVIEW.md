@@ -22,11 +22,12 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
 - **最新架构决策（ADR-0002）已全面落地并成功上线**：
   1. `src/content.config.ts`：轻量科普博客 Schema（`contraception` 避孕、`pleasure` 愉悦、`body` 身体、`intimacy` 亲密四大主题）；
   2. 交互升级：首页分类实时客户端筛选、一句话导读卡片流、文章详情页醒目原出处直达跳转；
-  3. 已上线 10 篇精选权威科普导读（涵盖避孕套误区、紧急避孕药、短效口服避孕药COC、阴蒂解剖与愉悦冰山、人体润滑剂选型、女性自慰与性心理、月经四大客观指标、异常出血诱因、HPV疫苗与宫颈筛查、FRIES知情同意法则）；所有外链 100% 在线探测 200 OK；
+  3. 已上线 11 篇精选权威科普导读（涵盖避孕套误区、紧急避孕药、短效口服避孕药COC、安全套权威指南、阴蒂解剖与愉悦冰山、人体润滑剂选型、女性自慰与性心理、月经四大客观指标、异常出血诱因、HPV疫苗与宫颈筛查、FRIES知情同意法则）；所有外链 100% 在线探测 200 OK；
   4. 生产流水线打通：GitHub Actions CI 校验通过，Deploy to GitHub Pages 自动化发布通过，线上 `https://rom4n2.github.io/know-her/` 实测 200 OK，CSS/JS 资源与 Pagefind 索引正常；
   5. 每日任务与互动闭环上线：首页置顶「今日精选科普 + 每日一答 30 秒速测」组件（确定性积日轮换、localStorage 连续打卡记天数）；配置 `.github/workflows/daily-routine.yml` 每天北京时间 08:00 定时全库外链 200 探针巡检并播报；CLI 支持 `pnpm curate:today` 查看每日排期；
   6. 开源规范达标：建立高标准 `README.md`、MIT `LICENSE`、`CONTRIBUTING.md` 与 `CODE_OF_CONDUCT.md`，GitHub 社区健康度跃升至 85%+；
-  7. Pipeline B 每日自动化扩充工作流打通：开发 `scripts/curate_harvester.py`、`scripts/sources.json` 与 `.github/workflows/harvest-candidates.yml`，每日 08:30 自动扫描 WHO/默沙东权威入口并提交待审 Draft PR，杜绝 404 与凭空捏造，实现安全半自动化扩充。
+  7. Pipeline B 每日自动化扩充工作流打通：开发 `scripts/curate_harvester.py`、`scripts/sources.json` 与 `.github/workflows/harvest-candidates.yml`，每日 08:30 自动扫描 WHO/默沙东权威入口并提交待审 Draft PR，杜绝 404 与凭空捏造，首篇候选 PR #1 已成功合并上线；
+  8. 社交分享与交互体验升级：全站集成 Open Graph 与 Twitter Card 预览卡片（`public/og-card.svg`）；四大分类拥有独立静态路由（`/categories/[category]/`）；文章详情页新增“⏱️ 导读时长预估”与“📋 一键复制精炼要点卡片”；首页新增“🎲 随便逛逛”灵感漫游。
 
 ## 高频坑（踩过的雷区）
 
