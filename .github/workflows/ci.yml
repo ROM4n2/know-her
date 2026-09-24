@@ -39,6 +39,11 @@ jobs:
       - name: astro check（阻断）
         run: pnpm check
 
+      - name: Frontmatter & Links Check（零404外链阻断门禁）
+        run: |
+          pnpm curate:check
+          pnpm curate:links
+
   build:
     name: pnpm build
     runs-on: ubuntu-latest

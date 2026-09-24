@@ -15,6 +15,9 @@ curate.py — know-her 日常科普策展与内容管理辅助工具 (ADR-0002)
 
   3. 校验所有文章 frontmatter 合规性：
      python scripts/curate.py check
+
+  4. 严格在线探测所有文章原出处外链可达性（杜绝 404）：
+     python scripts/curate.py check-links
 """
 
 import os
@@ -22,6 +25,8 @@ import sys
 import re
 import argparse
 import datetime
+import urllib.request
+import urllib.error
 
 ARTICLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src", "content", "articles")
 VALID_CATEGORIES = ["contraception", "pleasure", "body", "intimacy"]
@@ -32,6 +37,8 @@ CATEGORY_NAMES = {
     "body": "身体机制",
     "intimacy": "亲密沟通",
 }
+
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 def parse_frontmatter(content: str):
     match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
@@ -54,8 +61,8 @@ def parse_frontmatter(content: str):
 def cmd_list(args):
     files = [f for f in os.listdir(ARTICLES_DIR) if f.endswith(".mdx") and not f.startswith("_")]
     print(f"📖 know-her 当前收录文章列表（共 {len(files)} 篇）：\n")
-    print(f"{'分类':<10} {'发布日期':<12} {'来源':<16} {'标题'}")
-    print("-" * 75)
+    print(f"{'分类':<10} {'发布日期':<12} {'来源':<20} {'标题'}")
+    print("-" * 80)
     for fname in sorted(files):
         fpath = os.path.join(ARTICLES_DIR, fname)
         with open(fpath, "r", encoding="utf-8") as f:
@@ -64,7 +71,7 @@ def cmd_list(args):
         date = meta.get("pubDate", "----")
         src = meta.get("source_name", "未知")
         title = meta.get("title", fname)
-        print(f"[{cat}] {date:<12} {src:<16} {title}")
+        print(f"[{cat}] {date:<12} {src:<20} {title}")
     print()
 
 def cmd_check(args):
@@ -98,9 +105,49 @@ def cmd_check(args):
         print(f"✅ {fname} ({CATEGORY_NAMES.get(cat)}) 格式规范")
 
     if errors == 0:
-        print(f"\n🎉 全部 {len(files)} 篇文章通过校验，无格式错误！")
+        print(f"\n🎉 全部 {len(files)} 篇文章通过结构校验，无格式错误！")
     else:
         print(f"\n⚠️ 发现 {errors} 处错误，请及时修复。")
+        sys.exit(1)
+
+def cmd_check_links(args):
+    files = [f for f in os.listdir(ARTICLES_DIR) if f.endswith(".mdx") and not f.startswith("_")]
+    errors = 0
+    print(f"🌐 在线探测 {len(files)} 篇词条的原出处外链可达性（杜绝 404）...\n")
+    for fname in sorted(files):
+        fpath = os.path.join(ARTICLES_DIR, fname)
+        with open(fpath, "r", encoding="utf-8") as f:
+            meta, _ = parse_frontmatter(f.read())
+        
+        url = meta.get("source_url", "")
+        src_name = meta.get("source_name", "未知")
+        if not url:
+            print(f"❌ {fname}: 无 source_url")
+            errors += 1
+            continue
+
+        req = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                code = resp.status
+                if 200 <= code < 400:
+                    print(f"✅ [{code} OK] {fname}")
+                    print(f"   机构: {src_name}")
+                    print(f"   链接: {url}")
+                else:
+                    print(f"❌ [{code} FAIL] {fname} ({src_name}) -> {url}")
+                    errors += 1
+        except urllib.error.HTTPError as e:
+            print(f"❌ [{e.code} HTTP Error] {fname} ({src_name}) -> {url}")
+            errors += 1
+        except Exception as e:
+            print(f"❌ [网络错误: {e}] {fname} ({src_name}) -> {url}")
+            errors += 1
+
+    if errors == 0:
+        print(f"\n🎉 完美！全部 {len(files)} 篇词条原文外链均返回 200 OK，零 404！")
+    else:
+        print(f"\n⚠️ 发现 {errors} 处无效或 404 外链，请按照真实出处修复后再发布。")
         sys.exit(1)
 
 def cmd_new(args):
@@ -167,6 +214,9 @@ def main():
     # check
     subparsers.add_parser("check", help="校验文章格式合规性")
 
+    # check-links
+    subparsers.add_parser("check-links", help="在线探测所有词条原出处外链可达性")
+
     # new
     new_p = subparsers.add_parser("new", help="创建新文章草稿模板")
     new_p.add_argument("--id", required=True, help="文件 slug（如 contraception-iud-basics）")
@@ -182,6 +232,8 @@ def main():
         cmd_list(args)
     elif args.command == "check":
         cmd_check(args)
+    elif args.command == "check-links":
+        cmd_check_links(args)
     elif args.command == "new":
         cmd_new(args)
     else:
