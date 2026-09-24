@@ -23,10 +23,14 @@ const { entry } = Astro.props;
 const { Content } = await render(entry);
 const data = entry.data;
 
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
 const pathname = Astro.url.pathname.endsWith('/')
   ? Astro.url.pathname
   : `${Astro.url.pathname}/`;
-const url = new URL(pathname, Astro.site ?? 'https://know-her.pages.dev').href;
+const url = new URL(pathname, Astro.site ?? 'https://rom4n2.github.io').href;
 
 const categoryInfo = CATEGORIES[data.category as CategoryKey] ?? {
   label: data.category,
@@ -58,7 +62,7 @@ const formattedDate = data.pubDate.toLocaleDateString('zh-CN', {
   </Fragment>
 
   <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
-    <a href="/" class="hover:text-rose-600 transition-colors">首页</a>
+    <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
     <span>/</span>
     <span class="text-gray-600">{categoryInfo.label}</span>
   </nav>

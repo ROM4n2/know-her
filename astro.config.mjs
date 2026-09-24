@@ -7,7 +7,8 @@ import mdx from '@astrojs/mdx';
 // https://astro.build/config
 export default defineConfig({
   output: 'static',
-  site: 'https://know-her.pages.dev',
+  site: 'https://rom4n2.github.io',
+  base: '/know-her',
   integrations: [pagefind(), mdx()],
   vite: {
     plugins: [tailwindcss()],

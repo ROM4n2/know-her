@@ -10,6 +10,10 @@ interface Props {
 }
 
 const { title = SITE_TITLE, description = SITE_DESCRIPTION } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
 ---
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -22,7 +26,7 @@ const { title = SITE_TITLE, description = SITE_DESCRIPTION } = Astro.props;
       rel="alternate"
       type="application/rss+xml"
       title={SITE_TITLE}
-      href="/rss.xml"
+      href={`${base}rss.xml`}
     />
     <slot name="head" />
   </head>
@@ -30,7 +34,7 @@ const { title = SITE_TITLE, description = SITE_DESCRIPTION } = Astro.props;
     <AgePreferenceBanner />
     <header class="border-b border-gray-100 bg-white/80 backdrop-blur sticky top-0 z-40">
       <div class="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3.5">
-        <a href="/" class="flex items-center gap-2 group">
+        <a href={base} class="flex items-center gap-2 group">
           <span class="text-xl">🌸</span>
           <div>
             <span class="font-bold text-gray-900 tracking-tight group-hover:text-rose-600 transition-colors">know-her</span>
@@ -38,7 +42,7 @@ const { title = SITE_TITLE, description = SITE_DESCRIPTION } = Astro.props;
           </div>
         </a>
         <nav class="flex items-center gap-4 text-xs font-medium text-gray-600">
-          <a href="/rss.xml" class="hover:text-rose-600 flex items-center gap-1 transition-colors" title="RSS 订阅">
+          <a href={`${base}rss.xml`} class="hover:text-rose-600 flex items-center gap-1 transition-colors" title="RSS 订阅">
             <span>📡</span> RSS
           </a>
         </nav>

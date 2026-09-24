@@ -12,13 +12,17 @@ export async function GET(context: APIContext) {
         b.data.pubDate.getTime() - a.data.pubDate.getTime(),
     );
 
+  const base = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL
+    : `${import.meta.env.BASE_URL}/`;
+
   return rss({
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    site: context.site ?? 'https://know-her.pages.dev',
+    site: context.site ?? 'https://rom4n2.github.io',
     items: valid.map((article: CollectionEntry<'articles'>) => ({
       title: article.data.title,
-      link: `/articles/${article.id}/`,
+      link: `${base}articles/${article.id}/`,
       pubDate: article.data.pubDate,
       description: article.data.summary,
       customData: `<dc:source><![CDATA[${article.data.source_url}]]></dc:source>`,
