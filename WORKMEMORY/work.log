@@ -153,3 +153,12 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. `src/data/dailyQuiz.ts` 题库同步扩充 8 道知情速测题目，覆盖全部 19 篇；
 4. `src/content/glossary/` 同步扩容 6 篇医学名词至 22 词条；
 5. `pnpm test` 门禁（类型检查、图完整性、词典外键、外链探测、静态构建）全绿通过，静态路由达 28 篇。
+
+### 2026-09-25T13:46:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+前端设计规范与 UI/UX 体验重塑：
+1. 借鉴 01-Rules/FRONTEND-DESIGN-PATTERNS.md 规范落地温润纸质感与社论排版体系；
+2. 全局 Design Tokens 注入温润米白底（#FAF8F5）、纯白卡片（#FFFFFF）、柔墨黑正文（#2A2620）与实体硬边阴影；
+3. 移动端上线 44px 触控黄金区吸底操作栏（Mobile Bottom Nav：首页/应急速查/知识词典/随机漫游）；
+4. 每日精选卡、应急决策树、知识词典、文章详情页长文排版及滚动阅读进度条全面升级；
+5. 全量执行 pnpm test、pnpm check、pnpm test:graph 与 pnpm build，28 篇静态路由与 Pagefind 索引构建 100% 成功。

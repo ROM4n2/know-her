@@ -31,30 +31,30 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
 ---
 
 <section
-  class="relative mb-10 overflow-hidden rounded-3xl border border-rose-100 bg-gradient-to-br from-rose-50/70 via-white to-orange-50/40 p-6 sm:p-7 shadow-xs"
+  class="relative mb-10 overflow-hidden rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)]"
   aria-label="每日任务与今日精选"
 >
   {/* 顶部标签栏 */}
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-rose-100/60 pb-3">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-[#15140F]/10 pb-3.5">
     <div class="flex items-center gap-2">
-      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-600 text-white text-xs font-bold shadow-xs">
+      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#15140F] text-white text-xs font-bold shadow-2xs">
         📅
       </span>
       <div>
-        <h2 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+        <h2 class="text-sm font-bold text-[#15140F] flex items-center gap-2">
           今日精选科普
           <span class="text-xs font-normal text-rose-600">({todayStr})</span>
         </h2>
       </div>
     </div>
 
-    {/* 打卡天数徽章 */}
+    {/* 打卡天数徽章 (环形统计印章风格) */}
     <div
       id="checkin-badge"
-      class="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 shadow-2xs"
+      class="inline-flex items-center gap-2 rounded-full border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-1 text-xs font-bold text-[#15140F] shadow-2xs"
     >
-      <span>✨</span>
-      <span>连续探索 <strong id="streak-num" class="text-rose-600">1</strong> 天</span>
+      <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-mono font-bold" id="streak-num">1</span>
+      <span class="text-xs text-[#5A5448]">天连续探索</span>
     </div>
   </div>
 
@@ -66,16 +66,16 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
           <span class:list={['rounded-full border px-2.5 py-0.5 font-medium', cat.cls]}>
             {cat.label}
           </span>
-          <span class="text-gray-400">来源：{article.data.source_name}</span>
+          <span class="text-[#8B8676]">来源：{article.data.source_name}</span>
         </div>
 
-        <h3 class="text-xl font-bold tracking-tight text-gray-900 hover:text-rose-600 transition-colors leading-snug">
+        <h3 class="text-xl font-bold tracking-tight text-[#15140F] hover:text-rose-600 transition-colors leading-snug">
           <a href={`${base}articles/${article.id}/`}>
             {article.data.title}
           </a>
         </h3>
 
-        <p class="mt-2.5 text-sm text-gray-600 leading-relaxed line-clamp-3">
+        <p class="mt-2.5 text-xs sm:text-sm text-[#5A5448] leading-relaxed line-clamp-3">
           {article.data.summary}
         </p>
       </div>
@@ -83,7 +83,7 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
       <div class="mt-5 pt-3">
         <a
           href={`${base}articles/${article.id}/`}
-          class="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-rose-600 transition-colors"
+          class="inline-flex items-center gap-1.5 rounded-xl bg-[#15140F] px-4 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_rgba(21,20,15,0.3)] hover:bg-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all"
         >
           <span>查阅今日精选完整导读</span>
           <span>→</span>
@@ -95,7 +95,7 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
     {quiz && (
       <div
         id="quiz-container"
-        class="lg:col-span-6 rounded-2xl border border-rose-100 bg-white/90 p-5 shadow-2xs backdrop-blur-xs flex flex-col justify-between"
+        class="lg:col-span-6 rounded-2xl border border-[#15140F]/12 bg-[#FAF8F5] p-5 shadow-2xs flex flex-col justify-between"
         data-correct-index={quiz.correctIndex}
         data-article-id={article.id}
       >
@@ -104,10 +104,10 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
             <span class="flex items-center gap-1">
               <span>🎯</span> 每日一答 · 30秒知情速测
             </span>
-            <span id="quiz-status" class="text-gray-400 font-normal">点击选项答题打卡</span>
+            <span id="quiz-status" class="text-[#8B8676] font-normal">点击选项答题打卡</span>
           </div>
 
-          <p class="text-sm font-bold text-gray-800 leading-snug mb-3">
+          <p class="text-xs sm:text-sm font-bold text-[#15140F] leading-snug mb-3">
             {quiz.question}
           </p>
 
@@ -116,12 +116,12 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
               <button
                 type="button"
                 data-index={idx}
-                class="quiz-btn w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-left text-xs font-medium text-gray-700 hover:border-rose-300 hover:bg-rose-50/50 transition-all cursor-pointer flex items-start gap-2"
+                class="quiz-btn w-full min-h-[44px] rounded-xl border border-[#15140F]/15 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-[#2A2620] hover:border-rose-400 hover:bg-rose-50/40 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
               >
-                <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-400 mt-0.5">
+                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-400">
                   {String.fromCharCode(65 + idx)}
                 </span>
-                <span>{option}</span>
+                <span class="leading-relaxed">{option}</span>
               </button>
             ))}
           </div>

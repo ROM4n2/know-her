@@ -53,6 +53,11 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - `src/data/dailyQuiz.ts` 题库同步扩容 8 道 30 秒速测知情题，覆盖全库 19 篇词条；
      - `src/content/glossary/` 同步扩充 6 个高频名词至 22 词条；
      - 静态构建产物扩充至 28 个路由页面。
+  13. 落地知识库 `FRONTEND-DESIGN-PATTERNS` 规范（UI/UX 质感重塑）：
+     - 注入 Paper & Ink Design Tokens（`--paper: #FAF8F5`, `--paper-card: #FFFFFF`, `--ink: #15140F`, `--ink-soft: #2A2620`），彻底告别廉价灰阶与冰冷模板感；
+     - 移动端人体工学优化：部署 44px 黄金触控区移动端吸底操作栏（`Mobile Bottom Bar`：首页/应急速查/知识词典/随机漫游）；
+     - 实体物理触感（Tactile Feedback）：卡片与按钮统一采用 `shadow-[2px_2px_0_rgba(21,20,15,...)]` 实体墨线与 `:active:translate` 微按压动效；
+     - 文章详情页沉浸式长文阅读升级：新增顶部动态阅读进度条、1.85 黄金行距、柔墨黑（`#2A2620`）抗疲劳排版与表格/引用块美化。
 
 ## 高频坑（踩过的雷区）
 

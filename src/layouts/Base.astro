@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { getCollection, type CollectionEntry } from 'astro:content';
 import AgePreferenceBanner from '../components/AgePreferenceBanner.astro';
 import MedicalDisclaimer from '../components/MedicalDisclaimer.astro';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
@@ -37,6 +38,12 @@ const canonicalUrl = new URL(pathname, siteUrl).href;
 const ogImage = image
   ? new URL(image, siteUrl).href
   : new URL(`${base}og-card.svg`, siteUrl).href;
+
+// 供全局“随便逛逛”随机漫游使用
+const allArticles: CollectionEntry<'articles'>[] = await getCollection('articles');
+const validArticleUrls = allArticles
+  .filter((a: CollectionEntry<'articles'>) => !a.id.startsWith('_'))
+  .map((a: CollectionEntry<'articles'>) => `${base}articles/${a.id}/`);
 ---
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -73,41 +80,95 @@ const ogImage = image
     />
     <slot name="head" />
   </head>
-  <body class="flex min-h-screen flex-col bg-[#fafaf9] text-gray-800 antialiased selection:bg-rose-100 selection:text-rose-900">
+  <body class="flex min-h-screen flex-col bg-[#FAF8F5] text-[#2A2620] antialiased selection:bg-rose-100 selection:text-rose-900">
     <AgePreferenceBanner />
-    <header class="border-b border-gray-100 bg-white/80 backdrop-blur sticky top-0 z-40">
-      <div class="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3.5">
+
+    {/* 桌面端与平板顶栏 */}
+    <header class="border-b border-[#15140F]/10 bg-[#FAF8F5]/90 backdrop-blur-md sticky top-0 z-40">
+      <div class="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3 sm:py-3.5">
         <a href={base} class="flex items-center gap-2 group">
-          <span class="text-xl">🌸</span>
+          <span class="text-xl sm:text-2xl transition-transform group-hover:scale-110">🌸</span>
           <div>
-            <span class="font-bold text-gray-900 tracking-tight group-hover:text-rose-600 transition-colors">know-her</span>
-            <span class="ml-1.5 hidden sm:inline-block text-xs text-gray-400 font-normal">性健康科普与愉悦分享</span>
+            <span class="font-extrabold text-gray-900 tracking-tight text-base sm:text-lg group-hover:text-rose-600 transition-colors">know-her</span>
+            <span class="ml-1.5 hidden sm:inline-block text-xs text-[#5A5448] font-normal">性健康科普与愉悦分享</span>
           </div>
         </a>
-        <nav class="flex items-center gap-3.5 text-xs font-medium text-gray-600">
+        <nav class="flex items-center gap-2.5 sm:gap-3.5 text-xs font-medium text-[#2A2620]">
           <a
             href={`${base}guide/decision-tree/`}
-            class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 font-semibold border border-rose-100 hover:bg-rose-100 transition-colors"
+            class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 font-semibold border border-rose-200/80 hover:bg-rose-100 transition-colors shadow-2xs"
           >
             <span>⚡</span>
             <span>应急速查</span>
           </a>
-          <a href={`${base}glossary/`} class="hover:text-rose-600 transition-colors font-medium">词典</a>
-          <a href={`${base}categories/contraception/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">避孕</a>
-          <a href={`${base}categories/pleasure/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">愉悦</a>
-          <a href={`${base}categories/body/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">身体</a>
-          <a href={`${base}categories/intimacy/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">亲密</a>
-          <a href={`${base}rss.xml`} class="hover:text-rose-600 flex items-center gap-1 transition-colors" title="RSS 订阅">
-            <span>📡</span> RSS
+          <a href={`${base}glossary/`} class="hover:text-rose-600 transition-colors px-1 py-1">词典</a>
+          <a href={`${base}categories/contraception/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors px-1 py-1">避孕</a>
+          <a href={`${base}categories/pleasure/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors px-1 py-1">愉悦</a>
+          <a href={`${base}categories/body/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors px-1 py-1">身体</a>
+          <a href={`${base}categories/intimacy/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors px-1 py-1">亲密</a>
+          <a href={`${base}rss.xml`} class="hover:text-rose-600 flex items-center gap-1 transition-colors px-1 py-1" title="RSS 订阅">
+            <span>📡</span> <span class="hidden sm:inline">RSS</span>
           </a>
         </nav>
       </div>
     </header>
 
-    <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+    {/* 主内容区域：移动端保留吸底导航避让高度 */}
+    <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8 pb-24 sm:pb-12">
       <slot />
     </main>
 
     <MedicalDisclaimer />
+
+    {/* 移动端沉浸底栏 (Mobile Bottom Bar - 44px 触控黄金区) */}
+    <nav
+      class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FAF8F5]/95 backdrop-blur-md border-t border-[#15140F]/10 px-3 py-1.5 flex items-center justify-around shadow-[0_-4px_16px_rgba(21,20,15,0.06)]"
+      aria-label="移动端快捷导航"
+    >
+      <a
+        href={base}
+        class="flex flex-col items-center justify-center min-w-[48px] min-h-[44px] text-[#5A5448] hover:text-rose-600 transition-colors"
+      >
+        <span class="text-lg">🏠</span>
+        <span class="text-[11px] font-medium mt-0.5">首页</span>
+      </a>
+      <a
+        href={`${base}guide/decision-tree/`}
+        class="flex flex-col items-center justify-center min-w-[48px] min-h-[44px] text-rose-600 font-bold transition-colors"
+      >
+        <span class="text-lg">⚡</span>
+        <span class="text-[11px] font-bold mt-0.5">应急速查</span>
+      </a>
+      <a
+        href={`${base}glossary/`}
+        class="flex flex-col items-center justify-center min-w-[48px] min-h-[44px] text-[#5A5448] hover:text-rose-600 transition-colors"
+      >
+        <span class="text-lg">📖</span>
+        <span class="text-[11px] font-medium mt-0.5">知识词典</span>
+      </a>
+      <button
+        type="button"
+        id="mobile-bottom-random-btn"
+        class="flex flex-col items-center justify-center min-w-[48px] min-h-[44px] text-[#5A5448] hover:text-rose-600 transition-colors cursor-pointer"
+        title="随机抽取一篇科普"
+      >
+        <span class="text-lg">🎲</span>
+        <span class="text-[11px] font-medium mt-0.5">随便逛逛</span>
+      </button>
+    </nav>
+
+    {/* 全局“随便逛逛”随机漫游脚本 */}
+    <script is:inline define:vars={{ articleUrls: validArticleUrls }}>
+      (function () {
+        function triggerRandomArticle() {
+          if (!articleUrls || articleUrls.length === 0) return;
+          const target = articleUrls[Math.floor(Math.random() * articleUrls.length)];
+          window.location.href = target;
+        }
+
+        document.getElementById('mobile-bottom-random-btn')?.addEventListener('click', triggerRandomArticle);
+        document.getElementById('random-explore-btn')?.addEventListener('click', triggerRandomArticle);
+      })();
+    </script>
   </body>
 </html>

@@ -1,1 +1,69 @@
 @import "tailwindcss";
+
+:root {
+  /* ──────── 1. 纸张与表面材质 (Paper Surfaces) ──────── */
+  --paper: #FAF8F5; /* 主纸张背景，温润米白 */
+  --paper-card: #FFFFFF; /* 纯白阅读纸张与展台卡片底色 */
+  --paper-tint: #F2ECE1; /* 次级衬底、工具条底槽、台账表头 */
+  --paper-deep: #E8E0D2; /* 强调背景、按压凹陷底色 */
+  --paper-dark-box: #15140F; /* 极夜黑展台容器 */
+
+  /* ──────── 2. 印刷墨水与灰阶 (Ink & Pencil Gradients) ──────── */
+  --ink: #15140F; /* 德国铸字墨黑，主文字与主边框（1.5px/1px 实线） */
+  --ink-soft: #2A2620; /* 柔墨黑，大段精读正文 */
+  --ink-mute: #5A5448; /* 铅笔暖灰，副标题、辅助说明文字 */
+  --ink-faint: #8B8676; /* 极淡灰元数据、占位符、标尺定位文字 */
+
+  /* ──────── 3. 分割线与网格标线 (Linework & Rules) ──────── */
+  --line: rgba(21, 20, 15, 0.12); /* 核心分割线 */
+  --line-soft: rgba(21, 20, 15, 0.06); /* 辅助虚线与二级分割线 */
+  --rule: #D8D0C2; /* 实体网格实线 */
+
+  /* ──────── 4. 经典学术与健康强调色 (Editorial Accents) ──────── */
+  --coral: #ED6F5C; /* 珊瑚朱砂红：主焦点、操作按钮、重点考点 */
+  --rose: #E11D48; /* 玫瑰红：品牌定焦 */
+  --mustard: #E9B94A; /* 暖芥末黄/琥珀色 */
+  --olive: #6E7448; /* 冷杉绿/橄榄绿：良性指标、正确答案 */
+  --ink-blue: #2A528A; /* 钢笔墨水蓝：外链标记 */
+
+  /* ──────── 5. 实体物理硬印章投影与动效 ──────── */
+  --shadow-sm: 0 2px 4px rgba(21, 20, 15, 0.05);
+  --shadow-hard: 3px 3px 0 rgba(21, 20, 15, 0.12);
+  --shadow-btn: 2px 2px 0 #15140F;
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 实体按键交互反馈 (Tactile Button Feedback) */
+.mech-btn {
+  background: var(--paper-card);
+  border: 1.5px solid var(--ink);
+  box-shadow: var(--shadow-btn);
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 150ms ease;
+  cursor: pointer;
+}
+.mech-btn:hover {
+  background-color: var(--paper-tint);
+}
+.mech-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+/* 实体硬印章卡片 (Editorial Hard Card) */
+.editorial-card {
+  background: var(--paper-card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  transition: transform 180ms var(--ease-editorial), box-shadow 180ms var(--ease-editorial), border-color 180ms ease;
+}
+.editorial-card:hover {
+  border-color: rgba(225, 29, 72, 0.3);
+  box-shadow: var(--shadow-hard);
+  transform: translateY(-1.5px);
+}
+
+/* 触控黄金区 (44px min touch target) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
