@@ -174,11 +174,7 @@ last_verified_at: {today_str}
 is_full_text: false
 ---
 
-import MedicalDisclaimer from '../../components/MedicalDisclaimer.astro';
-
-<MedicalDisclaimer />
-
-## 💡 为什么收录这篇？
+## 为什么收录这篇？
 
 两性与生殖健康需要建立在严谨客观的现代医学认知之上。本导读精选自**{candidate['source_name']}**官方发布的权威指引，帮助读者破除恐吓式营销与网络谣言，获取科学、去羞耻化的第一手常识。
 

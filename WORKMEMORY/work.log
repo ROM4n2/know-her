@@ -214,3 +214,14 @@ Key Artifacts:
 - src/data/dailyQuiz.ts (扩充至22道速测题)
 - scripts/test_tools.py (扩展自动化门禁契约)
 Tests: `pnpm test` (0 errors, 0 warnings, 32 static pages generated)
+
+### 2026-09-25T15:25:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 vault-debug 系统性根因排障：解决部分文章正文前误渲染全站页脚文字问题
+Outcome: SUCCESS
+Key Artifacts:
+- scripts/test_article_hygiene.py (文章正文整洁度与布局隔离门禁)
+- package.json (接入 test:graph 自动门禁)
+- scripts/curate_harvester.py (修复候选生成模板中的非法 MedicalDisclaimer 引用)
+- src/content/articles/ (清洗 4 篇受影响的 MDX 文章)
+Tests: `python scripts/test_article_hygiene.py` & `pnpm test` (0 errors, 0 warnings, 32 pages clean)

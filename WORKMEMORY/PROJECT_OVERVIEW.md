@@ -92,6 +92,7 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
 
 - 现象：Astro 5/7 与 Tailwind v4 不兼容 → 根因：`@astrojs/tailwind` 不支持 Tailwind v4 → 解法：改用 `@tailwindcss/vite` Vite 插件接入。
 - 现象：TypeScript 7.0 破坏 `@astrojs/check` → 根因：TS 7 移除了 programmatic API → 解法：固定安装 `typescript@5.8.3`。
+- 现象：部分文章正文前出现全站页脚文字（应急决策树、实用工具箱、声明等） → 根因：`curate_harvester.py` 模板误写了 `import MedicalDisclaimer` 与 `<MedicalDisclaimer />`，该组件本身为全站 `<footer>`，导致正文顶部重复渲染全站页脚打乱 DOM 流 → 解法：移除 MDX 中的多余组件，修正模板，落地 `scripts/test_article_hygiene.py` 自动化门禁拦截。
 - 现象：Astro 7 内容集合必须放在 `src/content.config.ts` 并配合 `glob` loader。
 - 现象：文章标签在 TS strict 下报 `implicitly has any type` → 解法：在模板 `.map((tag: string) => ...)` 中显式类型声明。
 - 现象：版权侵权与搬运风险 → 根因：第三方权威文章多为保留版权 → 解法：ADR-0002 确立“策展导读（核心干货提炼 + 原文直达链接）”，合法引用零侵权。
