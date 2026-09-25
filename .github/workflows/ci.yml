@@ -39,6 +39,9 @@ jobs:
       - name: astro check（阻断）
         run: pnpm check
 
+      - name: Decision Tree & Glossary Consistency Check (图连通性与词典完整性)
+        run: pnpm test:graph
+
       - name: Frontmatter & Links Check（零404外链阻断门禁）
         run: |
           pnpm curate:check

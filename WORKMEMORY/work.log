@@ -135,3 +135,12 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 全站顶栏与首页检索区上线「⚡ 应急速查」入口；
 4. 自动化测试 `scripts/test_decision_tree.py` 验证全图 100% 连通零孤立死胡同；
 5. GitHub Actions CI 与 Deploy to GitHub Pages 双流程通过，线上实测 200 OK。
+
+### 2026-09-25T12:47:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+两性健康与医学术语词典库上线（路线 2->1 第二阶段）：
+1. 在 `src/content.config.ts` 扩展 `glossary` collection 并创建 `src/content/glossary/` 包含 16 篇规范名词（左炔诺孕酮、含铜IUD、COC、储精囊、渗透压、黄体期、FIGO标准、PALM-COEIN等）；
+2. 编写 `src/pages/glossary/index.astro` 独立词典路由，集成即时搜索、分类过滤与首字母 (A-Z) 索引；
+3. 文章详情页 `src/pages/articles/[id].astro` 联动渲染「本文涉及的医学专有名词速查」；
+4. 编写 `scripts/test_glossary.py` 并整合进 CI 与 `package.json` (`pnpm test`)；
+5. 全流程构建验证通过，Pagefind 索引增至 20 篇静态路由。

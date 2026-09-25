@@ -32,4 +32,26 @@ const articles = defineCollection({
   }),
 });
 
-export const collections = { articles };
+const glossary = defineCollection({
+  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/glossary' }),
+  schema: z.object({
+    /** 术语规范中文名称，如“左炔诺孕酮” */
+    term: z.string(),
+    /** 外文医学名称或专业缩写，如“Levonorgestrel (LNG)” */
+    en_term: z.string().optional(),
+    /** 别名或通俗称呼列表 */
+    aliases: z.array(z.string()).default([]),
+    /** 检索拼音/字母索引大写 (A-Z) */
+    letter: z.string().length(1).toUpperCase(),
+    /** 概念简明权威释义（80字以内，适合正文悬浮和卡片速览） */
+    definition: z.string(),
+    /** 所属分类 */
+    category: z.enum(['contraception', 'pleasure', 'body', 'intimacy']),
+    /** 权威依据或临床定义来源 */
+    source: z.string(),
+    /** 关联的本站深度科普文章 slug（可选） */
+    related_article: z.string().optional(),
+  }),
+});
+
+export const collections = { articles, glossary };

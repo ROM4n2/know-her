@@ -12,7 +12,9 @@
 		"curate:check": "python scripts/curate.py check",
 		"curate:links": "python scripts/curate.py check-links",
 		"curate:today": "python scripts/curate.py daily",
-		"curate:harvest": "python scripts/curate_harvester.py"
+		"curate:harvest": "python scripts/curate_harvester.py",
+		"test:graph": "python scripts/test_decision_tree.py && python scripts/test_glossary.py",
+		"test": "pnpm check && pnpm test:graph && pnpm curate:check && pnpm build"
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.10",
