@@ -1,0 +1,286 @@
+---
+/**
+ * CycleAssessment.astro — 月经周期与经量客观评估打分器
+ * 严格依据国际妇产科联合会 (FIGO) 与中国妇产科学会临床指标制定
+ */
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<div class="rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-6">
+  <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-4">
+    <div class="flex items-center gap-2">
+      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white text-base shadow-2xs">
+        🩸
+      </span>
+      <div>
+        <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
+          月经四大客观指标与经量自测评估
+        </h3>
+        <p class="text-xs text-[#5A5448]">依据 FIGO 临床金标准，评估周期、天数、出血量与红旗预警</p>
+      </div>
+    </div>
+    <span class="hidden sm:inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+      FIGO 标准
+    </span>
+  </div>
+
+  {/* 输入网格 */}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {/* 指标 1：周期长度 */}
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-bold text-[#15140F]">
+          1. 月经周期长度（天数）：
+        </label>
+        <span id="cycle-len-val" class="font-mono text-xs font-bold text-rose-600">28 天</span>
+      </div>
+      <input
+        type="range"
+        id="cycle-len-input"
+        min="15"
+        max="60"
+        value="28"
+        class="w-full accent-rose-600 cursor-pointer"
+      />
+      <div class="flex justify-between text-[10px] text-[#8B8676] font-mono">
+        <span>15天 (过短)</span>
+        <span class="font-bold text-[#15140F]">正常: 21~35天</span>
+        <span>60天 (过长)</span>
+      </div>
+    </div>
+
+    {/* 指标 2：行经持续天数 */}
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-bold text-[#15140F]">
+          2. 每次来月经持续天数：
+        </label>
+        <span id="period-days-val" class="font-mono text-xs font-bold text-rose-600">5 天</span>
+      </div>
+      <input
+        type="range"
+        id="period-days-input"
+        min="1"
+        max="15"
+        value="5"
+        class="w-full accent-rose-600 cursor-pointer"
+      />
+      <div class="flex justify-between text-[10px] text-[#8B8676] font-mono">
+        <span>1天 (极短)</span>
+        <span class="font-bold text-[#15140F]">正常: 3~7天</span>
+        <span>15天 (淋漓)</span>
+      </div>
+    </div>
+
+    {/* 指标 3：周期波动幅度 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        3. 近一年最长与最短周期相差：
+      </label>
+      <select
+        id="cycle-variance"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="regular">相差 ≤ 7 天（高度规律）</option>
+        <option value="mild">相差 8~9 天（基本正常波动）</option>
+        <option value="irregular">相差 ≥ 10 天 / 几个月不来（明显不规律）</option>
+      </select>
+    </div>
+
+    {/* 指标 4：总出血量表现 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        4. 经期出血量与卫生巾使用情况：
+      </label>
+      <select
+        id="period-flow"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="normal">适中：每天用 3~5 片日用巾，大部分润湿 (正常 5~80ml)</option>
+        <option value="light">极少：点滴出血，仅用护垫即够 (< 5ml)</option>
+        <option value="heavy">过多：1~2小时即完全湿透需紧急更换，或伴有鸽子蛋大血块 (> 80ml)</option>
+      </select>
+    </div>
+  </div>
+
+  {/* 评估打分卡片 */}
+  <div id="cycle-result-panel" class="space-y-4">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div class="rounded-xl border border-[#15140F]/10 bg-[#FAF8F5] p-3 text-center space-y-1">
+        <span class="text-[11px] text-[#5A5448] block">周期长度</span>
+        <span id="badge-cycle-len" class="inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono">
+          正常
+        </span>
+      </div>
+      <div class="rounded-xl border border-[#15140F]/10 bg-[#FAF8F5] p-3 text-center space-y-1">
+        <span class="text-[11px] text-[#5A5448] block">经期天数</span>
+        <span id="badge-period-days" class="inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono">
+          正常
+        </span>
+      </div>
+      <div class="rounded-xl border border-[#15140F]/10 bg-[#FAF8F5] p-3 text-center space-y-1">
+        <span class="text-[11px] text-[#5A5448] block">规律性</span>
+        <span id="badge-regularity" class="inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono">
+          规律
+        </span>
+      </div>
+      <div class="rounded-xl border border-[#15140F]/10 bg-[#FAF8F5] p-3 text-center space-y-1">
+        <span class="text-[11px] text-[#5A5448] block">出血量级</span>
+        <span id="badge-flow" class="inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono">
+          适中
+        </span>
+      </div>
+    </div>
+
+    {/* 综合评价与就诊准备建议 */}
+    <div id="cycle-advice-box" class="rounded-2xl border p-4 sm:p-5 space-y-3">
+      <div class="flex items-center gap-2">
+        <span id="cycle-icon" class="text-xl">🌸</span>
+        <h4 id="cycle-title" class="font-bold text-sm sm:text-base text-[#15140F]">
+          综合生理评估报告
+        </h4>
+      </div>
+      <p id="cycle-desc" class="text-xs sm:text-sm text-[#2A2620] leading-relaxed"></p>
+
+      {/* 就诊沟通小抄 */}
+      <div id="cycle-doctor-tip" class="hidden rounded-xl bg-white border border-[#15140F]/10 p-3.5 space-y-2 text-xs text-[#5A5448]">
+        <strong class="text-[#15140F] block">📋 若前往公立医院妇科门诊，建议提前准备好这 3 组数据：</strong>
+        <ul class="list-disc pl-4 space-y-1 leading-relaxed">
+          <li><strong>末次月经第 1 天 (LMP)</strong>：医生开具性激素六项或 B 超的第一参考锚点；</li>
+          <li><strong>出血异常模式</strong>：是经期天数变长，还是非经期同房后接触性出血；</li>
+          <li><strong>贫血与血块表现</strong>：告知医生是否需要每 1~2 小时更换卫生巾，有无头晕头痛。</li>
+        </ul>
+      </div>
+
+      <div class="pt-2 border-t border-[#15140F]/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span class="text-[#8B8676]">依据：FIGO 异常子宫出血 PALM-COEIN 分类系统</span>
+        <a
+          href={`${base}articles/normal-menstrual-cycle/`}
+          class="font-semibold text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1"
+        >
+          <span>查阅正常月经四大客观指标科普</span>
+          <span>→</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    const cycleInput = document.getElementById('cycle-len-input');
+    const cycleVal = document.getElementById('cycle-len-val');
+    const periodInput = document.getElementById('period-days-input');
+    const periodVal = document.getElementById('period-days-val');
+    const varianceSelect = document.getElementById('cycle-variance');
+    const flowSelect = document.getElementById('period-flow');
+
+    const badgeCycle = document.getElementById('badge-cycle-len');
+    const badgePeriod = document.getElementById('badge-period-days');
+    const badgeReg = document.getElementById('badge-regularity');
+    const badgeFlow = document.getElementById('badge-flow');
+
+    const adviceBox = document.getElementById('cycle-advice-box');
+    const cycleIcon = document.getElementById('cycle-icon');
+    const cycleTitle = document.getElementById('cycle-title');
+    const cycleDesc = document.getElementById('cycle-desc');
+    const doctorTip = document.getElementById('cycle-doctor-tip');
+
+    if (!cycleInput) return;
+
+    function assess() {
+      const cycle = parseInt(cycleInput.value, 10);
+      const period = parseInt(periodInput.value, 10);
+      const variance = varianceSelect.value;
+      const flow = flowSelect.value;
+
+      cycleVal.textContent = `${cycle} 天`;
+      periodVal.textContent = `${period} 天`;
+
+      let hasWarning = false;
+      let notes = [];
+
+      // 周期判断
+      if (cycle >= 21 && cycle <= 35) {
+        badgeCycle.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        badgeCycle.textContent = '正常(21-35d)';
+      } else if (cycle < 21) {
+        badgeCycle.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-800';
+        badgeCycle.textContent = '过短频发(<21d)';
+        hasWarning = true;
+        notes.push('月经周期 < 21 天属于月经频发，排卵可能受影响或存在黄体功能不全。');
+      } else {
+        badgeCycle.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-amber-100 text-amber-800';
+        badgeCycle.textContent = '过长稀发(>35d)';
+        hasWarning = true;
+        notes.push('月经周期 > 35 天属于月经稀发，建议关注多囊卵巢综合征（PCOS）或高泌乳素血症。');
+      }
+
+      // 经期判断
+      if (period >= 3 && period <= 7) {
+        badgePeriod.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        badgePeriod.textContent = '正常(3-7d)';
+      } else if (period < 3) {
+        badgePeriod.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-stone-200 text-stone-700';
+        badgePeriod.textContent = '偏短(<3d)';
+      } else {
+        badgePeriod.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-800';
+        badgePeriod.textContent = '延长淋漓(>7d)';
+        hasWarning = true;
+        notes.push('行经天数 > 7 天属于经期延长，需通过妇科 B 超排查子宫内膜息肉、黏膜下肌瘤或剖宫产切口憩室。');
+      }
+
+      // 规律性判断
+      if (variance === 'regular') {
+        badgeReg.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        badgeReg.textContent = '规律(≤7d)';
+      } else if (variance === 'mild') {
+        badgeReg.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-stone-200 text-stone-700';
+        badgeReg.textContent = '正常浮动';
+      } else {
+        badgeReg.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-amber-100 text-amber-800';
+        badgeReg.textContent = '不规律(≥10d)';
+        hasWarning = true;
+        notes.push('年内周期波动超过 10 天提示排卵不稳定，熬夜、压力或内分泌波动常有影响。');
+      }
+
+      // 经量判断
+      if (flow === 'normal') {
+        badgeFlow.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        badgeFlow.textContent = '适中(5-80ml)';
+      } else if (flow === 'light') {
+        badgeFlow.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-stone-200 text-stone-700';
+        badgeFlow.textContent = '偏少(<5ml)';
+      } else {
+        badgeFlow.className = 'inline-block px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-800';
+        badgeFlow.textContent = '月经过多(>80ml)';
+        hasWarning = true;
+        notes.push('出血量已达到医学上的月经过多（AUB-HMB），长期存在极易引发缺铁性贫血，建议就医查血常规。');
+      }
+
+      // 综合渲染
+      if (hasWarning) {
+        adviceBox.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5 space-y-3';
+        cycleIcon.textContent = '⚠️';
+        cycleTitle.textContent = '部分指标存在客观偏离，建议持续关注或择机面诊';
+        cycleDesc.innerHTML = notes.join('<br>');
+        doctorTip.classList.remove('hidden');
+      } else {
+        adviceBox.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 space-y-3';
+        cycleIcon.textContent = '🌸';
+        cycleTitle.textContent = '四项指标均处于 FIGO 权威临床健康参考区间';
+        cycleDesc.textContent = '你的月经周期、行经天数与出血量均呈现非常健康的生理自洽状态。人体的下丘脑-垂体-卵巢轴极具动态平衡能力，个别月份受情绪波动、远途飞行或劳累出现轻微提前或推后数天属正常生理反馈，继续保持规律作息即可。';
+        doctorTip.classList.add('hidden');
+      }
+    }
+
+    cycleInput.addEventListener('input', assess);
+    periodInput.addEventListener('input', assess);
+    varianceSelect.addEventListener('change', assess);
+    flowSelect.addEventListener('change', assess);
+
+    assess();
+  })();
+</script>

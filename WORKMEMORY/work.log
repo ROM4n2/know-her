@@ -162,3 +162,14 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 移动端上线 44px 触控黄金区吸底操作栏（Mobile Bottom Nav：首页/应急速查/知识词典/随机漫游）；
 4. 每日精选卡、应急决策树、知识词典、文章详情页长文排版及滚动阅读进度条全面升级；
 5. 全量执行 pnpm test、pnpm check、pnpm test:graph 与 pnpm build，28 篇静态路由与 Pagefind 索引构建 100% 成功。
+
+### 2026-09-25T14:02:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+1 2 4 三合一闭环交付（排障、工具箱与版本交接）：
+1. 修复 .github/workflows/harvest-candidates.yml 移除 cache: pip，解决 CI 启动即报错缺陷，本地 dry-run 验证成功抓取 WHO 候选；
+2. 落地纯前端离线循证健康工具箱（/tools/）：
+   - 紧急避孕 72h / 120h 黄金窗口实时计算与处置指引；
+   - 短效口服避孕药 (COC) 漏服分周补救计算器；
+   - 月经四大客观指标（周期、经期、规律性、出血量 AUB-HMB）自测打分器；
+3. 新增 scripts/test_tools.py 自动化测试门禁并接入 pnpm test；
+4. 全站静态路由扩充至 29 个页面，更新 PROJECT_OVERVIEW 踩坑记录。

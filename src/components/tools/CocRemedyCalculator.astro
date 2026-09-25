@@ -1,0 +1,244 @@
+---
+/**
+ * CocRemedyCalculator.astro — 短效口服避孕药 (COC) 漏服分周补救计算器
+ * 依据 WHO 避孕方法选用的医学资格标准与 COC 官方临床说明书
+ */
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<div class="rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-6">
+  <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-4">
+    <div class="flex items-center gap-2">
+      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white text-base shadow-2xs">
+        💊
+      </span>
+      <div>
+        <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
+          短效口服避孕药 (COC) 漏服补救计算器
+        </h3>
+        <p class="text-xs text-[#5A5448]">输入包装规格与漏服周数，生成精准补服步骤与防护指引</p>
+      </div>
+    </div>
+    <span class="hidden sm:inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+      循证指南
+    </span>
+  </div>
+
+  {/* 表单输入网格 */}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {/* 问题 1：药片包装周期 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        1. 正在服用的短效避孕药规格：
+      </label>
+      <select
+        id="coc-pack-type"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="21">21片制（如优思明、达英-35、妈富隆）</option>
+        <option value="28">28片制（如优思悦 24+4、含安慰剂片）</option>
+      </select>
+    </div>
+
+    {/* 问题 2：漏服发生在第几周 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        2. 漏服发生在服药周期的哪一部分：
+      </label>
+      <select
+        id="coc-week-phase"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="w1">第 1 周（第 1~7 片，刚开始新一盒）</option>
+        <option value="w2">第 2 周（第 8~14 片，周期中段）</option>
+        <option value="w3">第 3 周（第 15~21 片，临近停药期）</option>
+        <option value="w4" id="coc-w4-opt" class="hidden">第 4 周安慰剂期（28片版的后4片空白片）</option>
+      </select>
+    </div>
+
+    {/* 问题 3：距常规服药时间已延迟多久 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        3. 距离你每天固定的服药时间延迟了多久：
+      </label>
+      <select
+        id="coc-delay-hours"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="under12">未超过 12 小时（如本应昨晚22点，今天早上8点想起）</option>
+        <option value="over12">超过 12 小时（漏服整整1天或多片）</option>
+      </select>
+    </div>
+
+    {/* 问题 4：漏服前 5~7 天是否有性行为 */}
+    <div class="space-y-1.5">
+      <label class="block text-xs font-bold text-[#15140F]">
+        4. 在漏服发生前的 5~7 天内是否有过无保护性行为：
+      </label>
+      <select
+        id="coc-had-sex"
+        class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+      >
+        <option value="no">没有无保护性行为 / 全程使用安全套</option>
+        <option value="yes">有发生过无保护性行为</option>
+      </select>
+    </div>
+  </div>
+
+  {/* 决策结果卡片 */}
+  <div id="coc-result-card" class="rounded-2xl border p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span id="coc-res-icon" class="text-xl">💡</span>
+        <h4 id="coc-res-title" class="font-bold text-sm sm:text-base text-[#15140F]">
+          计算结果
+        </h4>
+      </div>
+      <span id="coc-res-urgency" class="rounded-full px-2.5 py-0.5 text-xs font-bold font-mono">
+        状态
+      </span>
+    </div>
+
+    {/* 4步明确执行台账 */}
+    <div class="space-y-2 text-xs sm:text-sm text-[#2A2620]">
+      <div class="p-3 rounded-xl bg-white border border-[#15140F]/10 space-y-1 shadow-2xs">
+        <strong class="text-[#15140F] block">1. 立即补服指引：</strong>
+        <p id="coc-step-remedy" class="leading-relaxed"></p>
+      </div>
+      <div class="p-3 rounded-xl bg-white border border-[#15140F]/10 space-y-1 shadow-2xs">
+        <strong class="text-[#15140F] block">2. 额外屏障防护（安全套）：</strong>
+        <p id="coc-step-condom" class="leading-relaxed"></p>
+      </div>
+      <div class="p-3 rounded-xl bg-white border border-[#15140F]/10 space-y-1 shadow-2xs">
+        <strong class="text-[#15140F] block">3. 停药期与后续周期处理：</strong>
+        <p id="coc-step-cycle" class="leading-relaxed"></p>
+      </div>
+      <div id="coc-emergency-box" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1">
+        <strong class="block text-rose-900">🚨 紧急避孕药特别警报：</strong>
+        <p id="coc-step-emergency" class="leading-relaxed"></p>
+      </div>
+    </div>
+
+    <div class="pt-3 border-t border-[#15140F]/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <span class="text-[#8B8676]">参考来源：WHO 避孕选用法则与 COC 官方说明书</span>
+      <a
+        href={`${base}articles/contraception-oral-pills/`}
+        class="font-semibold text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1"
+      >
+        <span>查阅短效口服避孕药全解析</span>
+        <span>→</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    const packType = document.getElementById('coc-pack-type');
+    const weekPhase = document.getElementById('coc-week-phase');
+    const delayHours = document.getElementById('coc-delay-hours');
+    const hadSex = document.getElementById('coc-had-sex');
+    const w4Opt = document.getElementById('coc-w4-opt');
+
+    const resultCard = document.getElementById('coc-result-card');
+    const resIcon = document.getElementById('coc-res-icon');
+    const resTitle = document.getElementById('coc-res-title');
+    const resUrgency = document.getElementById('coc-res-urgency');
+    const stepRemedy = document.getElementById('coc-step-remedy');
+    const stepCondom = document.getElementById('coc-step-condom');
+    const stepCycle = document.getElementById('coc-step-cycle');
+    const emergencyBox = document.getElementById('coc-emergency-box');
+    const stepEmergency = document.getElementById('coc-step-emergency');
+
+    if (!packType) return;
+
+    function evaluate() {
+      const is28 = packType.value === '28';
+      if (is28) {
+        w4Opt.classList.remove('hidden');
+      } else {
+        w4Opt.classList.add('hidden');
+        if (weekPhase.value === 'w4') weekPhase.value = 'w1';
+      }
+
+      const week = weekPhase.value;
+      const delay = delayHours.value;
+      const sex = hadSex.value === 'yes';
+
+      // 假片期判断
+      if (week === 'w4') {
+        resultCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 space-y-4';
+        resIcon.textContent = '🟢';
+        resTitle.textContent = '无需惊慌：漏服的是无药理活性的假片/安慰剂片';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        resUrgency.textContent = '完全无风险';
+        stepRemedy.textContent = '直接将漏服的那片假片扔掉即可，不需要任何补服动作。';
+        stepCondom.textContent = '避孕保护力未受任何影响，不需要加用安全套。';
+        stepCycle.textContent = '继续在固定时间吃完剩余假片，随后按原计划开启新的一盒。';
+        emergencyBox.classList.add('hidden');
+        return;
+      }
+
+      // 延迟未超过 12 小时
+      if (delay === 'under12') {
+        resultCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 space-y-4';
+        resIcon.textContent = '🟢';
+        resTitle.textContent = '延迟 < 12 小时：保护力维持，立即补服即可';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        resUrgency.textContent = '轻微延迟';
+        stepRemedy.textContent = '想起来时立即补服这一片，今天晚些时候的常规药片仍按原定时间正常服用（即使同一天吃两片）。';
+        stepCondom.textContent = '只要在 12 小时内补齐，血液中激素浓度仍处于排卵抑制区间，不需要额外加用安全套。';
+        stepCycle.textContent = '后续按正常流程继续服药，停药期保持不变。';
+        emergencyBox.classList.add('hidden');
+        return;
+      }
+
+      // 延迟超过 12 小时，按周分别处置
+      if (week === 'w1') {
+        resultCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-5 space-y-4';
+        resIcon.textContent = '🚨';
+        resTitle.textContent = '第 1 周漏服（高危）：极易打破排卵抑制';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-100 text-rose-800';
+        resUrgency.textContent = '需紧急补救';
+        stepRemedy.textContent = '立刻补服漏掉的药片（哪怕同一天同时服用 2 片），随后按原计划每天按时服用。';
+        stepCondom.textContent = '接下来的 7 天内进行性生活，必须全程严格加用避孕套！';
+        stepCycle.textContent = '继续吃完本盒药片，常规进行 7 天停药期。';
+
+        if (sex) {
+          emergencyBox.classList.remove('hidden');
+          stepEmergency.textContent = '因处于刚开始周期的第 1 周，卵泡极易在激素低谷时重新募集发育。若在漏服前 5~7 天内有无保护行为，必须在 72 小时内考虑服用紧急避孕药（或 120 小时内医院上铜环）！';
+        } else {
+          emergencyBox.classList.add('hidden');
+        }
+      } else if (week === 'w2') {
+        resultCard.className = 'rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-4';
+        resIcon.textContent = '⚠️';
+        resTitle.textContent = '第 2 周漏服：立即补服，保守加用安全套 7 天';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-amber-100 text-amber-800';
+        resUrgency.textContent = '中度关注';
+        stepRemedy.textContent = '想起来时立即补服，即使同一天吃两片；随后每天按时继续服用剩余药片。';
+        stepCondom.textContent = '如果过去 7 天连续规律服药，避孕效果依然稳定；但为确保绝对安全，建议未来 7 天仍加用安全套。';
+        stepCycle.textContent = '继续吃完本盒，正常进入停药期。';
+        emergencyBox.classList.add('hidden');
+      } else if (week === 'w3') {
+        resultCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-5 space-y-4';
+        resIcon.textContent = '🔄';
+        resTitle.textContent = '第 3 周漏服：关键原则【吃完本盒立即连开新盒，不可停药】';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-100 text-rose-800';
+        resUrgency.textContent = '需跳过停药期';
+        stepRemedy.textContent = '立即补服漏掉的药片，即使今天同时吃 2 片。随后按常规时间把本盒剩余的有效片吃完。';
+        stepCondom.textContent = '接下来的 7 天内建议全程加用安全套防护。';
+        stepCycle.textContent = '【最核心规则】当吃完本盒最后一片有效药后，绝对不要进入 7 天停药期！次日直接开启新的一盒继续服用。这意味着本次周期不会出现撤退性出血，直到吃完第二盒再停药。';
+        emergencyBox.classList.add('hidden');
+      }
+    }
+
+    [packType, weekPhase, delayHours, hadSex].forEach((el) => {
+      el.addEventListener('change', evaluate);
+    });
+
+    evaluate();
+  })();
+</script>

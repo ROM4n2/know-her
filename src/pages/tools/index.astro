@@ -1,0 +1,95 @@
+---
+/**
+ * /tools/ — 实用循证计算器与生理健康工具箱
+ * 纯客户端离线计算，零个人数据上传与存储
+ */
+import Base from '../../layouts/Base.astro';
+import EmergencyCountdown from '../../components/tools/EmergencyCountdown.astro';
+import CocRemedyCalculator from '../../components/tools/CocRemedyCalculator.astro';
+import CycleAssessment from '../../components/tools/CycleAssessment.astro';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<Base
+  title="循证健康计算器与避孕工具箱 | know-her"
+  description="免费、免注册、零隐私泄露的女性健康离线交互工具箱：包含紧急避孕 72h/120h 黄金窗口倒计时、短效避孕药漏服分周补救计算器、月经四大客观指标与经量打分评估。"
+>
+  {/* 面包屑导航 */}
+  <nav class="mb-6 flex items-center gap-2 text-xs text-[#8B8676]">
+    <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
+    <span>/</span>
+    <span class="text-[#5A5448] font-medium">实用工具箱</span>
+  </nav>
+
+  {/* 页面 Header */}
+  <header class="mb-8 space-y-3">
+    <div class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200/80 px-3 py-1 text-xs font-semibold text-rose-700 shadow-2xs">
+      <span>🧮</span> 离线交互 · 循证行动工具箱
+    </div>
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-[#15140F] tracking-tight leading-snug">
+      把医学共识做成清晰、免恐慌的实用工具
+    </h1>
+    <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed max-w-2xl">
+      避孕事故、漏服药片或月经异常时，恐慌往往来自于对时间窗口与具体处置步骤的不确定。本工具箱将 WHO、FIGO 与临床处方规范转化为可交互的推演工具，所有计算全程在你的浏览器本地离线运行，绝不记录任何个人数据。
+    </p>
+
+    {/* 工具锚点快捷跳转 */}
+    <div class="flex flex-wrap items-center gap-2 pt-2 text-xs">
+      <span class="text-[#8B8676]">快速定位：</span>
+      <a
+        href="#sec-ec-countdown"
+        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+      >
+        ⏱️ 紧急避孕 72h/120h 倒计时
+      </a>
+      <a
+        href="#sec-coc-remedy"
+        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+      >
+        💊 短效药漏服分周补救
+      </a>
+      <a
+        href="#sec-cycle-assess"
+        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+      >
+        🩸 月经四大指标与经量自测
+      </a>
+    </div>
+  </header>
+
+  {/* 工具 1：紧急避孕倒计时 */}
+  <section id="sec-ec-countdown" class="mb-12 scroll-mt-20">
+    <EmergencyCountdown />
+  </section>
+
+  {/* 工具 2：短效药漏服补救计算 */}
+  <section id="sec-coc-remedy" class="mb-12 scroll-mt-20">
+    <CocRemedyCalculator />
+  </section>
+
+  {/* 工具 3：月经指标自测 */}
+  <section id="sec-cycle-assess" class="mb-12 scroll-mt-20">
+    <CycleAssessment />
+  </section>
+
+  {/* 底部免责与隐私说明卡片 */}
+  <section class="rounded-2xl border border-[#15140F]/15 bg-white p-6 text-xs sm:text-sm space-y-3 shadow-[2px_2px_0_rgba(21,20,15,0.06)]">
+    <h3 class="font-bold text-[#15140F] flex items-center gap-1.5 text-sm sm:text-base">
+      <span>🛡️</span> 工具箱设计原则与免责声明
+    </h3>
+    <ul class="space-y-2 text-[#5A5448] list-disc pl-4 leading-relaxed">
+      <li>
+        <strong>零隐私收集保证</strong>：本页面所有表单与运算均运行于前端纯 JavaScript，无任何接口回传，页面刷新即销毁，保护你的绝对私密；
+      </li>
+      <li>
+        <strong>非处方指导性质</strong>：计算器给出的结论为基于国际权威指南的一般性推荐，若患有血栓史、肝功能受损或正在服用利福平等抗结核/抗癫痫药物，请遵医嘱或药师指导用药；
+      </li>
+      <li>
+        <strong>突发红旗警报</strong>：如伴随单侧剧烈撕裂样腹痛、肛门坠胀、持续头晕晕厥，请切勿等待，立即拨打 120 或前往公立三甲急诊就医。
+      </li>
+    </ul>
+  </section>
+</Base>
