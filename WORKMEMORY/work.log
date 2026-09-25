@@ -200,3 +200,17 @@ Caps: filesystem-read, filesystem-write, shell-exec
    - 元数据引入 `tracking-[0.28em]` 宽字母间距排版与半透毛玻璃徽标（`backdrop-blur-md`）；
    - 导航与速测题库注入带光晕发光微指示点（`shadow-[0_0_10px_rgba(244,63,94,0.7)]`）；
 4. 运行 `pnpm test`，全站静态构建、类型检查与全图连通性测试 100% 通过。
+
+### 2026-09-25T15:05:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+落地方案 C：愉悦探索专栏扩容（性生理学与技巧循证词条 + 双重控制模型自测盘点器）
+Outcome: SUCCESS
+Key Artifacts:
+- src/content/articles/pleasure-arousal-time-physiology.mdx (时间生理学与帐篷效应)
+- src/content/articles/pleasure-cat-technique-alignment.mdx (CAT协调对位法实操)
+- src/content/articles/pleasure-responsive-desire-dual-control.mdx (响应性欲望与双重控制模型)
+- src/content/glossary/tenting-effect.md, cat-technique.md, dual-control-model.md (25词条)
+- src/components/tools/ArousalBrakesChecklist.astro (第4离线工具)
+- src/data/dailyQuiz.ts (扩充至22道速测题)
+- scripts/test_tools.py (扩展自动化门禁契约)
+Tests: `pnpm test` (0 errors, 0 warnings, 32 static pages generated)

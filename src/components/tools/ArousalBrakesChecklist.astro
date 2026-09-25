@@ -1,0 +1,282 @@
+---
+/**
+ * ArousalBrakesChecklist.astro — 性唤起“油门与刹车”自测盘点器
+ * 依据金赛研究所双重控制模型 (Dual Control Model) 与现代性生理心理学设计
+ * 纯客户端离线计算，零隐私数据收集
+ */
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<div
+  id="brakes-calc-container"
+  class:list={[
+    "rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-6",
+    className
+  ]}
+>
+  {/* 表头区 */}
+  <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-4">
+    <div class="flex items-center gap-2.5">
+      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+        <svg class="w-4 h-4 text-rose-200" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" stroke-width="1.8"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 12 16 8"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 15h6"/>
+        </svg>
+      </span>
+      <div>
+        <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
+          性唤起“油门与刹车”自测盘点器
+        </h3>
+        <p class="text-xs text-[#5A5448]">依据双重控制模型，排查情欲阻力与解锁响应性欲望的关键条件</p>
+      </div>
+    </div>
+    <span class="hidden sm:inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+      双重控制模型
+    </span>
+  </div>
+
+  {/* 双栏盘点选择 */}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    {/* 左栏：油门（性兴奋系统 SES 激活项） */}
+    <div class="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-4 sm:p-5 space-y-3.5">
+      <div class="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
+        <div class="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-emerald-950">
+          <span class="rounded-sm bg-emerald-700 px-1.5 py-0.2 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            ACCELERATOR
+          </span>
+          <span>油门 · 性兴奋驱动条件</span>
+        </div>
+        <span id="gas-count-badge" class="font-mono text-xs font-bold text-emerald-800">
+          已激活 0/5
+        </span>
+      </div>
+
+      <p class="text-[11px] text-[#5A5448] leading-relaxed">
+        勾选此时此刻已具备或能让你感到放松悦纳的积极因素：
+      </p>
+
+      <div class="space-y-2 text-xs text-[#2A2620]">
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="gas-checkbox mt-0.5 rounded accent-emerald-600 cursor-pointer" data-label="被爱与情感安全感" />
+          <span><strong>情感安全感</strong>：感到被伴侣全然接纳与喜爱，无需讨好或迎合</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="gas-checkbox mt-0.5 rounded accent-emerald-600 cursor-pointer" data-label="舒适温热的感官环境" />
+          <span><strong>舒缓感官氛围</strong>：柔和暗光、暖气充足、适宜温度与令自己放松的气味</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="gas-checkbox mt-0.5 rounded accent-emerald-600 cursor-pointer" data-label="非目的性纯抚触" />
+          <span><strong>无目的性抚触</strong>：明确约定“今晚只接吻和抚摩，不以发生插入为目标”</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="gas-checkbox mt-0.5 rounded accent-emerald-600 cursor-pointer" data-label="自主掌控节奏权" />
+          <span><strong>节奏绝对掌控</strong>：随时可以喊停或调整方式，没有被催促或失望的压力</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="gas-checkbox mt-0.5 rounded accent-emerald-600 cursor-pointer" data-label="充足润滑与道具支持" />
+          <span><strong>物资充分就绪</strong>：合格避孕套与高品质润滑剂触手可及，无后顾之忧</span>
+        </label>
+      </div>
+    </div>
+
+    {/* 右栏：刹车（性抑制系统 SIS 阻力项） */}
+    <div class="rounded-2xl border border-rose-200/80 bg-rose-50/40 p-4 sm:p-5 space-y-3.5">
+      <div class="flex items-center justify-between border-b border-rose-200/60 pb-2.5">
+        <div class="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-rose-950">
+          <span class="rounded-sm bg-rose-600 px-1.5 py-0.2 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            BRAKE
+          </span>
+          <span>刹车 · 性抑制阻力排查</span>
+        </div>
+        <span id="brake-count-badge" class="font-mono text-xs font-bold text-rose-800">
+          已踩下 0/6
+        </span>
+      </div>
+
+      <p class="text-[11px] text-[#5A5448] leading-relaxed">
+        勾选正在你大脑后台默默运转、消耗情欲注意力的阻碍因素：
+      </p>
+
+      <div class="space-y-2 text-xs text-[#2A2620]">
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="身体重度疲惫与缺觉" />
+          <span><strong>精力耗竭与疲劳</strong>：白天工作强度大、睡眠不足、只想闭眼瘫倒</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="隐私与隔音顾虑" />
+          <span><strong>环境与隐私担忧</strong>：担心房门没锁好、怕合租室友/父母/孩子听见动静</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="意外怀孕或感染恐惧" />
+          <span><strong>避孕或卫生焦虑</strong>：担心意外怀孕、避孕措施不可靠或担心炎症感染</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="身材审判与身体自卑" />
+          <span><strong>身体羞耻与审判</strong>：对自己的体型、体味或私密处状态感到不自在</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="伴侣未消的情绪隔阂" />
+          <span><strong>伴侣沟通隔阂</strong>：白天某句伤人言语、家务分工或情感冷暴力未化解</span>
+        </label>
+        <label class="flex items-start gap-2.5 p-2 rounded-xl bg-white/90 border border-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none">
+          <input type="checkbox" class="brake-checkbox mt-0.5 rounded accent-rose-600 cursor-pointer" data-label="既往干涩疼痛记忆" />
+          <span><strong>疼痛恐惧反射</strong>：过去体验过干涩摩擦痛，身体本能绷紧防卫</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  {/* 综合阻力分析与临床建议卡片 */}
+  <div id="brakes-result-card" class="rounded-2xl border border-stone-200 bg-[#FAF8F5] p-5 space-y-3.5">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#15140F]/10 pb-3">
+      <div class="flex items-center gap-2">
+        <h4 id="brakes-result-title" class="font-bold text-sm sm:text-base text-[#15140F]">
+          状态盘点
+        </h4>
+      </div>
+      <span id="brakes-balance-badge" class="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-stone-200 text-stone-800">
+        请勾选上方选项
+      </span>
+    </div>
+
+    <p id="brakes-result-desc" class="text-xs sm:text-sm text-[#5A5448] leading-relaxed">
+      勾选上方此时此刻的状态，评估你的性反应系统处于“阻力深重”还是“通畅就绪”。
+    </p>
+
+    {/* 复制伴侣沟通小抄 */}
+    <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-[#15140F]/8">
+      <span class="text-xs text-[#8B8676]">
+        把难以启齿的身体状态，变成客观不伤人的循证沟通小抄：
+      </span>
+      <button
+        type="button"
+        id="brakes-copy-btn"
+        class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#15140F]/15 bg-white px-3.5 py-2 text-xs font-semibold text-[#15140F] shadow-2xs hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer whitespace-nowrap"
+      >
+        <svg class="w-3.5 h-3.5 text-[#8B8676]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <rect x="9" y="9" width="13" height="13" rx="2" stroke-width="1.8"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        <span id="brakes-copy-btn-text">复制伴侣沟通便签</span>
+      </button>
+    </div>
+  </div>
+
+  {/* 关联导读导航 */}
+  <div class="pt-1 flex flex-wrap items-center justify-between gap-2 text-xs border-t border-[#15140F]/10">
+    <span class="text-[#8B8676]">理论来源：金赛研究所 Bancroft & Janssen 双重控制模型</span>
+    <a
+      href={`${base}articles/pleasure-responsive-desire-dual-control/`}
+      class="font-semibold text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1"
+    >
+      <span>深入阅读《我不是性冷淡，只是被动唤起》</span>
+      <span>→</span>
+    </a>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    const gasInputs = document.querySelectorAll('.gas-checkbox');
+    const brakeInputs = document.querySelectorAll('.brake-checkbox');
+    const gasBadge = document.getElementById('gas-count-badge');
+    const brakeBadge = document.getElementById('brake-count-badge');
+    const resCard = document.getElementById('brakes-result-card');
+    const resTitle = document.getElementById('brakes-result-title');
+    const resDesc = document.getElementById('brakes-result-desc');
+    const balanceBadge = document.getElementById('brakes-balance-badge');
+    const copyBtn = document.getElementById('brakes-copy-btn');
+    const copyBtnText = document.getElementById('brakes-copy-btn-text');
+
+    if (!gasInputs.length) return;
+
+    function evaluate() {
+      const activeGases = Array.from(gasInputs).filter(i => i.checked);
+      const activeBrakes = Array.from(brakeInputs).filter(i => i.checked);
+
+      const gasCount = activeGases.length;
+      const brakeCount = activeBrakes.length;
+
+      gasBadge.textContent = `已激活 ${gasCount}/5`;
+      brakeBadge.textContent = `已踩下 ${brakeCount}/6`;
+
+      if (gasCount === 0 && brakeCount === 0) {
+        resCard.className = 'rounded-2xl border border-stone-200 bg-[#FAF8F5] p-5 space-y-3.5';
+        resTitle.textContent = '请根据此时此刻的真实心理与环境状态进行勾选';
+        balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-stone-200 text-stone-800';
+        balanceBadge.textContent = '等待勾选';
+        resDesc.textContent = '性唤起从来不是纯粹的生理机械动作，而是神经系统在权衡安全与阻力的动态平衡。';
+        return;
+      }
+
+      if (brakeCount >= 3) {
+        resCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-5 space-y-3.5';
+        resTitle.textContent = '[ 阻力显著 · 优先松开刹车 ] 此时猛踩油门只会适得其反';
+        balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-200 text-rose-900';
+        balanceBadge.textContent = `刹车超载 (${brakeCount}项) · 阻力沉重`;
+        resDesc.innerHTML = `你的大脑神经系统目前处于高度防御戒备状态（检测到了 ${brakeCount} 项抑制源）。在演化本能上，大脑处理生存威胁的优先级绝对高于繁衍愉悦。此时伴侣无论如何催促或进行肢体试探，只会引发你的反感与烦躁。<br><br><strong>临床应对策略</strong>：彻底放弃今晚必须完成性生活的目标！优先针对性解决这几个刹车（如反锁房门、痛快洗个热水澡、坦诚告知疲惫并要求单纯拥抱）。先松开刹车，身体才能感知安全。`;
+      } else if (brakeCount >= 1 && gasCount < 2) {
+        resCard.className = 'rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-3.5';
+        resTitle.textContent = '[ 中度制动 · 需微调环境与卸载顾虑 ]';
+        balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900';
+        balanceBadge.textContent = `轻微制动 (${brakeCount}刹车 / ${gasCount}油门)`;
+        resDesc.innerHTML = `当前存在 1~2 项潜意识顾虑在牵制你的情欲通路。你并不排斥亲近，但身体还未完全进入无戒备状态。<br><br><strong>建议行动</strong>：给彼此 15~20 分钟的过渡缓冲期，可以通过肩颈精油按摩、调暗灯光或放轻音乐来逐步增加油门分量。`;
+      } else if (gasCount >= 3 && brakeCount <= 1) {
+        resCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 space-y-3.5';
+        resTitle.textContent = '[ 阻力极低 · 响应性欲望就绪 ] 身心处于充沛的安全与接纳状态';
+        balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900';
+        balanceBadge.textContent = `通畅顺滑 (${gasCount}油门 / ${brakeCount}刹车)`;
+        resDesc.innerHTML = `大脑抑制系统几乎完全静默，安全感与信任感充盈。即使此前脑海中没有自发性的情欲冲动，在这种状态下只要开始温和漫长的前戏与爱抚，你的身体会在 15~20 分钟内非常自然地分泌润滑并完成生殖器深部充血。`;
+      } else {
+        resCard.className = 'rounded-2xl border border-stone-300 bg-white p-5 space-y-3.5';
+        resTitle.textContent = '[ 处于动态平衡期 ]';
+        balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-stone-200 text-stone-800';
+        balanceBadge.textContent = `${gasCount}项油门 vs ${brakeCount}项刹车`;
+        resDesc.textContent = '当前积极因素与顾虑因素大致相当，亲密体验的走向取决于是否能主动移走一两个明显的阻碍点。';
+      }
+    }
+
+    [...gasInputs, ...brakeInputs].forEach(el => {
+      el.addEventListener('change', evaluate);
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      const activeBrakes = Array.from(brakeInputs).filter(i => i.checked).map(i => i.dataset.label);
+      const activeGases = Array.from(gasInputs).filter(i => i.checked).map(i => i.dataset.label);
+
+      let text = `【know-her 亲密自测便签 · 双重控制模型】\n亲爱的，我做了一个科学的性唤起自测：原来我不是不想亲近你，而是大脑里还有几个“刹车片”踩着：\n`;
+      if (activeBrakes.length > 0) {
+        text += `\n目前让我分心紧绷的阻碍：\n${activeBrakes.map((b, i) => `${i + 1}. ${b}`).join('\n')}\n`;
+      } else {
+        text += `\n目前没有太多心理负担，只要环境放松即可。\n`;
+      }
+      if (activeGases.length > 0) {
+        text += `\n能让我感到安全和舒服的因素：\n${activeGases.map((g, i) => `${i + 1}. ${g}`).join('\n')}\n`;
+      }
+      text += `\n今晚我们先不设必须发生性生活的目标，先解决阻力、单纯抱抱放松好吗？`;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        if (copyBtnText) {
+          copyBtnText.textContent = '便签已复制！';
+          setTimeout(() => {
+            copyBtnText.textContent = '复制伴侣沟通便签';
+          }, 2500);
+        }
+      } catch (err) {
+        alert('复制失败，请手动选择文字进行复制。');
+      }
+    });
+
+    evaluate();
+  })();
+</script>

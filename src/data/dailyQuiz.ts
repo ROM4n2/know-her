@@ -232,6 +232,42 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '进行性加剧的痛经是子宫内膜异位症与腺肌病的典型标志性信号。异位内膜随月经反复出血导致盆腔严重粘连，延误诊治可能导致输卵管梗阻与不孕。应及时前往公立妇科做超声与妇科内诊。',
   },
+  'pleasure-arousal-time-physiology': {
+    articleId: 'pleasure-arousal-time-physiology',
+    question: '从性解剖生理学来看，为什么女性通常需要 20~40 分钟充分前戏才能进入良好状态？',
+    options: [
+      '单纯因为心理犹豫，生理上其实几秒钟就能准备好',
+      '女性盆腔血管床庞大，需要时间让深部海绵体充血并触发子宫提升、阴道深部扩张的“帐篷效应”',
+      '只有缺乏性经验的年轻女性才需要这么长时间',
+    ],
+    correctIndex: 1,
+    explanation:
+      '女性阴道在未唤起时是闭合的肌性裂隙。充分唤起需要副交感神经促使深部海绵体充分充血，子宫整体上提形成“帐篷效应”，阴道才能自然延长扩容并分泌润滑液，这是由客观生理血管解剖决定的。',
+  },
+  'pleasure-cat-technique-alignment': {
+    articleId: 'pleasure-cat-technique-alignment',
+    question: '临床性学界经典的 CAT 协调对位法（Coital Alignment Technique）的核心动作原理是什么？',
+    options: [
+      '大幅度加快抽插频率与力度',
+      '身位向上错位、保持双方耻骨紧密咬合与小幅度滑磨，持续刺激阴蒂',
+      '尽量拉开二人身体距离以增加视觉冲击',
+    ],
+    correctIndex: 1,
+    explanation:
+      'CAT 协调对位法放弃了传统大幅度拉开身体的进出抽拉，改为伴侣身体上移半个身位，让阴茎根部与耻骨对准女方阴蒂头，在恒定紧贴的微压下小幅度滑磨，使阴蒂获得不间断的物理刺激。',
+  },
+  'pleasure-responsive-desire-dual-control': {
+    articleId: 'pleasure-responsive-desire-dual-control',
+    question: '很多女性在长期关系中很少主动产生性冲动，现代性科学（双重控制模型）对此的解释是？',
+    options: [
+      '属于病理性的严重性冷淡，必须立即吃药治疗',
+      '绝大多数女性属于健康的“响应性欲望”，且疲劳、焦虑等心理“刹车片”踩死时会优先阻止性唤起',
+      '说明对伴侣已经完全没有感情了',
+    ],
+    correctIndex: 1,
+    explanation:
+      '金赛研究所的双重控制模型表明：女性更普遍具有“响应性欲望”（在安全、无压力的温和身体接触后才涌现情欲）。当工作压力、疲惫、身体自卑等“刹车片”被踩下时，大脑会本能优先切断情欲通道，这属于极为正常的自我保护机制，绝非性冷淡。',
+  },
 };
 
 /**

@@ -16,6 +16,7 @@ REQUIRED_COMPONENTS = [
     ("EmergencyCountdown.astro", ["ec-datetime-input", "ec-progress-bar", "contraception-emergency-pill"]),
     ("CocRemedyCalculator.astro", ["coc-pack-type", "coc-week-phase", "contraception-oral-pills"]),
     ("CycleAssessment.astro", ["cycle-len-input", "period-days-input", "normal-menstrual-cycle"]),
+    ("ArousalBrakesChecklist.astro", ["brakes-calc-container", "brakes-copy-btn", "pleasure-responsive-desire-dual-control"]),
 ]
 
 
@@ -48,7 +49,7 @@ def run_tests():
                 errors.append(f"组件 {comp_name} 缺失关键标识或外键: {token}")
 
             # 若 token 看起来是文章 slug，核验实体文件
-            if not token.startswith("ec-") and not token.startswith("coc-") and not token.startswith("cycle-") and not token.startswith("period-"):
+            if not token.startswith("ec-") and not token.startswith("coc-") and not token.startswith("cycle-") and not token.startswith("period-") and not token.startswith("brakes-"):
                 art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{token}{ext}")) for ext in [".mdx", ".md"])
                 if not art_found:
                     errors.append(f"组件 {comp_name} 关联的外键文章不存在: {token}")
@@ -59,7 +60,7 @@ def run_tests():
             print(f"   • {err}")
         sys.exit(1)
 
-    print("🎉 实用工具箱测试全绿！3 大组件完备、状态与交互逻辑健全、关联科普外键 100% 存在！")
+    print(f"🎉 实用工具箱测试全绿！{len(REQUIRED_COMPONENTS)} 大组件完备、状态与交互逻辑健全、关联科普外键 100% 存在！")
 
 
 if __name__ == "__main__":

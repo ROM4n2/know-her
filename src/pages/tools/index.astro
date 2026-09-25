@@ -7,6 +7,7 @@ import Base from '../../layouts/Base.astro';
 import EmergencyCountdown from '../../components/tools/EmergencyCountdown.astro';
 import CocRemedyCalculator from '../../components/tools/CocRemedyCalculator.astro';
 import CycleAssessment from '../../components/tools/CycleAssessment.astro';
+import ArousalBrakesChecklist from '../../components/tools/ArousalBrakesChecklist.astro';
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -58,6 +59,12 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       >
         月经四大指标与经量自测
       </a>
+      <a
+        href="#sec-arousal-brakes"
+        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+      >
+        性唤起油门与刹车盘点
+      </a>
     </div>
   </header>
 
@@ -74,6 +81,11 @@ const base = import.meta.env.BASE_URL.endsWith('/')
   {/* 工具 3：月经指标自测 */}
   <section id="sec-cycle-assess" class="mb-12 scroll-mt-20">
     <CycleAssessment />
+  </section>
+
+  {/* 工具 4：性唤起油门与刹车自测 */}
+  <section id="sec-arousal-brakes" class="mb-12 scroll-mt-20">
+    <ArousalBrakesChecklist />
   </section>
 
   {/* 底部免责与隐私说明卡片 */}
