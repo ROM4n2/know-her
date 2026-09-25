@@ -35,7 +35,13 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 上线「信任两页」：`/how-we-source/`（信源准入清单与循证定义）与 `/privacy/`（零收集三段论与本机打卡记录一键清空）；
      - SEO 与协议合规：集成 `@astrojs/sitemap` 生成 `sitemap-index.xml` + `robots.txt`，设定 GitHub 仓库 topics 与 homepage，归档 `CONTENT-LICENSE.md`（代码 MIT / 导读 CC BY-SA 4.0 分立）；
      - 外链探针降频分级：晨检仅探测今日精选（<1秒），新增 `.github/workflows/weekly-full-audit.yml` 每周日五态全量体检；
-     - 文章详情页新增预填 GitHub Issue 勘误闭环通道。
+     - 文章详情页新增预填 GitHub Issue 勘误闭环通道；
+  10. 紧急状况交互决策树上线（路线 2->1 第一阶段）：
+     - 依据 WHO、FIGO 与默沙东临床指南编制 `src/data/decisionTree.ts` 题库与状态图；
+     - 编写纯前端无埋点离线交互组件 `src/components/DecisionGuide.astro` 与独立路由 `/guide/decision-tree/`；
+     - 覆盖三大高频意外：避孕套破裂滑脱（<24h, 24-72h, 72-120h, >120h）、短效口服避孕药连续漏服分周抢救、突发异常出血生理鉴别与急腹症红旗警报；
+     - 配备《行动方案卡》一键复制、关键验孕复查时间表与站内深度词条锚定；
+     - 编写 `scripts/test_decision_tree.py` 自动化图遍历测试，确立 100% 全连通零死胡同门禁。
 
 ## 高频坑（踩过的雷区）
 

@@ -1,0 +1,428 @@
+---
+/**
+ * DecisionGuide.astro — 紧急状况交互决策树组件
+ * 纯客户端零后端状态机，提供 3 步循证应急处置与行动卡
+ */
+import { DECISION_TREE } from '../data/decisionTree';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+const treeJson = JSON.stringify(DECISION_TREE);
+---
+
+<div class="decision-guide-wrapper rounded-3xl border border-rose-100 bg-white p-5 sm:p-8 shadow-xs">
+  {/* 顶部状态与重置条 */}
+  <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+    <div class="flex items-center gap-2">
+      <span class="text-xl">⚡</span>
+      <h2 class="text-base sm:text-lg font-bold text-gray-900">
+        “我该怎么办？”女性健康应急与速查决策树
+      </h2>
+    </div>
+    <button
+      type="button"
+      id="dg-reset-btn"
+      class="hidden items-center gap-1 text-xs text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+    >
+      <span>↺</span>
+      <span>重新选择</span>
+    </button>
+  </div>
+
+  {/* 状态 1：选择突发状况大类 */}
+  <div id="dg-category-view" class="space-y-4">
+    <p class="text-xs sm:text-sm text-gray-500 leading-relaxed">
+      请选择你当前面临的具体困扰或突发状况，我们将根据循证指南在 2~3 步内为你提供明确的处置建议：
+    </p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
+      {DECISION_TREE.initialCategories.map((cat) => (
+        <button
+          type="button"
+          data-category-id={cat.id}
+          data-start-node={cat.startNodeId}
+          class="dg-category-btn group flex flex-col items-start p-4 rounded-2xl border border-gray-200 bg-white hover:border-rose-300 hover:bg-rose-50/40 text-left transition-all cursor-pointer shadow-2xs hover:shadow-sm"
+        >
+          <span class="text-2xl mb-2.5 block">{cat.icon}</span>
+          <span class="font-bold text-sm sm:text-base text-gray-900 group-hover:text-rose-700 transition-colors">
+            {cat.title}
+          </span>
+          <span class="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-2">
+            {cat.desc}
+          </span>
+          <span class="mt-3 text-xs font-semibold text-rose-600 flex items-center gap-1">
+            <span>开始速查</span>
+            <span>→</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* 状态 2：问题选择节点 */}
+  <div id="dg-node-view" class="hidden space-y-5">
+    <div class="flex items-center justify-between text-xs text-gray-400">
+      <span id="dg-step-indicator">步骤 1/2</span>
+      <button
+        type="button"
+        id="dg-back-btn"
+        class="inline-flex items-center gap-1 text-gray-500 hover:text-rose-600 transition-colors cursor-pointer"
+      >
+        <span>←</span>
+        <span>返回上一步</span>
+      </button>
+    </div>
+
+    <div>
+      <h3 id="dg-question-text" class="text-base sm:text-xl font-bold text-gray-900 leading-snug">
+        问题题干
+      </h3>
+      <p id="dg-question-hint" class="text-xs text-rose-700/80 mt-1.5 flex items-center gap-1">
+        <span>💡</span>
+        <span id="dg-question-hint-text">提示信息</span>
+      </p>
+    </div>
+
+    <div id="dg-options-container" class="space-y-2.5 pt-1">
+      {/* 动态注入选项按钮 */}
+    </div>
+  </div>
+
+  {/* 状态 3：行动决策卡 (Outcome View) */}
+  <div id="dg-outcome-view" class="hidden space-y-6">
+    <div id="dg-outcome-banner" class="rounded-2xl p-5 border">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <span id="dg-urgency-badge" class="rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide">
+          状态徽章
+        </span>
+        <button
+          type="button"
+          id="dg-copy-outcome-btn"
+          class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white/80 backdrop-blur px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-white transition-all cursor-pointer shadow-2xs"
+        >
+          <span id="dg-copy-icon">📋</span>
+          <span id="dg-copy-text">复制方案卡片</span>
+        </button>
+      </div>
+
+      <h3 id="dg-outcome-title" class="text-lg sm:text-xl font-extrabold text-gray-900">
+        结果标题
+      </h3>
+      <p id="dg-outcome-headline" class="mt-1 text-xs sm:text-sm font-medium leading-relaxed">
+        结果核心结论
+      </p>
+    </div>
+
+    {/* 行动步骤列表 */}
+    <div class="space-y-3">
+      <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">
+        建议执行步骤 (Action Items)
+      </h4>
+      <div id="dg-actions-list" class="space-y-2 text-xs sm:text-sm text-gray-700">
+        {/* 动态注入行动项 */}
+      </div>
+    </div>
+
+    {/* 时间窗口 / 复查提示 */}
+    <div id="dg-timeline-box" class="hidden rounded-xl bg-gray-50 border border-gray-200 p-4 text-xs text-gray-600">
+      <span class="font-bold text-gray-800">⏱️ 后续监测时间点：</span>
+      <span id="dg-timeline-text">14天验孕</span>
+    </div>
+
+    {/* 警惕体征 Red Flags */}
+    <div id="dg-redflags-box" class="hidden rounded-xl bg-red-50 border border-red-200 p-4 text-xs text-red-900">
+      <span class="font-bold block mb-1">🚨 警惕高危体征（若有以下任一情况，请立即前往医院急诊）：</span>
+      <ul id="dg-redflags-list" class="list-disc pl-4 space-y-1"></ul>
+    </div>
+
+    {/* 安心提示 */}
+    <div id="dg-reassurance-box" class="hidden rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-900">
+      <span class="font-bold block mb-0.5">🌸 心态关照：</span>
+      <p id="dg-reassurance-text"></p>
+    </div>
+
+    {/* 关联科普直达与信源底线 */}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-gray-100 text-xs">
+      <div class="text-gray-400">
+        <span>循证权威：</span>
+        <span id="dg-authority-text" class="text-gray-600 font-medium">WHO 指南</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <a
+          id="dg-article-link"
+          href="#"
+          class="hidden font-semibold text-rose-600 hover:text-rose-700 transition-colors items-center gap-1"
+        >
+          <span>查阅关联深度科普</span>
+          <span>→</span>
+        </a>
+        <button
+          type="button"
+          id="dg-recheck-btn"
+          class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:border-gray-300 transition-colors cursor-pointer"
+        >
+          测试其他状况 ↺
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="decision-tree-data" type="application/json" set:html={treeJson}></script>
+
+<script is:inline define:vars={{ siteBase: base }}>
+  (function () {
+    const rawDataElem = document.getElementById('decision-tree-data');
+    if (!rawDataElem || !rawDataElem.textContent) return;
+    const treeData = JSON.parse(rawDataElem.textContent);
+    const categoryView = document.getElementById('dg-category-view');
+    const nodeView = document.getElementById('dg-node-view');
+    const outcomeView = document.getElementById('dg-outcome-view');
+    const resetBtn = document.getElementById('dg-reset-btn');
+    const backBtn = document.getElementById('dg-back-btn');
+    const stepIndicator = document.getElementById('dg-step-indicator');
+    const questionText = document.getElementById('dg-question-text');
+    const questionHintBox = document.getElementById('dg-question-hint');
+    const questionHintText = document.getElementById('dg-question-hint-text');
+    const optionsContainer = document.getElementById('dg-options-container');
+
+    const outcomeBanner = document.getElementById('dg-outcome-banner');
+    const urgencyBadge = document.getElementById('dg-urgency-badge');
+    const outcomeTitle = document.getElementById('dg-outcome-title');
+    const outcomeHeadline = document.getElementById('dg-outcome-headline');
+    const actionsList = document.getElementById('dg-actions-list');
+    const timelineBox = document.getElementById('dg-timeline-box');
+    const timelineText = document.getElementById('dg-timeline-text');
+    const redflagsBox = document.getElementById('dg-redflags-box');
+    const redflagsList = document.getElementById('dg-redflags-list');
+    const reassuranceBox = document.getElementById('dg-reassurance-box');
+    const reassuranceText = document.getElementById('dg-reassurance-text');
+    const authorityText = document.getElementById('dg-authority-text');
+    const articleLink = document.getElementById('dg-article-link');
+    const recheckBtn = document.getElementById('dg-recheck-btn');
+    const copyOutcomeBtn = document.getElementById('dg-copy-outcome-btn');
+    const copyText = document.getElementById('dg-copy-text');
+    const copyIcon = document.getElementById('dg-copy-icon');
+
+    // 历史路径栈：记录经过的 node_id
+    let history = [];
+    let currentOutcomeData = null;
+
+    function resetToHome() {
+      history = [];
+      currentOutcomeData = null;
+      categoryView.classList.remove('hidden');
+      nodeView.classList.add('hidden');
+      outcomeView.classList.add('hidden');
+      resetBtn.classList.add('hidden');
+      resetBtn.classList.remove('inline-flex');
+    }
+
+    function showNode(nodeId) {
+      const node = treeData.nodes[nodeId];
+      if (!node) return;
+
+      history.push(nodeId);
+
+      categoryView.classList.add('hidden');
+      nodeView.classList.remove('hidden');
+      outcomeView.classList.add('hidden');
+      resetBtn.classList.remove('hidden');
+      resetBtn.classList.add('inline-flex');
+
+      stepIndicator.textContent = `第 ${history.length} 步`;
+      questionText.textContent = node.question;
+
+      if (node.hint) {
+        questionHintBox.classList.remove('hidden');
+        questionHintText.textContent = node.hint;
+      } else {
+        questionHintBox.classList.add('hidden');
+      }
+
+      optionsContainer.innerHTML = '';
+      node.options.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className =
+          'w-full flex flex-col items-start p-3.5 rounded-xl border border-gray-200 bg-white hover:border-rose-400 hover:bg-rose-50/30 transition-all cursor-pointer text-left shadow-2xs group';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'font-bold text-xs sm:text-sm text-gray-900 group-hover:text-rose-700 transition-colors';
+        titleSpan.textContent = opt.label;
+        btn.appendChild(titleSpan);
+
+        if (opt.desc) {
+          const descSpan = document.createElement('span');
+          descSpan.className = 'text-xs text-gray-500 mt-1 leading-relaxed';
+          descSpan.textContent = opt.desc;
+          btn.appendChild(descSpan);
+        }
+
+        btn.addEventListener('click', () => {
+          if (opt.nextNodeId) {
+            showNode(opt.nextNodeId);
+          } else if (opt.outcomeId) {
+            showOutcome(opt.outcomeId);
+          }
+        });
+
+        optionsContainer.appendChild(btn);
+      });
+    }
+
+    function showOutcome(outcomeId) {
+      const outcome = treeData.outcomes[outcomeId];
+      if (!outcome) return;
+
+      currentOutcomeData = outcome;
+      categoryView.classList.add('hidden');
+      nodeView.classList.add('hidden');
+      outcomeView.classList.remove('hidden');
+      resetBtn.classList.remove('hidden');
+      resetBtn.classList.add('inline-flex');
+
+      // 紧急度样式映射
+      const urgencyConfig = {
+        emergency: {
+          banner: 'bg-red-50 border-red-200 text-red-900',
+          badge: 'bg-red-600 text-white',
+          badgeText: '🚨 紧急就医或黄金干预',
+          headline: 'text-red-800'
+        },
+        warning: {
+          banner: 'bg-amber-50 border-amber-200 text-amber-900',
+          badge: 'bg-amber-500 text-white',
+          badgeText: '⚠️ 需采取补救防护措施',
+          headline: 'text-amber-800'
+        },
+        reassurance: {
+          banner: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+          badge: 'bg-emerald-600 text-white',
+          badgeText: '🟢 生理性波动 · 安心观察',
+          headline: 'text-emerald-800'
+        },
+        info: {
+          banner: 'bg-blue-50 border-blue-200 text-blue-900',
+          badge: 'bg-blue-600 text-white',
+          badgeText: 'ℹ️ 科学指导与后续建议',
+          headline: 'text-blue-800'
+        }
+      };
+
+      const cfg = urgencyConfig[outcome.urgency] || urgencyConfig.info;
+
+      outcomeBanner.className = `rounded-2xl p-5 border ${cfg.banner}`;
+      urgencyBadge.className = `rounded-full px-2.5 py-0.5 text-xs font-bold tracking-wide ${cfg.badge}`;
+      urgencyBadge.textContent = cfg.badgeText;
+
+      outcomeTitle.textContent = outcome.title;
+      outcomeHeadline.className = `mt-1 text-xs sm:text-sm font-medium leading-relaxed ${cfg.headline}`;
+      outcomeHeadline.textContent = outcome.headline;
+
+      // 行动清单
+      actionsList.innerHTML = '';
+      outcome.actionItems.forEach((act, idx) => {
+        const item = document.createElement('div');
+        item.className = 'flex items-start gap-2.5 p-3 rounded-xl bg-gray-50/80 border border-gray-100';
+        item.innerHTML = `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold shrink-0 mt-0.5">${idx + 1}</span><span class="leading-relaxed">${act}</span>`;
+        actionsList.appendChild(item);
+      });
+
+      // 时间线
+      if (outcome.timelineGuide) {
+        timelineBox.classList.remove('hidden');
+        timelineText.textContent = outcome.timelineGuide;
+      } else {
+        timelineBox.classList.add('hidden');
+      }
+
+      // 警惕体征
+      if (outcome.redFlags && outcome.redFlags.length > 0) {
+        redflagsBox.classList.remove('hidden');
+        redflagsList.innerHTML = '';
+        outcome.redFlags.forEach((rf) => {
+          const li = document.createElement('li');
+          li.textContent = rf;
+          redflagsList.appendChild(li);
+        });
+      } else {
+        redflagsBox.classList.add('hidden');
+      }
+
+      // 安心提示
+      if (outcome.reassuranceNote) {
+        reassuranceBox.classList.remove('hidden');
+        reassuranceText.textContent = outcome.reassuranceNote;
+      } else {
+        reassuranceBox.classList.add('hidden');
+      }
+
+      authorityText.textContent = outcome.sourceAuthority;
+
+      // 关联文章
+      if (outcome.relatedArticleSlug) {
+        articleLink.classList.remove('hidden');
+        articleLink.classList.add('inline-flex');
+        articleLink.href = `${siteBase}articles/${outcome.relatedArticleSlug}/`;
+      } else {
+        articleLink.classList.add('hidden');
+        articleLink.classList.remove('inline-flex');
+      }
+    }
+
+    // 事件绑定
+    document.querySelectorAll('.dg-category-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const startNodeId = btn.dataset.startNode;
+        if (startNodeId) showNode(startNodeId);
+      });
+    });
+
+    backBtn?.addEventListener('click', () => {
+      if (history.length <= 1) {
+        resetToHome();
+      } else {
+        history.pop(); // 弹出当前节点
+        const prevNodeId = history.pop(); // 弹出上一个节点并重新显示
+        showNode(prevNodeId);
+      }
+    });
+
+    resetBtn?.addEventListener('click', resetToHome);
+    recheckBtn?.addEventListener('click', resetToHome);
+
+    // 复制卡片
+    copyOutcomeBtn?.addEventListener('click', async () => {
+      if (!currentOutcomeData) return;
+      const d = currentOutcomeData;
+      const text = `⚡【know-her 应急决策卡】${d.title}\n结论：${d.headline}\n\n执行步骤：\n${d.actionItems.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n${d.timelineGuide ? `\n⏱️ 关键监测点：${d.timelineGuide}` : ''}\n\n权威循证：${d.sourceAuthority}\n直达决策树：https://rom4n2.github.io/know-her/guide/decision-tree/`;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        if (copyText && copyIcon) {
+          copyText.textContent = '已复制方案！';
+          copyIcon.textContent = '✅';
+          setTimeout(() => {
+            copyText.textContent = '复制方案卡片';
+            copyIcon.textContent = '📋';
+          }, 2000);
+        }
+      } catch (err) {
+        alert('复制失败，请手动长按选择复制。');
+      }
+    });
+
+    // Hash 监听直达特定分类
+    const hash = window.location.hash;
+    if (hash === '#condom') {
+      showNode('node_condom_time');
+    } else if (hash === '#missed-pill') {
+      showNode('node_pill_days');
+    } else if (hash === '#bleeding') {
+      showNode('node_bleeding_timing');
+    }
+  })();
+</script>

@@ -49,12 +49,20 @@ const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefine
     <button
       type="button"
       id="random-explore-btn"
-      class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 hover:border-rose-300 transition-all cursor-pointer whitespace-nowrap"
+      class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 hover:border-rose-300 transition-all cursor-pointer whitespace-nowrap"
       title="随机抽一篇科普文章阅读"
     >
       <span>🎲</span>
-      <span>随便逛逛</span>
+      <span class="hidden sm:inline">随便逛逛</span>
     </button>
+    <a
+      href={`${base}guide/decision-tree/`}
+      class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 px-3.5 py-2.5 text-xs font-semibold text-white shadow-xs hover:from-rose-600 hover:to-rose-700 transition-all whitespace-nowrap"
+      title="遇到避孕或突发出血意外？3步获取循证处置卡"
+    >
+      <span>⚡</span>
+      <span>应急速查</span>
+    </a>
   </section>
 
   {/* 分类快捷筛选 */}

@@ -84,7 +84,14 @@ const ogImage = image
             <span class="ml-1.5 hidden sm:inline-block text-xs text-gray-400 font-normal">性健康科普与愉悦分享</span>
           </div>
         </a>
-        <nav class="flex items-center gap-4 text-xs font-medium text-gray-600">
+        <nav class="flex items-center gap-3.5 text-xs font-medium text-gray-600">
+          <a
+            href={`${base}guide/decision-tree/`}
+            class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 font-semibold border border-rose-100 hover:bg-rose-100 transition-colors"
+          >
+            <span>⚡</span>
+            <span>应急速查</span>
+          </a>
           <a href={`${base}categories/contraception/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">避孕</a>
           <a href={`${base}categories/pleasure/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">愉悦</a>
           <a href={`${base}categories/body/`} class="hidden sm:inline-block hover:text-rose-600 transition-colors">身体</a>
