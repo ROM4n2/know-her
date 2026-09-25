@@ -144,3 +144,12 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 文章详情页 `src/pages/articles/[id].astro` 联动渲染「本文涉及的医学专有名词速查」；
 4. 编写 `scripts/test_glossary.py` 并整合进 CI 与 `package.json` (`pnpm test`)；
 5. 全流程构建验证通过，Pagefind 索引增至 20 篇静态路由。
+
+### 2026-09-25T12:56:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+词条库大幅扩容（11 篇 ➔ 19 篇）：
+1. 落地 8 篇权威导读：痛经、细菌性阴道病BV、外阴阴道假丝酵母菌病、宫内节育器IUD指南、性传播感染STIs防治、同房疼痛与阴道痉挛、亲密伴侣暴力与控制边界、子宫内膜异位症与腺肌病；
+2. 8 篇全部通过真机探针确认 WHO 与默沙东 200 OK 真实链接，全库 19 篇外链 100% 探活成功；
+3. `src/data/dailyQuiz.ts` 题库同步扩充 8 道知情速测题目，覆盖全部 19 篇；
+4. `src/content/glossary/` 同步扩容 6 篇医学名词至 22 词条；
+5. `pnpm test` 门禁（类型检查、图完整性、词典外键、外链探测、静态构建）全绿通过，静态路由达 28 篇。
