@@ -34,26 +34,26 @@ interface Props {
 const { categoryKey, articles } = Astro.props;
 const categoryInfo = CATEGORIES[categoryKey];
 
-const CATEGORY_META: Record<CategoryKey, { title: string; desc: string; icon: string }> = {
+const CATEGORY_META: Record<CategoryKey, { title: string; desc: string; code: string }> = {
   contraception: {
     title: '安全避孕专题指南',
     desc: '倡导科学知情与自主避孕。深入剖析避孕套使用误区、紧急避孕药 72 小时抢救窗口与短效避孕药 (COC) 规律服用常识，破除侥幸心理。',
-    icon: '🛡️',
+    code: 'CONTRACEPTION',
   },
   pleasure: {
     title: '愉悦探索与性心理',
     desc: '去羞耻化的两性愉悦指南。从现代解剖学立体认识阴蒂“隐藏冰山”，打破单一插入迷思，掌握润滑剂选型与女性自慰脱敏常识。',
-    icon: '🌸',
+    code: 'PLEASURE',
   },
   body: {
     title: '生理机制与身体常识',
     desc: '客观平实地看待身体信号。涵盖 FIGO 月经周期四大指标、排卵期出血、宫颈癌防治与 HPV 疫苗筛查常识，摆脱恐慌焦虑。',
-    icon: '🩸',
+    code: 'PHYSIOLOGY',
   },
   intimacy: {
     title: '亲密沟通与知情同意',
     desc: '健康平等的两性边界构建。全面拆解联合国教科文组织全面性教育倡导的 FRIES 知情同意黄金法则，拒绝胁迫与模糊边界。',
-    icon: '💬',
+    code: 'INTIMACY',
   },
 };
 
@@ -78,31 +78,33 @@ const base = import.meta.env.BASE_URL.endsWith('/')
   </nav>
 
   {/* 专题 Hero Banner */}
-  <header class="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs">
+  <header class="mb-8 rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)]">
     <div class="flex items-center gap-2 mb-3">
-      <span class="text-2xl">{meta.icon}</span>
+      <span class="font-mono text-xs font-bold text-[#8B8676] tracking-wider uppercase">
+        TOPIC // {meta.code}
+      </span>
       <span class:list={['rounded-full border px-3 py-0.5 text-xs font-semibold', categoryInfo.cls]}>
         {categoryInfo.label} 专题
       </span>
-      <span class="text-xs text-gray-400 ml-auto">共 {articles.length} 篇精选</span>
+      <span class="text-xs text-[#8B8676] ml-auto font-mono">共 {articles.length} 篇精选</span>
     </div>
 
-    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">
+    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#15140F] mb-2 leading-snug">
       {meta.title}
     </h1>
-    <p class="text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+    <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed max-w-2xl">
       {meta.desc}
     </p>
 
     {/* 其他分类快捷切换 */}
-    <div class="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2 text-xs">
-      <span class="text-gray-400 mr-1">查看其他专题：</span>
+    <div class="mt-5 pt-4 border-t border-[#15140F]/10 flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-[#8B8676] mr-1">查看其他专题：</span>
       {Object.entries(CATEGORIES).map(([key, item]) => {
         if (key === categoryKey) return null;
         return (
           <a
             href={`${base}categories/${key}/`}
-            class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-gray-600 hover:border-rose-300 hover:text-rose-600 transition-colors"
+            class="rounded-full border border-stone-200 bg-[#FAF8F5] px-3 py-1 text-[#5A5448] hover:border-stone-300 hover:text-rose-600 transition-colors"
           >
             {item.label}
           </a>

@@ -10,9 +10,12 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 
 <div class="rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-6">
   <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-4">
-    <div class="flex items-center gap-2">
-      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white text-base shadow-2xs">
-        🩸
+    <div class="flex items-center gap-2.5">
+      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+        <svg class="w-4 h-4 text-rose-200" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 0 0 9-9c0-4.97-4.03-9-9-9s-9 4.03-9 9a9 9 0 0 0 9 9Z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 3"/>
+        </svg>
       </span>
       <div>
         <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
@@ -137,7 +140,6 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     {/* 综合评价与就诊准备建议 */}
     <div id="cycle-advice-box" class="rounded-2xl border p-4 sm:p-5 space-y-3">
       <div class="flex items-center gap-2">
-        <span id="cycle-icon" class="text-xl">🌸</span>
         <h4 id="cycle-title" class="font-bold text-sm sm:text-base text-[#15140F]">
           综合生理评估报告
         </h4>
@@ -146,7 +148,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 
       {/* 就诊沟通小抄 */}
       <div id="cycle-doctor-tip" class="hidden rounded-xl bg-white border border-[#15140F]/10 p-3.5 space-y-2 text-xs text-[#5A5448]">
-        <strong class="text-[#15140F] block">📋 若前往公立医院妇科门诊，建议提前准备好这 3 组数据：</strong>
+        <strong class="text-[#15140F] block">就诊沟通清单：前往公立医院妇科门诊，建议提前准备好这 3 组数据</strong>
         <ul class="list-disc pl-4 space-y-1 leading-relaxed">
           <li><strong>末次月经第 1 天 (LMP)</strong>：医生开具性激素六项或 B 超的第一参考锚点；</li>
           <li><strong>出血异常模式</strong>：是经期天数变长，还是非经期同房后接触性出血；</li>
@@ -183,7 +185,6 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     const badgeFlow = document.getElementById('badge-flow');
 
     const adviceBox = document.getElementById('cycle-advice-box');
-    const cycleIcon = document.getElementById('cycle-icon');
     const cycleTitle = document.getElementById('cycle-title');
     const cycleDesc = document.getElementById('cycle-desc');
     const doctorTip = document.getElementById('cycle-doctor-tip');
@@ -263,15 +264,13 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       // 综合渲染
       if (hasWarning) {
         adviceBox.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5 space-y-3';
-        cycleIcon.textContent = '⚠️';
-        cycleTitle.textContent = '部分指标存在客观偏离，建议持续关注或择机面诊';
+        cycleTitle.textContent = '[ 指标偏离提醒 ] 存在客观偏差项，建议持续关注或择机面诊';
         cycleDesc.innerHTML = notes.join('<br>');
         doctorTip.classList.remove('hidden');
       } else {
         adviceBox.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 space-y-3';
-        cycleIcon.textContent = '🌸';
-        cycleTitle.textContent = '四项指标均处于 FIGO 权威临床健康参考区间';
-        cycleDesc.textContent = '你的月经周期、行经天数与出血量均呈现非常健康的生理自洽状态。人体的下丘脑-垂体-卵巢轴极具动态平衡能力，个别月份受情绪波动、远途飞行或劳累出现轻微提前或推后数天属正常生理反馈，继续保持规律作息即可。';
+        cycleTitle.textContent = '[ FIGO 标准评估 ] 周期、天数与出血量均在标准生理区间';
+        cycleDesc.textContent = '当前自测数据的四大指标均符合国际妇产科联合会 (FIGO) 与中华医学会妇产科学分会给出的健康育龄期女性标准。偶发的一两次 1~2 天轻微波动通常受压力、作息或短期情绪影响，无需过度焦虑。';
         doctorTip.classList.add('hidden');
       }
     }

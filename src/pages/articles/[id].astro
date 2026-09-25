@@ -113,11 +113,11 @@ const relatedGlossary = allGlossary.filter(
       >
         {tierInfo.label}
       </a>
-      <span class="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs text-gray-500">
-        {data.is_full_text ? '📖 全文收录' : '💡 精选导读'}
+      <span class="rounded-full border border-stone-200 bg-white px-2.5 py-0.5 text-xs text-stone-600">
+        {data.is_full_text ? '全文收录' : '精选导读'}
       </span>
       <span class="rounded-full border border-rose-100 bg-rose-50/60 px-2.5 py-0.5 text-xs text-rose-700">
-        ⏱️ 导读约 {readMinutes} 分钟
+        阅读约 {readMinutes} 分钟
       </span>
     </div>
 
@@ -149,16 +149,19 @@ const relatedGlossary = allGlossary.filter(
     <div class="mt-6 rounded-xl border border-rose-100 bg-rose-50/50 p-4 text-sm text-gray-700 leading-relaxed">
       <div class="flex items-center justify-between gap-2 mb-2">
         <div class="flex items-center gap-1.5 font-semibold text-rose-800">
-          <span>✨</span> 核心导读与看点
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+          <span>核心导读与看点</span>
         </div>
         <button
           type="button"
           id="copy-summary-btn"
-          class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 shadow-2xs hover:bg-rose-100/60 transition-all cursor-pointer"
-          title="复制本篇导读要点卡片发送给朋友"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-[#15140F]/15 bg-white px-2.5 py-1 text-xs font-medium text-[#2A2620] hover:border-rose-300 hover:text-rose-700 transition-all cursor-pointer shadow-2xs"
+          title="复制本篇核心看点卡片"
         >
-          <span id="copy-btn-icon">📋</span>
-          <span id="copy-btn-text">复制要点卡片</span>
+          <svg class="w-3.5 h-3.5 text-[#8B8676]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"/>
+          </svg>
+          <span id="copy-btn-text">复制要点</span>
         </button>
       </div>
       <p>{data.summary}</p>
@@ -191,7 +194,7 @@ const relatedGlossary = allGlossary.filter(
     <section class="mt-8 rounded-2xl border border-[#15140F]/12 bg-[#FAF8F5] p-5 space-y-3.5 shadow-2xs">
       <div class="flex items-center justify-between">
         <h3 class="text-xs sm:text-sm font-bold text-[#15140F] flex items-center gap-1.5">
-          <span>📖</span> 本文涉及的医学专有名词速查
+          <span>本文涉及的医学专有名词速查</span>
         </h3>
         <a href={`${base}glossary/`} class="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline">
           查阅完整词典 ↗
@@ -254,7 +257,7 @@ const relatedGlossary = allGlossary.filter(
     {/* 读者勘误通道 */}
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#15140F]/10 pt-3 text-xs text-[#5A5448]">
       <div class="flex items-center gap-1">
-        <span>💡 循证医学需要持续纠偏。若发现本篇数据有误或已过时：</span>
+        <span>循证医学需要持续纠偏。若发现本篇数据有误或已过时：</span>
       </div>
       <a
         href={`https://github.com/ROM4n2/know-her/issues/new?title=${encodeURIComponent(`[勘误反馈] 《${data.title}》`)}&labels=correction&template=correction.yml`}
@@ -262,7 +265,7 @@ const relatedGlossary = allGlossary.filter(
         rel="noopener noreferrer"
         class="text-rose-600 font-semibold hover:underline inline-flex items-center gap-1"
       >
-        <span>🐞 提交勘误反馈</span>
+        <span>提交勘误反馈</span>
         <span>↗</span>
       </a>
     </div>
@@ -282,17 +285,14 @@ const relatedGlossary = allGlossary.filter(
     }, { passive: true });
 
     document.getElementById('copy-summary-btn')?.addEventListener('click', async () => {
-      const text = `🌸【know-her 科普速览】《${shareTitle}》\n🏷️ 专题：${shareCategory} · 权威来源：${shareSource}\n\n💡 核心看点：\n${shareSummary}\n\n🔗 完整导读与出处直达：\n${shareUrl}`;
+      const text = `【know-her 科普速览】《${shareTitle}》\n专题：${shareCategory} · 权威来源：${shareSource}\n\n核心看点：\n${shareSummary}\n\n完整导读与出处直达：\n${shareUrl}`;
       try {
         await navigator.clipboard.writeText(text);
         const btnText = document.getElementById('copy-btn-text');
-        const btnIcon = document.getElementById('copy-btn-icon');
-        if (btnText && btnIcon) {
+        if (btnText) {
           btnText.textContent = '已复制！';
-          btnIcon.textContent = '✅';
           setTimeout(() => {
-            btnText.textContent = '复制要点卡片';
-            btnIcon.textContent = '📋';
+            btnText.textContent = '复制要点';
           }, 2000);
         }
       } catch (err) {

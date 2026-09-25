@@ -10,9 +10,11 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 
 <div class="rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-6">
   <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-4">
-    <div class="flex items-center gap-2">
-      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white text-base shadow-2xs">
-        ⏱️
+    <div class="flex items-center gap-2.5">
+      <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+        <svg class="w-4 h-4 text-rose-200" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+        </svg>
       </span>
       <div>
         <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
@@ -22,7 +24,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       </div>
     </div>
     <span class="hidden sm:inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
-      🔒 纯本地离线计算
+      纯本地离线计算
     </span>
   </div>
 
@@ -101,7 +103,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       {/* 72h 窗口卡 */}
       <div class="rounded-xl border border-[#15140F]/12 bg-white p-4 shadow-2xs space-y-1.5">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-[#15140F]">💊 72小时口服黄金窗口</span>
+          <span class="text-xs font-bold text-[#15140F]">72小时口服黄金窗口</span>
           <span id="ec-72-badge" class="rounded-full px-2 py-0.5 text-[10px] font-bold font-mono">
             计算中
           </span>
@@ -117,7 +119,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       {/* 120h 窗口卡 */}
       <div class="rounded-xl border border-[#15140F]/12 bg-white p-4 shadow-2xs space-y-1.5">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-[#15140F]">🏥 120小时医疗终极窗口</span>
+          <span class="text-xs font-bold text-[#15140F]">120小时医疗终极窗口</span>
           <span id="ec-120-badge" class="rounded-full px-2 py-0.5 text-[10px] font-bold font-mono">
             计算中
           </span>
@@ -134,7 +136,6 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     {/* 动态医学建议结论卡 */}
     <div id="ec-advice-card" class="rounded-2xl border p-4 sm:p-5 space-y-2.5">
       <div class="flex items-center gap-2">
-        <span id="ec-advice-icon" class="text-lg">💡</span>
         <h4 id="ec-advice-title" class="font-bold text-sm sm:text-base text-[#15140F]">
           方案结论
         </h4>
@@ -166,7 +167,6 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     const badge120 = document.getElementById('ec-120-badge');
     const rem120 = document.getElementById('ec-120-remaining');
     const adviceCard = document.getElementById('ec-advice-card');
-    const adviceIcon = document.getElementById('ec-advice-icon');
     const adviceTitle = document.getElementById('ec-advice-title');
     const adviceDesc = document.getElementById('ec-advice-desc');
 
@@ -234,27 +234,23 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       // 综合处置方案
       if (diffHours <= 24) {
         adviceCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 space-y-2.5';
-        adviceIcon.textContent = '🟢';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-emerald-950';
-        adviceTitle.textContent = '处于 24 小时黄金拦截期（有效率达 95%）';
+        adviceTitle.textContent = '[ 24小时黄金期 · 95%有效率 ] 建议尽快口服左炔诺孕酮';
         adviceDesc.textContent = '请尽早前往就近正规药店或外卖购买左炔诺孕酮（1.5mg 单片装或 0.75mg 双片装间隔12小时），服用越早效果越好。服药后 2 小时内若发生呕吐，必须原剂量补服一片。';
       } else if (diffHours <= 72) {
         adviceCard.className = 'rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5 space-y-2.5';
-        adviceIcon.textContent = '⚠️';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-amber-950';
-        adviceTitle.textContent = '处于 24~72 小时次级期（有效率下降至 58%~85%）';
+        adviceTitle.textContent = '[ 24~72小时次级期 · 效果递减 ] 仍可口服但应立即执行';
         adviceDesc.textContent = '常规左炔诺孕酮口服药依然有效但成功率随时间递减，请不要再拖延，立即购买服用！若有条件且体重偏大（BMI>25），可考虑公立医院急诊放置含铜节育器（IUD）作为终极保险。';
       } else if (diffHours <= 120) {
         adviceCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5 space-y-2.5';
-        adviceIcon.textContent = '🚨';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-rose-950';
-        adviceTitle.textContent = '已超出 72 小时常规口服药窗口！请立即前往公立医院';
+        adviceTitle.textContent = '[ 超出72小时口服窗口 · 需急诊介入 ] 常规药失效，需医院处置';
         adviceDesc.textContent = '常规左炔诺孕酮（毓婷）已基本无效，请勿盲目大剂量滥服！请在 120 小时（5天）内前往公立医院妇科急诊，由医生评估急诊放置含铜宫内节育器（IUD，避孕有效率仍高达 99% 以上）或开具处方类紧急避孕药（醋酸乌利司他）。';
       } else {
         adviceCard.className = 'rounded-2xl border border-stone-200 bg-stone-100 p-4 sm:p-5 space-y-2.5';
-        adviceIcon.textContent = '🛑';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-stone-900';
-        adviceTitle.textContent = '已超出 120 小时所有医学紧急避孕窗口';
+        adviceTitle.textContent = '[ 超出120小时全部窗口 ] 紧急避孕已失效，转入随访';
         adviceDesc.textContent = '受精卵很可能已完成着床，任何紧急避孕药物与操作均已失效。切忌相信网络偏方或私自加大药量伤害身体。请保持平和心态，在同房满 14 天后购买早孕试纸使用晨尿初筛，或在下次月经延期 7 天后前往公立医院抽血查 HCG。';
       }
     }

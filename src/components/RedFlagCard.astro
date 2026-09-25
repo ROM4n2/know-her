@@ -8,10 +8,15 @@ const { flags } = Astro.props;
 {
   flags.length > 0 && (
     <section
-      class="border-l-4 border-red-600 bg-red-50 p-4 text-red-900"
+      class="border-l-4 border-red-600 bg-red-50/70 p-4 text-red-950 rounded-r-xl"
       role="alert"
     >
-      <h2 class="font-semibold">❗ 以下情况请立即就医</h2>
+      <h2 class="font-bold text-sm text-red-900 flex items-center gap-1.5">
+        <span class="rounded-sm bg-red-600 px-1.5 py-0.2 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+          RED FLAG
+        </span>
+        <span>以下情况请立即就医</span>
+      </h2>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {flags.map((flag) => (
           <li>{flag}</li>

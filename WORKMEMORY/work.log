@@ -173,3 +173,15 @@ Caps: filesystem-read, filesystem-write, shell-exec
    - 月经四大客观指标（周期、经期、规律性、出血量 AUB-HMB）自测打分器；
 3. 新增 scripts/test_tools.py 自动化测试门禁并接入 pnpm test；
 4. 全站静态路由扩充至 29 个页面，更新 PROJECT_OVERVIEW 踩坑记录。
+
+### 2026-09-25T14:24:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+全站去 Emoji 视觉与社论风格净化（遵循 frontend-design）：
+1. 视觉问题定位：大量彩色原生系统 Emoji（🌸/⚡/📖/🎲/🧮/⏱/💊/🩸/🚨/⚠️/💡/🏠/🎯/🐞/🔒/🛡️）在跨平台呈现下高度割裂，产生廉价模板与 AI 伪劣感，削弱了严肃循证医学网站的公信力；
+2. 架构与 UI 净化：
+   - 顶部导航、移动端吸底栏与免责页脚：去除所有 Emoji，替换为高质感单色几何标记与简洁文字；
+   - 实用工具箱三大计算器（EmergencyCountdown, CocRemedyCalculator, CycleAssessment）：移除全部状态与卡片 Emoji，换用标准单色语义 SVG、结构化状态微徽标（如 `[ 24小时黄金期 · 95%有效率 ]`）与 Academic Modern Editorial 纸墨卡片；
+   - 应急决策树与医学词典：移除卡片与复制小抄中的多余 Emoji，优化为纯排版符号；
+   - 隐私承诺声明与信源准则：重构为温润纸墨视觉风格，采用 `01 // PRINCIPLE`、`WHITELIST`、`BLACKLIST` 微标签与结构化编号；
+3. 内容库深度净化：全库 19 篇 MDX 文章标题与小节统一清除 `💡`、`📖`、`🚨`、`🩺`、`🔗` 等装饰性 Emoji；
+4. 代码清理与验证：移除未使用的图标 DOM 引用变量，运行 `pnpm test`（含 Astro check、全图连通性、词典与工具箱测试、构建）全部零报错通过。

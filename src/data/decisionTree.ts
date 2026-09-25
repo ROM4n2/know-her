@@ -51,21 +51,21 @@ export const DECISION_TREE: DecisionTreeData = {
     {
       id: "condom_accident",
       title: "避孕套破损 / 脱落 / 事故",
-      icon: "🛡️",
+      icon: "contraception",
       desc: "同房中途避孕套破裂、滑脱在体内、或未全程佩戴",
       startNodeId: "node_condom_time"
     },
     {
       id: "missed_pill",
       title: "短效口服避孕药 (COC) 漏服",
-      icon: "💊",
+      icon: "pill",
       desc: "忘记服药 1 天或连续漏服 2 天以上的分步抢救",
       startNodeId: "node_pill_days"
     },
     {
       id: "abnormal_bleeding",
       title: "非经期出血 / 咖啡色分泌物",
-      icon: "🩸",
+      icon: "bleeding",
       desc: "月经刚完又有少量褐血、两次经期正中间点滴、或同房出血",
       startNodeId: "node_bleeding_timing"
     }
@@ -267,7 +267,7 @@ export const DECISION_TREE: DecisionTreeData = {
         "保持心情平静，在事故同房后满 14 天，使用晨尿验孕棒检测；或在月经推迟 3 天后复测；",
         "若测出阳性弱阳性，请第一时间前往公立医院妇科门诊查超声和血 HCG，由正规医生面诊评估。"
       ],
-      timelineGuide: "同房后 14 天首测 ➔ 月经推迟 3~7 天复测。",
+      timelineGuide: "同房后 14 天首测 → 月经推迟 3~7 天复测。",
       relatedArticleSlug: "contraception-condom-myths",
       sourceAuthority: "默沙东诊疗手册大众版"
     },
@@ -362,7 +362,7 @@ export const DECISION_TREE: DecisionTreeData = {
       id: "outcome_bleeding_red_flag",
       category: "abnormal_bleeding",
       urgency: "emergency",
-      title: "🚨 医疗红旗警报：伴随急性下腹剧痛，请立即前往急诊！",
+      title: "医疗红旗警报：伴随急性下腹剧痛，请立即前往急诊！",
       headline: "出血伴剧烈撕裂样下腹痛、冷汗或肛门下坠感，提示黄体破裂或异位妊娠急症风险！",
       actionItems: [
         "【立即行动】立刻停下手中事务，不要强忍，建议由伴侣或家人陪同前往附近公立三甲医院急诊妇产科；",
