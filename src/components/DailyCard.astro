@@ -43,6 +43,9 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
         </svg>
       </span>
       <div>
+        <span class="text-[10px] font-mono font-bold uppercase tracking-[0.25em] text-[#8B8676] block">
+          01 // TODAY'S SELECTION
+        </span>
         <h2 class="text-sm font-bold text-[#15140F] flex items-center gap-2">
           今日精选科普
           <span class="text-xs font-normal text-rose-600">({todayStr})</span>
@@ -104,10 +107,10 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
         <div>
           <div class="flex items-center justify-between text-xs font-semibold text-rose-700 mb-2.5">
             <span class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
-              <span>每日一答 · 30秒知情速测</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(225,29,72,0.8)] animate-pulse"></span>
+              <span class="tracking-wide">每日一答 · 30秒知情速测</span>
             </span>
-            <span id="quiz-status" class="text-[#8B8676] font-normal">点击选项答题打卡</span>
+            <span id="quiz-status" class="text-[#8B8676] font-mono text-[11px] tracking-wider uppercase">点击选项答题打卡</span>
           </div>
 
           <p class="text-xs sm:text-sm font-bold text-[#15140F] leading-snug mb-3">

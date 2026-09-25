@@ -68,6 +68,12 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 替换为 Academic Modern Editorial 纸张墨水风格的专业排版与排版符号（单色 SVG 图标、`[ 准入清单 ]` 紧凑微标签、`01 // PRINCIPLE` 结构化编号与专业提示点）；
      - 全量 19 篇 MDX 词条标题统一去除装饰性 Emoji（`💡`、`📖`、`🚨`、`🩺`、`🔗` 等），全面回归出版级严肃循证质感；
      - 清理代码内未引用变量，全站编译零错误、零警告。
+  16. 落地 `artifact`（极光帘幕 Aurora Veil）设计语言（方案 A + B）：
+     - 提取 `artifact/` 中工业级微排版与 WebGL2 实时光幕渲染思路；
+     - 开发 `src/components/AmbientHero.astro`，构建适配 `#FAF8F5` 温润纸底的柔粉珊瑚-暖桃-琥珀金三层呼吸有机光幕，支持光标与触控微摆动（Sway the veil）；
+     - 落地大尺度字重对比（`KNOW HER`<br>`<span class="font-light">两性健康与自主愉悦探索</span>`）；
+     - 引入宽字间距（`tracking-[0.28em]`）、荧光微光斑指示点（`shadow-[0_0_10px_rgba(244,63,94,0.7)]`）与毛玻璃半透徽标（`backdrop-blur-md`）；
+     - 完善无障碍体验：响应 `prefers-reduced-motion`，支持 `IntersectionObserver` 离屏静默零 CPU 浪费。
 
 ## 高频坑（踩过的雷区）
 

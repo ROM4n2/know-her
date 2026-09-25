@@ -1,0 +1,268 @@
+---
+/**
+ * AmbientHero.astro — 极光与有机光幕 Hero 交互组件
+ * 借鉴 artifact/index.html (Aurora Veil) 的 WebGL2 实时光幕渲染与工业级社论排版：
+ * 1. 宽字距 (tracking-[0.28em]) 与大字阶粗细对撞 (800 + 300)；
+ * 2. 荧光微脉冲指示点 (box-shadow 光斑) 与半透毛玻璃浮层；
+ * 3. 针对 #FAF8F5 温润纸张调配的柔和珊瑚暖光帷幕，响应鼠标与手势引力摇曳 (Sway)。
+ */
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+---
+
+<section
+  id="ambient-hero-container"
+  class:list={[
+    "relative overflow-hidden rounded-3xl border border-[#15140F]/15 bg-white/75 p-6 sm:p-9 shadow-[3px_3px_0_rgba(21,20,15,0.06)] transition-all",
+    className
+  ]}
+  aria-label="站点导言与交互光幕"
+>
+  {/* WebGL2 实时光幕背景画布 */}
+  <canvas
+    id="hero-aura-canvas"
+    class="absolute inset-0 h-full w-full pointer-events-none opacity-85 transition-opacity duration-700"
+    aria-hidden="true"
+  ></canvas>
+
+  {/* 遮罩内容层 */}
+  <div class="relative z-10 flex flex-col justify-between space-y-6">
+    {/* 顶部微元数据条 */}
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-3 text-[10px] sm:text-[11px] font-mono font-bold tracking-[0.28em] text-[#8B8676] uppercase">
+      <span class="flex items-center">
+        <span class="inline-block h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)] mr-2.5 animate-pulse"></span>
+        <span>KNOW HER // EVIDENCE & PLEASURE</span>
+      </span>
+      <span class="hidden sm:inline-block text-[#8B8676]/90">
+        EVIDENCE-BASED · PEER-REVIEWED
+      </span>
+    </div>
+
+    {/* 核心社论字阶对撞标题 */}
+    <div class="space-y-2">
+      <h1 class="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-[#15140F] leading-[0.96] sm:leading-[0.92]">
+        KNOW HER<br />
+        <span class="font-light text-[#5A5448] text-2xl sm:text-4xl lg:text-5xl tracking-normal">
+          两性健康与自主愉悦探索
+        </span>
+      </h1>
+    </div>
+
+    {/* 底部导言与交互徽标 */}
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-1">
+      <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed max-w-[48ch] m-0">
+        面向现代年轻女性与伴侣的循证健康指南。避开商业营销套路，建立科学的自主避孕、身体自洽、亲密沟通与无羞耻愉悦认知。
+      </p>
+
+      <div class="inline-flex items-center gap-2 self-start sm:self-end rounded-full border border-[#15140F]/15 bg-white/80 px-3.5 py-1.5 text-[10px] sm:text-[11px] font-mono font-semibold tracking-[0.2em] text-[#2A2620] uppercase backdrop-blur-md shadow-2xs shrink-0 select-none">
+        <span class="inline-block h-1.5 w-1.5 rounded-full bg-rose-500/80"></span>
+        <span>SWAY WITH TOUCH</span>
+        <span class="text-rose-600">↗</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    const canvas = document.getElementById('hero-aura-canvas');
+    const container = document.getElementById('ambient-hero-container');
+    if (!canvas || !container) return;
+
+    // 尊重用户减少动画偏好
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const gl = canvas.getContext('webgl2', {
+      alpha: true,
+      antialias: false,
+      powerPreference: 'low-power'
+    });
+
+    if (!gl) {
+      // WebGL2 不可用时保持极简静止半透明，不影响可读性
+      return;
+    }
+
+    const VERT = `#version 300 es
+    void main() {
+      vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+      gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+
+    const FRAG = `#version 300 es
+    precision highp float;
+    out vec4 o;
+    uniform vec2 u_res;
+    uniform float u_time;
+    uniform vec2 u_mouse;
+
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453);
+    }
+
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(
+        mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+        mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+        u.y
+      );
+    }
+
+    float fbm(vec2 p) {
+      float v = 0.0;
+      float a = 0.5;
+      for (int i = 0; i < 4; i++) {
+        v += a * noise(p);
+        p = p * 2.0 + 2.5;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    // 匹配 know-her 纸质温润暖光：柔粉珊瑚 -> 杏桃暖橘 -> 琥珀金
+    vec3 organicPal(float t) {
+      vec3 rose = vec3(0.96, 0.35, 0.45);
+      vec3 peach = vec3(0.98, 0.56, 0.42);
+      vec3 amber = vec3(0.99, 0.72, 0.46);
+      return mix(mix(rose, peach, smoothstep(0.0, 0.5, t)), amber, smoothstep(0.5, 1.0, t));
+    }
+
+    void main() {
+      vec2 uv = gl_FragCoord.xy / u_res;
+      vec2 p = (gl_FragCoord.xy - 0.5 * u_res) / u_res.y;
+      float sway = (u_mouse.x - 0.5) * 0.85;
+
+      // 底纸温润色 #FAF8F5 (RGB: 250, 248, 245)
+      vec3 paper = vec3(0.980, 0.973, 0.961);
+      vec3 col = paper;
+
+      float t = u_time * 0.12;
+      float totalRibbon = 0.0;
+      vec3 veilCol = vec3(0.0);
+
+      // 三层柔和有机光幕
+      for (int i = 0; i < 3; i++) {
+        float fi = float(i);
+        float base = (fi - 1.0) * 0.45 + sway * (0.25 + fi * 0.15);
+        float cx = base + sin(p.y * 1.5 + t * 1.8 + fi * 2.1) * 0.18 + (fbm(vec2(p.y * 1.1 + fi * 3.0, t * 1.2)) - 0.5) * 0.45;
+        float w = 0.22 + 0.10 * fbm(vec2(p.y * 2.5 + fi, t));
+        float band = exp(-pow((p.x - cx) / w, 2.0));
+        float vert = smoothstep(-1.0, 0.9, p.y) * (0.35 + 0.65 * fbm(vec2(p.x * 4.0 + fi * 3.0, p.y * 2.2 - t * 2.0)));
+        float ribbon = band * vert;
+        float hue = fract(0.1 + fi * 0.32 + p.y * 0.15 + t * 0.25);
+
+        veilCol += organicPal(hue) * ribbon;
+        totalRibbon += ribbon;
+      }
+
+      if (totalRibbon > 0.001) {
+        vec3 ribbonColor = veilCol / (totalRibbon + 0.0001);
+        float alpha = clamp(totalRibbon * 0.36, 0.0, 0.40);
+        // 四周边际柔和羽化
+        float edgeVignette = smoothstep(0.0, 0.12, uv.x) * smoothstep(1.0, 0.88, uv.x) *
+                             smoothstep(0.0, 0.15, uv.y) * smoothstep(1.0, 0.85, uv.y);
+        alpha *= edgeVignette;
+        col = mix(paper, ribbonColor, alpha);
+      }
+
+      o = vec4(col, 1.0);
+    }`;
+
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        gl.deleteShader(s);
+        return null;
+      }
+      return s;
+    }
+
+    const vs = compile(gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) return;
+
+    const pr = gl.createProgram();
+    gl.attachShader(pr, vs);
+    gl.attachShader(pr, fs);
+    gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
+    gl.useProgram(pr);
+
+    const uRes = gl.getUniformLocation(pr, 'u_res');
+    const uTime = gl.getUniformLocation(pr, 'u_time');
+    const uMouse = gl.getUniformLocation(pr, 'u_mouse');
+
+    let mouse = [0.5, 0.5];
+    let target = [0.5, 0.5];
+
+    function updatePointer(clientX, clientY) {
+      const rect = container.getBoundingClientRect();
+      const x = Math.min(Math.max((clientX - rect.left) / rect.width, 0.0), 1.0);
+      const y = Math.min(Math.max(1.0 - (clientY - rect.top) / rect.height, 0.0), 1.0);
+      target = [x, y];
+    }
+
+    window.addEventListener('pointermove', (e) => {
+      updatePointer(e.clientX, e.clientY);
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches[0]) {
+        updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5); // 性能节约限制在 1.5x
+      const w = Math.floor(container.clientWidth * dpr);
+      const h = Math.floor(container.clientHeight * dpr);
+      if (w === canvas.width && h === canvas.height) return;
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+
+    window.addEventListener('resize', resize, { passive: true });
+    resize();
+
+    let isVisible = true;
+    const observer = new IntersectionObserver((entries) => {
+      isVisible = entries[0].isIntersecting;
+    }, { threshold: 0.1 });
+    observer.observe(container);
+
+    const t0 = performance.now();
+
+    function render(now) {
+      if (!isVisible) {
+        requestAnimationFrame(render);
+        return;
+      }
+
+      resize();
+      mouse[0] += (target[0] - mouse[0]) * 0.04;
+      mouse[1] += (target[1] - mouse[1]) * 0.04;
+
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1f(uTime, (now - t0) / 1000);
+      gl.uniform2f(uMouse, mouse[0], mouse[1]);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      if (!prefersReducedMotion) {
+        requestAnimationFrame(render);
+      }
+    }
+
+    // 启动动画
+    requestAnimationFrame(render);
+  })();
+</script>

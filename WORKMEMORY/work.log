@@ -185,3 +185,18 @@ Caps: filesystem-read, filesystem-write, shell-exec
    - 隐私承诺声明与信源准则：重构为温润纸墨视觉风格，采用 `01 // PRINCIPLE`、`WHITELIST`、`BLACKLIST` 微标签与结构化编号；
 3. 内容库深度净化：全库 19 篇 MDX 文章标题与小节统一清除 `💡`、`📖`、`🚨`、`🩺`、`🔗` 等装饰性 Emoji；
 4. 代码清理与验证：移除未使用的图标 DOM 引用变量，运行 `pnpm test`（含 Astro check、全图连通性、词典与工具箱测试、构建）全部零报错通过。
+
+### 2026-09-25T14:40:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+落地 artifact (极光帘幕 Aurora Veil) 交互与社论设计系统（方案 A + B）：
+1. 深入剖析 artifact/index.html 与 DESIGN-HANDOFF.md，解构其 WebGL2 实时光幕渲染与工业级微排版精髓；
+2. 架构落地方案 B（有机呼吸光幕交互）：
+   - 创建 `src/components/AmbientHero.astro`，基于 WebGL2 与 FBM 算法构建原生轻量着色器；
+   - 适配知她温润米白底（#FAF8F5），调配出如真丝绸缎般柔和的珊瑚暖粉（#F43F5E）、杏桃橘与琥珀金三层呼吸水波；
+   - 支持移动端与鼠标悬停引力摇曳（Sway），四周边际柔和羽化；
+   - 兼顾极致性能与无障碍：支持 `prefers-reduced-motion` 降级，`IntersectionObserver` 离屏停止渲染；
+3. 架构落地方案 A（社论高反差字阶与微排版）：
+   - 首页 Hero 标题采用 800 + 300 粗细戏剧性对撞（`KNOW HER` + `两性健康与自主愉悦探索`）；
+   - 元数据引入 `tracking-[0.28em]` 宽字母间距排版与半透毛玻璃徽标（`backdrop-blur-md`）；
+   - 导航与速测题库注入带光晕发光微指示点（`shadow-[0_0_10px_rgba(244,63,94,0.7)]`）；
+4. 运行 `pnpm test`，全站静态构建、类型检查与全图连通性测试 100% 通过。
