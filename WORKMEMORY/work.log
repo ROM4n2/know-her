@@ -126,3 +126,12 @@ Caps: filesystem-read, filesystem-write, shell-exec, web-fetch(mcp)
 核心结论：中文开源无同模式竞品（唯一直接同类 KnowSex 489★ 同栈）；方法论先例 HowToLiveBetter 14k★/18天；最大风险=触达(github.io 大陆可达性实测三次重置+零SEO)、信任承诺与机制落差(harvester 模板合成病句实锤 contraception-condoms.mdx L26、UnreviewedBanner 死代码实锤)、bus factor=1(53 commits 单作者实锤)。
 产出物：调研报告已交付用户；Inbox 草稿 d:/Obsidian/Coding/99-Inbox/2026-09-25-know-her-竞品调研与可行性.md；P0-P3 行动建议 10 条（含止血 harvester/接线横幅/探测降频/SEO 落地）。
 注：用户尚未对建议拍板，P0 项未执行。
+
+### 2026-09-25T12:42:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+紧急状况交互决策树上线（路线 2->1 第一阶段，commit `6df09b9`）：
+1. 依据 WHO、FIGO 与默沙东大众版临床指南编制 `src/data/decisionTree.ts`（3 大类、6 个问题节点、12 个结果卡）；
+2. 编写 `src/components/DecisionGuide.astro` 与独立路由 `/guide/decision-tree/`，提供纯客户端离线交互、3 步循证处置卡、一键复制卡片与站内深度词条联动；
+3. 全站顶栏与首页检索区上线「⚡ 应急速查」入口；
+4. 自动化测试 `scripts/test_decision_tree.py` 验证全图 100% 连通零孤立死胡同；
+5. GitHub Actions CI 与 Deploy to GitHub Pages 双流程通过，线上实测 200 OK。
