@@ -25,6 +25,7 @@ REQUIRED_COMPONENTS = [
     ("ArousalBrakesChecklist.astro", ["brakes-calc-container", "brakes-copy-btn", "pleasure-responsive-desire-dual-control"]),
     ("ClinicMemo.astro", ["clinic-memo-container", "clinic-copy-btn", "abnormal-uterine-bleeding"]),
     ("ContraceptionMatrix.astro", ["matrix-filter-container", "matrix-card", "contraception-condoms"]),
+    ("PositionAndIntimacyGuide.astro", ["position-filter-container", "position-card", "intimacy-checklist-root", "pleasure-woman-on-top-mechanics"]),
 ]
 
 
@@ -354,7 +355,17 @@ def run_tests():
                 errors.append(f"组件 {comp_name} 缺失关键标识或外键: {token}")
 
             # 若 token 看起来是文章 slug，核验实体文件
-            if not token.startswith("ec-") and not token.startswith("coc-") and not token.startswith("cycle-") and not token.startswith("period-") and not token.startswith("brakes-") and not token.startswith("clinic-") and not token.startswith("matrix-"):
+            if (
+                not token.startswith("ec-")
+                and not token.startswith("coc-")
+                and not token.startswith("cycle-")
+                and not token.startswith("period-")
+                and not token.startswith("brakes-")
+                and not token.startswith("clinic-")
+                and not token.startswith("matrix-")
+                and not token.startswith("position-")
+                and not token.startswith("intimacy-")
+            ):
                 art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{token}{ext}")) for ext in [".mdx", ".md"])
                 if not art_found:
                     errors.append(f"组件 {comp_name} 关联的外键文章不存在: {token}")

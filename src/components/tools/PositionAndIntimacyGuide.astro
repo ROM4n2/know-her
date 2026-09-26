@@ -1,0 +1,1509 @@
+---
+/**
+ * PositionAndIntimacyGuide.astro — 体位生理力学矩阵与伴侣探索知情清单复合组件
+ * 基于女性盆底解剖学、进入轴线力学与临床 Yes/No/Maybe 脱敏知情协议构建
+ * 纯客户端离线计算，零个人数据留存与隐私回传，页面刷新即销毁
+ */
+import {
+  POSITION_METHODS,
+  type SexualPosition,
+} from '../../data/positionMatrix';
+import {
+  INTIMACY_CHECKLIST_CONFIGS,
+} from '../../data/intimacyChecklist';
+
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+// 体位类别中文映射
+const categoryBadgeMap: Record<SexualPosition['category'], string> = {
+  female_control: '女性主导 / 深度自主',
+  intimacy_close: '温热贴合 / 亲密研磨',
+  low_energy: '低体能消耗 / 放松省力',
+  deep_penetration: '深层缓冲 / 角度改良',
+};
+
+// 关联科普文章标题映射
+const articleTitleMap: Record<string, string> = {
+  'pleasure-woman-on-top-mechanics': '女上位掌控度与深部痛防护力学',
+  'pleasure-side-lying-spooning': '侧卧匙羹与剪刀式力学指南',
+  'pleasure-rear-entry-angles': '后入位进入轴线与子宫后位避坑',
+  'pleasure-cat-technique-alignment': 'CAT性高潮对齐技术科学解析',
+  'pleasure-arousal-time-physiology': '女性性唤起生理时间窗口科普',
+};
+
+// 计算体位筛选标签
+function getFilterTags(pos: SexualPosition): string[] {
+  const tags: string[] = ['all'];
+  if (pos.clitoral_access === 'high') {
+    tags.push('clitoral-high');
+  }
+  if (pos.category === 'female_control') {
+    tags.push('female-control');
+  }
+  if (pos.energy_expenditure === 'low') {
+    tags.push('low-energy');
+  }
+  if (pos.cervical_collision_risk === 'low') {
+    tags.push('cervical-low');
+  }
+  if (
+    pos.pelvic_support_advice.includes('枕') ||
+    pos.pelvic_support_advice.includes('垫')
+  ) {
+    tags.push('pillow');
+  }
+  return tags;
+}
+
+// 序列化数据供客户端原生轻量交互
+const positionsJson = JSON.stringify(POSITION_METHODS);
+const checklistConfigsJson = JSON.stringify(INTIMACY_CHECKLIST_CONFIGS);
+const articleMapJson = JSON.stringify(articleTitleMap);
+---
+
+<div
+  id="position-intimacy-root"
+  data-base-url={base}
+  class:list={[
+    "rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-8 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-8",
+    className
+  ]}
+>
+  {/* 顶部标题区 */}
+  <header class="border-b border-[#15140F]/10 pb-5 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+          <svg class="w-5 h-5 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+          </svg>
+        </span>
+        <div>
+          <div class="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-sm mb-1">
+            [ 循证性生理力学与知情探索 ]
+          </div>
+          <h2 class="text-lg sm:text-xl font-extrabold text-[#15140F] tracking-tight">
+            [ 体位生理力学矩阵与伴侣探索知情清单 ]
+          </h2>
+          <p class="text-xs text-[#5A5448] max-w-3xl mt-1 leading-relaxed">
+            突破网络低俗姿势误导。从女性解剖迎角、阴蒂可达度、深部撞击痛防护与盆底肌耗能出发，提供科学体位矩阵比对与去尴尬的 Yes/No/Maybe 探索沟通清单。
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-[11px] font-mono">
+        <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-800">
+          解剖力学循证
+        </span>
+        <span class="rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 font-medium text-[#5A5448]">
+          本地离线无痕
+        </span>
+      </div>
+    </div>
+  </header>
+
+  {/* 顶部双 Tab 切换控制器 */}
+  <nav class="position-intimacy-no-print border-b border-[#15140F]/10 pb-1" aria-label="工具功能导航">
+    <div class="flex flex-wrap items-center gap-2" role="tablist">
+      <button
+        type="button"
+        id="tab-btn-positions"
+        role="tab"
+        aria-selected="true"
+        aria-controls="panel-positions"
+        class="tab-nav-btn inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold border border-[#15140F] bg-[#15140F] text-white shadow-[2px_2px_0_rgba(21,20,15,1)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <svg class="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+        </svg>
+        <span>[ 姿势生理力学知情选择矩阵 ]</span>
+      </button>
+
+      <button
+        type="button"
+        id="tab-btn-checklist"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-checklist"
+        class="tab-nav-btn inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold border border-[#15140F]/15 bg-[#FAF8F5] text-[#5A5448] hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        </svg>
+        <span>[ 伴侣私密探索知情清单 (Yes/No/Maybe) ]</span>
+      </button>
+    </div>
+  </nav>
+
+  {/* ========================================================================= */}
+  {/* Tab 1 Panel: 姿势生理力学知情选择矩阵 */}
+  {/* ========================================================================= */}
+  <div id="panel-positions" role="tabpanel" class="space-y-8">
+    {/* 多维筛选栏 (position-filter-container) */}
+    <section class="space-y-3">
+      <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            FILTER 01
+          </span>
+          <h3 class="text-sm font-bold text-[#15140F]">
+            按生理力学特征与舒适偏好筛选
+          </h3>
+        </div>
+        <span id="position-filter-count" class="text-xs font-mono text-[#8B8676]">
+          已收录 8 种循证体位力学方案
+        </span>
+      </div>
+
+      <div class="position-filter-container flex flex-wrap items-center gap-2 pt-1" id="position-filter-buttons">
+        <button
+          type="button"
+          data-filter="all"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F] bg-[#15140F] text-white px-3.5 py-1.5 text-xs font-bold shadow-[2px_2px_0_rgba(21,20,15,1)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+          <span>[ 全部收录 (8) ]</span>
+        </button>
+
+        <button
+          type="button"
+          data-filter="clitoral-high"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+          <span>[ 阴蒂高频贴合 ]</span>
+        </button>
+
+        <button
+          type="button"
+          data-filter="female-control"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+          <span>[ 女性自主主导深度 ]</span>
+        </button>
+
+        <button
+          type="button"
+          data-filter="low-energy"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+          <span>[ 低体能消耗/放松 ]</span>
+        </button>
+
+        <button
+          type="button"
+          data-filter="cervical-low"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+          <span>[ 避免深部撞击痛 ]</span>
+        </button>
+
+        <button
+          type="button"
+          data-filter="pillow"
+          class="position-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+        >
+          <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+          <span>[ 枕头硬垫辅助推荐 ]</span>
+        </button>
+
+        <button
+          type="button"
+          id="position-reset-filter-btn"
+          class="hidden text-xs text-[#8B8676] hover:text-[#15140F] underline cursor-pointer ml-1"
+        >
+          重置筛选
+        </button>
+      </div>
+    </section>
+
+    {/* 8 大体位卡片网格 (Card Grid) */}
+    <section class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="position-cards-grid">
+        {POSITION_METHODS.map((pos) => {
+          const filterTags = getFilterTags(pos);
+          return (
+            <article
+              class="position-card flex flex-col justify-between rounded-2xl border border-[#15140F]/15 bg-[#FAF8F5]/30 p-5 shadow-[2px_2px_0_rgba(21,20,15,0.06)] hover:border-[#15140F]/30 hover:shadow-[3px_3px_0_rgba(21,20,15,0.12)] transition-all"
+              data-position-id={pos.id}
+              data-filter-tags={filterTags.join(' ')}
+            >
+              <div class="space-y-4">
+                {/* 卡片顶部类别与标题 */}
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="rounded-full border border-[#15140F]/15 bg-stone-100 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#5A5448]">
+                      [ {categoryBadgeMap[pos.category]} ]
+                    </span>
+                    <span class="text-[10px] font-mono text-[#8B8676]">
+                      ID: {pos.id}
+                    </span>
+                  </div>
+                  <h4 class="text-base font-extrabold text-[#15140F] tracking-tight leading-snug">
+                    {pos.name}
+                  </h4>
+                  <p class="text-[11px] font-mono text-[#8B8676] truncate" title={pos.en_name}>
+                    {pos.en_name}
+                  </p>
+                </div>
+
+                {/* 3 重核心生理参数条 */}
+                <div class="rounded-xl border border-[#15140F]/10 bg-white p-3 space-y-2.5 text-xs">
+                  {/* 阴蒂可达度 */}
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] text-[#5A5448] font-medium">阴蒂可达度 (Clitoral Access)</span>
+                      <span class:list={[
+                        "font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-sm",
+                        pos.clitoral_access === 'high' ? "bg-emerald-50 text-emerald-700" :
+                        pos.clitoral_access === 'moderate' ? "bg-teal-50 text-teal-700" : "bg-stone-100 text-[#5A5448]"
+                      ]}>
+                        {pos.clitoral_access === 'high' ? 'High · 充分贴合' :
+                         pos.clitoral_access === 'moderate' ? 'Moderate · 需外力辅助' : 'Low · 间接/需道具'}
+                      </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 h-1.5 bg-[#FAF8F5] rounded-full p-0.5">
+                      <div class:list={["h-full rounded-full", pos.clitoral_access === 'high' || pos.clitoral_access === 'moderate' || pos.clitoral_access === 'low' ? 'bg-emerald-600' : 'bg-stone-200']}></div>
+                      <div class:list={["h-full rounded-full", pos.clitoral_access === 'high' || pos.clitoral_access === 'moderate' ? 'bg-emerald-600' : 'bg-stone-200']}></div>
+                      <div class:list={["h-full rounded-full", pos.clitoral_access === 'high' ? 'bg-emerald-600' : 'bg-stone-200']}></div>
+                    </div>
+                  </div>
+
+                  {/* 宫颈碰撞风险 */}
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] text-[#5A5448] font-medium">宫颈碰撞风险 (Cervical Collision)</span>
+                      <span class:list={[
+                        "font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-sm",
+                        pos.cervical_collision_risk === 'low' ? "bg-emerald-50 text-emerald-700" :
+                        pos.cervical_collision_risk === 'moderate' ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
+                      ]}>
+                        {pos.cervical_collision_risk === 'low' ? 'Low · 极低/安全缓冲' :
+                         pos.cervical_collision_risk === 'moderate' ? 'Moderate · 需克制冲程' : 'High · 深部冲撞预警'}
+                      </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 h-1.5 bg-[#FAF8F5] rounded-full p-0.5">
+                      <div class:list={["h-full rounded-full", pos.cervical_collision_risk === 'low' ? 'bg-emerald-600' : pos.cervical_collision_risk === 'moderate' ? 'bg-amber-500' : 'bg-rose-500']}></div>
+                      <div class:list={["h-full rounded-full", pos.cervical_collision_risk === 'moderate' ? 'bg-amber-500' : pos.cervical_collision_risk === 'high' ? 'bg-rose-500' : 'bg-stone-200']}></div>
+                      <div class:list={["h-full rounded-full", pos.cervical_collision_risk === 'high' ? 'bg-rose-500' : 'bg-stone-200']}></div>
+                    </div>
+                  </div>
+
+                  {/* 体能消耗等级 */}
+                  <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] text-[#5A5448] font-medium">体能消耗等级 (Energy Expenditure)</span>
+                      <span class:list={[
+                        "font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-sm",
+                        pos.energy_expenditure === 'low' ? "bg-emerald-50 text-emerald-700" :
+                        pos.energy_expenditure === 'moderate' ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
+                      ]}>
+                        {pos.energy_expenditure === 'low' ? 'Low · 轻度省力' :
+                         pos.energy_expenditure === 'moderate' ? 'Moderate · 核心负荷' : 'High · 高肌力消耗'}
+                      </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 h-1.5 bg-[#FAF8F5] rounded-full p-0.5">
+                      <div class:list={["h-full rounded-full", pos.energy_expenditure === 'low' ? 'bg-emerald-600' : pos.energy_expenditure === 'moderate' ? 'bg-amber-500' : 'bg-rose-500']}></div>
+                      <div class:list={["h-full rounded-full", pos.energy_expenditure === 'moderate' ? 'bg-amber-500' : pos.energy_expenditure === 'high' ? 'bg-rose-500' : 'bg-stone-200']}></div>
+                      <div class:list={["h-full rounded-full", pos.energy_expenditure === 'high' ? 'bg-rose-500' : 'bg-stone-200']}></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 力学特征标签: 进入轴线与骨盆支撑 */}
+                <div class="space-y-2 text-xs">
+                  <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 space-y-1">
+                    <span class="text-[10px] font-mono font-bold text-rose-700 uppercase tracking-wider block">
+                      进入轴线力学 (Coital Angle)
+                    </span>
+                    <p class="text-[11px] text-[#2A2620] leading-relaxed">
+                      {pos.coital_angle_desc}
+                    </p>
+                  </div>
+                  <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 space-y-1">
+                    <span class="text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-wider block">
+                      骨盆与支点改良 (Pelvic Support)
+                    </span>
+                    <p class="text-[11px] text-[#2A2620] leading-relaxed">
+                      {pos.pelvic_support_advice}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 可展开生理利弊与沟通提示 */}
+                <details class="group rounded-xl border border-[#15140F]/10 bg-white overflow-hidden text-xs">
+                  <summary class="cursor-pointer p-3 font-bold text-[#15140F] flex items-center justify-between hover:bg-[#FAF8F5] transition-colors select-none">
+                    <span class="flex items-center gap-1.5 text-xs">
+                      <span class="font-mono text-[10px] text-rose-600 font-bold">[+]</span>
+                      <span>展开核心优势、局限与伴侣沟通语</span>
+                    </span>
+                    <svg class="w-4 h-4 text-[#8B8676] group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </summary>
+                  <div class="border-t border-[#15140F]/10 p-3 space-y-3 bg-[#FAF8F5]/40 text-[11px]">
+                    {/* 优势 */}
+                    <div class="space-y-1">
+                      <span class="font-bold text-emerald-800 flex items-center gap-1">
+                        <span>[ 生理优势 PROS ]</span>
+                      </span>
+                      <ul class="space-y-1 pl-3 text-[#2A2620] list-disc leading-relaxed">
+                        {pos.pros.map((pro) => (
+                          <li>{pro}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* 局限 */}
+                    <div class="space-y-1">
+                      <span class="font-bold text-amber-800 flex items-center gap-1">
+                        <span>[ 潜在局限 CONS ]</span>
+                      </span>
+                      <ul class="space-y-1 pl-3 text-[#5A5448] list-disc leading-relaxed">
+                        {pos.cons.map((con) => (
+                          <li>{con}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* 沟通提示 */}
+                    <div class="space-y-1 rounded-lg border border-[#15140F]/10 bg-white p-2 text-[#15140F]">
+                      <span class="font-bold text-[10px] text-rose-700 block">
+                        [ 伴侣沟通无障碍示范 ]
+                      </span>
+                      <p class="italic text-[#2A2620] leading-relaxed">
+                        {pos.communication_tip}
+                      </p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              {/* 卡片底部操作与科普链接 */}
+              <div class="pt-4 border-t border-[#15140F]/10 space-y-2 mt-4">
+                <div class="flex items-center justify-between">
+                  <a
+                    href={`${base}articles/${pos.related_article}/`}
+                    class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-800 hover:underline"
+                  >
+                    <span>阅读《{articleTitleMap[pos.related_article] || '性生理力学'}》长文</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                    </svg>
+                  </a>
+                </div>
+
+                <button
+                  type="button"
+                  class="position-compare-toggle-btn w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-[#15140F] bg-white text-xs font-bold text-[#15140F] shadow-[1.5px_1.5px_0_#15140F] hover:bg-[#FAF8F5] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+                  data-position-id={pos.id}
+                  data-position-name={pos.name}
+                  aria-pressed="false"
+                >
+                  <span class="compare-checkbox-indicator w-3.5 h-3.5 rounded border border-[#15140F] flex items-center justify-center bg-white transition-colors">
+                    <svg class="check-icon w-2.5 h-2.5 text-white hidden" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </span>
+                  <span class="compare-btn-label">加入横向对比 (最多选 2 项)</span>
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+
+    {/* 底部悬浮对比提示条 (Floating Bar) */}
+    <div
+      id="position-floating-bar"
+      class="position-floating-bar fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-xl w-[calc(100%-2rem)] rounded-2xl border-2 border-[#15140F] bg-white p-3.5 shadow-[4px_4px_0_#15140F] transition-all duration-300 hidden"
+    >
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#15140F] text-white text-xs font-mono font-bold">
+            PK
+          </span>
+          <div class="min-w-0">
+            <div id="position-floating-status" class="text-xs font-bold text-[#15140F] truncate">
+              已选择 0 项
+            </div>
+            <div id="position-floating-chips" class="flex items-center gap-1.5 mt-0.5 truncate text-[11px] text-[#5A5448]">
+              {/* 动态加入所选标签 */}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            id="position-floating-clear-btn"
+            class="rounded-xl border border-[#15140F]/20 px-3 py-1.5 text-xs font-semibold text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            清空
+          </button>
+          <button
+            type="button"
+            id="position-open-compare-btn"
+            class="rounded-xl bg-[#15140F] text-white px-4 py-1.5 text-xs font-bold shadow-btn hover:bg-[#2A2620] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled
+          >
+            查看双体位横向比对
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* 双向横向对比抽屉/弹窗 (Compare Drawer / Modal) */}
+    <div
+      id="position-compare-drawer"
+      class="position-compare-drawer fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs transition-opacity duration-200 hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="position-modal-title"
+    >
+      <div
+        id="position-compare-dialog"
+        class="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl border-2 border-[#15140F] bg-[#FAF8F5] shadow-[6px_6px_0_#15140F] overflow-hidden"
+      >
+        {/* 弹窗头部 */}
+        <div class="flex items-center justify-between border-b border-[#15140F]/15 bg-white p-4 sm:p-5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+                HEAD-TO-HEAD
+              </span>
+              <h3 id="position-modal-title" class="text-base sm:text-lg font-extrabold text-[#15140F] tracking-tight">
+                [ 性生理力学姿势横向 PK 对比台账 ]
+              </h3>
+            </div>
+            <p class="text-xs text-[#5A5448] mt-1">
+              对比指标基于女性盆底解剖学、进入轴线几何学与性治疗临床实证。
+            </p>
+          </div>
+          <button
+            type="button"
+            id="position-close-modal-btn"
+            class="rounded-xl border border-[#15140F]/15 bg-[#FAF8F5] p-2 text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+            aria-label="关闭对比窗口"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 弹窗表格主体 (纯 DOM 零 innerHTML 渲染) */}
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6" id="position-table-container">
+          {/* 由客户端脚本渲染对比表格 */}
+        </div>
+
+        {/* 弹窗底部操作 */}
+        <div class="border-t border-[#15140F]/15 bg-white p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <span class="text-[#8B8676]">
+            * 提示：人体解剖角度各异，若出现突发性下腹尖锐刺痛，请立即停止并调整姿势。
+          </span>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              id="position-modal-close-bottom-btn"
+              class="rounded-xl border border-[#15140F]/20 px-3.5 py-1.5 text-xs font-semibold text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* ========================================================================= */}
+  {/* Tab 2 Panel: 伴侣私密探索知情清单 (Yes/No/Maybe) */}
+  {/* ========================================================================= */}
+  <div id="panel-checklist" role="tabpanel" class="hidden space-y-8 intimacy-checklist-root">
+    {/* 临床 Yes/No/Maybe 知情协议说明横幅 */}
+    <div class="rounded-2xl border border-emerald-200/90 bg-emerald-50/40 p-4 sm:p-5 space-y-2.5">
+      <div class="flex items-center justify-between border-b border-emerald-200/70 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="rounded-sm bg-emerald-700 px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            CLINICAL PROTOCOL
+          </span>
+          <h3 class="text-xs sm:text-sm font-bold text-emerald-950">
+            [ 临床 Yes / No / Maybe 去尴尬知情探索原则 ]
+          </h3>
+        </div>
+        <span class="text-[11px] text-emerald-800 font-medium">非暴力沟通 · 零隐私留存</span>
+      </div>
+      <p class="text-xs text-emerald-900 leading-relaxed">
+        在性治疗与伴侣咨询中，<strong>Yes/No/Maybe 清单</strong>是一种经实证检验的去羞耻化沟通媒介。它将私密边界与偏好从情绪化的“指责/拒绝”解构为中立客观的身体知情探索。勾选过程完全在你的浏览器本地进行，任何人都无法调取。
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+        <div class="rounded-xl bg-white/80 border border-emerald-200 p-2 text-emerald-900">
+          <span class="font-bold text-emerald-700 block mb-0.5">[ 愿尝试 (YES) ]</span>
+          非常有兴趣，渴望在安全体贴的前提下优先探索
+        </div>
+        <div class="rounded-xl bg-white/80 border border-amber-200 p-2 text-amber-900">
+          <span class="font-bold text-amber-700 block mb-0.5">[ 视情况 (MAYBE) ]</span>
+          保持开放，需在充分沟通、时机成熟或特定条件下尝试
+        </div>
+        <div class="rounded-xl bg-white/80 border border-rose-200 p-2 text-rose-900">
+          <span class="font-bold text-rose-700 block mb-0.5">[ 明确不接受 (NO) ]</span>
+          当前明确的身体生理边界与红线，请予以绝对尊重
+        </div>
+      </div>
+    </div>
+
+    {/* 5 大分类 16 项点选列表 */}
+    <div class="space-y-6">
+      {INTIMACY_CHECKLIST_CONFIGS.map((category) => (
+        <section class="rounded-2xl border border-[#15140F]/15 bg-[#FAF8F5]/30 p-4 sm:p-5 space-y-4 shadow-[2px_2px_0_rgba(21,20,15,0.06)]">
+          <div class="border-b border-[#15140F]/10 pb-2 space-y-1">
+            <h4 class="text-sm sm:text-base font-extrabold text-[#15140F] tracking-tight">
+              {category.name}
+            </h4>
+            <p class="text-xs text-[#5A5448]">
+              {category.description}
+            </p>
+          </div>
+
+          <div class="space-y-3">
+            {category.items.map((item) => (
+              <div
+                class="checklist-item-card rounded-xl border border-[#15140F]/10 bg-white p-3.5 sm:p-4 space-y-2.5 transition-all hover:border-[#15140F]/25"
+                data-item-id={item.id}
+                data-item-title={item.title}
+                data-item-reason={item.physiological_reason}
+                data-item-suggestion={item.suggestion_text}
+                data-category-name={category.name}
+              >
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span class="font-bold text-sm text-[#15140F]">
+                    {item.title}
+                  </span>
+                  <div class="flex items-center gap-1.5 shrink-0" role="group" aria-label={`对 ${item.title} 的态度选择`}>
+                    <button
+                      type="button"
+                      class="checklist-choice-btn rounded-lg border border-emerald-300 bg-white text-emerald-800 px-2.5 py-1 text-xs font-semibold hover:bg-emerald-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all"
+                      data-choice="yes"
+                      data-item-id={item.id}
+                    >
+                      [ 愿尝试 (YES) ]
+                    </button>
+                    <button
+                      type="button"
+                      class="checklist-choice-btn rounded-lg border border-amber-300 bg-white text-amber-800 px-2.5 py-1 text-xs font-semibold hover:bg-amber-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all"
+                      data-choice="maybe"
+                      data-item-id={item.id}
+                    >
+                      [ 视情况 (MAYBE) ]
+                    </button>
+                    <button
+                      type="button"
+                      class="checklist-choice-btn rounded-lg border border-rose-300 bg-white text-rose-800 px-2.5 py-1 text-xs font-semibold hover:bg-rose-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all"
+                      data-choice="no"
+                      data-item-id={item.id}
+                    >
+                      [ 明确不接受 (NO) ]
+                    </button>
+                  </div>
+                </div>
+
+                {/* 生理依据 */}
+                <div class="rounded-lg bg-[#FAF8F5] p-2 text-xs space-y-1">
+                  <span class="font-mono text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+                    [ 生理学机制 ]
+                  </span>
+                  <p class="text-[11px] text-[#2A2620] leading-relaxed">
+                    {item.physiological_reason}
+                  </p>
+                </div>
+
+                {/* 非暴力沟通示范文案 */}
+                <div class="rounded-lg bg-rose-50/40 border border-rose-100 p-2 text-xs space-y-0.5">
+                  <span class="font-mono text-[10px] font-bold text-rose-700 uppercase tracking-wider block">
+                    [ 伴侣沟通示范文案 ]
+                  </span>
+                  <p class="text-[11px] italic text-[#5A5448] leading-relaxed">
+                    {item.suggestion_text}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    {/* 实时渲染结果便签卡 (Exploration Note Card - #intimacy-memo-container) */}
+    <section class="space-y-3 pt-2">
+      <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            MEMO RESULT
+          </span>
+          <h3 class="text-sm sm:text-base font-bold text-[#15140F]">
+            实时生成伴侣私密探索知情便签（可复制/打印沟通）
+          </h3>
+        </div>
+        <span class="text-xs text-[#8B8676]">随选随变 · 即时成文</span>
+      </div>
+
+      <div
+        id="intimacy-memo-container"
+        class="rounded-2xl border-2 border-[#15140F] bg-[#FAF8F5] p-5 sm:p-7 shadow-[4px_4px_0_rgba(21,20,15,1)] space-y-6"
+      >
+        {/* 便签头部 */}
+        <div class="border-b-2 border-dashed border-[#15140F]/20 pb-4 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-sm bg-[#15140F] text-white">
+                INTIMACY MEMO
+              </span>
+              <span class="text-xs font-extrabold text-[#15140F] tracking-wide">
+                [ 伴侣私密探索知情沟通便签 ]
+              </span>
+            </div>
+            <span id="intimacy-memo-date" class="font-mono text-xs text-[#8B8676]">
+              本地离线生成
+            </span>
+          </div>
+          <p class="text-[11px] text-[#5A5448]">
+            * 提示：本便签采用非暴力沟通框架，将偏好与界限客观化呈现，用于睡前交流或私信递送，促进温柔理解。
+          </p>
+        </div>
+
+        {/* NVC 开头引导语 */}
+        <div class="rounded-xl border border-[#15140F]/10 bg-white p-3.5 text-xs text-[#2A2620] leading-relaxed">
+          <p class="font-medium">
+            亲爱的：在我们的亲密时光里，我希望我们彼此都能感到舒适、安全和被尊重。根据我对自身生理感受的体会，整理了这份温和的知情便签，期待我们一起阅读交流：
+          </p>
+        </div>
+
+        {/* 01 // 积极期待的探索项 (YES) */}
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-emerald-800">
+              01 // 积极期待的探索项 (YES)
+            </span>
+            <span class="text-[10px] text-emerald-700 font-medium">愿优先尝试</span>
+          </div>
+          <div
+            id="memo-yes-list"
+            class="rounded-xl border border-emerald-200/80 bg-white p-3.5 text-xs text-[#15140F] space-y-2"
+          >
+            <p class="text-[#8B8676] italic text-[11px]">（暂未勾选优先探索项）</p>
+          </div>
+        </div>
+
+        {/* 02 // 需视环境与沟通再定的探索项 (MAYBE) */}
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-amber-800">
+              02 // 需视环境与沟通再定的探索项 (MAYBE)
+            </span>
+            <span class="text-[10px] text-amber-700 font-medium">保持开放·条件成熟再试</span>
+          </div>
+          <div
+            id="memo-maybe-list"
+            class="rounded-xl border border-amber-200/80 bg-white p-3.5 text-xs text-[#15140F] space-y-2"
+          >
+            <p class="text-[#8B8676] italic text-[11px]">（暂未勾选待定探索项）</p>
+          </div>
+        </div>
+
+        {/* 03 // 当前明确的身体边界与红线 (NO) */}
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-rose-800">
+              03 // 当前明确的身体边界与红线 (NO)
+            </span>
+            <span class="text-[10px] text-rose-700 font-medium">身体红线·请务必避开</span>
+          </div>
+          <div
+            id="memo-no-list"
+            class="rounded-xl border border-rose-200/80 bg-white p-3.5 text-xs text-[#15140F] space-y-2"
+          >
+            <p class="text-[#8B8676] italic text-[11px]">（当前无特殊红线避雷项，以双方实时舒适为准）</p>
+          </div>
+        </div>
+
+        {/* NVC 结尾结语 */}
+        <div class="rounded-xl border border-[#15140F]/10 bg-white p-3.5 text-xs text-[#5A5448] leading-relaxed">
+          <p class="italic">
+            无论何时，身体的舒适与心理安全感永远排在第一位。任何时候如果感到不适或疼痛，我们都可以随时温柔叫停，无需任何解释或心理负担。
+          </p>
+        </div>
+
+        {/* 操作按钮组 (打印时隐藏) */}
+        <div class="position-intimacy-no-print flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#15140F]/10">
+          <div class="flex flex-wrap items-center gap-2">
+            {/* 一键复制便签 */}
+            <button
+              type="button"
+              id="intimacy-copy-btn"
+              class="inline-flex items-center gap-2 rounded-xl border border-[#15140F] bg-[#15140F] px-4 py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-[#2A2620] active:translate-x-0.5 active:translate-y-0.5 shadow-[2px_2px_0_rgba(21,20,15,1)] transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+              </svg>
+              <span id="intimacy-copy-btn-text">[ 复制探索沟通便签 ]</span>
+            </button>
+
+            {/* 打印便签 */}
+            <button
+              type="button"
+              id="intimacy-print-btn"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-[#15140F]/30 bg-white px-3.5 py-2.5 text-xs font-bold text-[#15140F] hover:bg-[#FAF8F5] active:translate-x-0.5 active:translate-y-0.5 shadow-2xs transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4 text-[#5A5448]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24-1.076-.672-2.03-1.27-2.829H18.55c-.598.799-1.03 1.753-1.27 2.829m-10.56 0A7.5 7.5 0 0 1 12 11.25a7.5 7.5 0 0 1 5.28 2.579m-10.56 0A9 9 0 0 0 3 20.25h18a9 9 0 0 0-3.72-6.421M6 6h12a3 3 0 0 1 3 3v3H3V9a3 3 0 0 1 3-3Z" />
+              </svg>
+              <span>[ 打印便签 ]</span>
+            </button>
+
+            {/* 重置选择 */}
+            <button
+              type="button"
+              id="intimacy-reset-btn"
+              class="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-medium text-[#8B8676] hover:text-[#15140F] hover:border-stone-400 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+            >
+              <span>[ 重置所有选项 ]</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+{/* 打印样式适配 */}
+<style>
+  @media print {
+    :global(body) {
+      background: white !important;
+      color: #15140F !important;
+    }
+    .position-intimacy-no-print {
+      display: none !important;
+    }
+    #panel-positions {
+      display: none !important;
+    }
+    #panel-checklist {
+      display: block !important;
+    }
+    .checklist-item-card {
+      display: none !important;
+    }
+    #intimacy-memo-container {
+      box-shadow: none !important;
+      border: 1px solid #15140F !important;
+      background: white !important;
+      margin: 0 !important;
+      padding: 1.5rem !important;
+      page-break-inside: avoid;
+    }
+  }
+</style>
+
+{/* 嵌入只读静态数据供客户端原生脚本使用 */}
+<script type="application/json" id="position-methods-data" set:html={positionsJson}></script>
+<script type="application/json" id="intimacy-checklist-data" set:html={checklistConfigsJson}></script>
+<script type="application/json" id="position-article-map" set:html={articleMapJson}></script>
+
+{/* 纯前端原生交互脚本 (Zero innerHTML, 纯客户端离线闭包) */}
+<script is:inline>
+  (function initPositionAndIntimacyGuide() {
+    var root = document.getElementById('position-intimacy-root');
+    if (!root) return;
+
+    var baseUrl = (root.getAttribute('data-base-url') || '/').replace(/\/+$/, '') + '/';
+
+    // 1. 数据反序列化
+    var positions = [];
+    var checklistConfigs = [];
+    var articleMap = {};
+    try {
+      var methodsElem = document.getElementById('position-methods-data');
+      var checklistElem = document.getElementById('intimacy-checklist-data');
+      var articleMapElem = document.getElementById('position-article-map');
+      if (methodsElem) positions = JSON.parse(methodsElem.textContent || '[]');
+      if (checklistElem) checklistConfigs = JSON.parse(checklistElem.textContent || '[]');
+      if (articleMapElem) articleMap = JSON.parse(articleMapElem.textContent || '{}');
+    } catch (e) {
+      console.error('Failed to parse guide data', e);
+      return;
+    }
+
+    // Tabs
+    var tabBtnPositions = document.getElementById('tab-btn-positions');
+    var tabBtnChecklist = document.getElementById('tab-btn-checklist');
+    var panelPositions = document.getElementById('panel-positions');
+    var panelChecklist = document.getElementById('panel-checklist');
+
+    // Filter Elements
+    var filterButtons = root.querySelectorAll('.position-filter-btn');
+    var cards = root.querySelectorAll('.position-card');
+    var resetFilterBtn = document.getElementById('position-reset-filter-btn');
+    var filterCountEl = document.getElementById('position-filter-count');
+
+    // Compare Elements
+    var compareToggleBtns = root.querySelectorAll('.position-compare-toggle-btn');
+    var floatingBar = document.getElementById('position-floating-bar');
+    var floatingStatus = document.getElementById('position-floating-status');
+    var floatingChips = document.getElementById('position-floating-chips');
+    var floatingClearBtn = document.getElementById('position-floating-clear-btn');
+    var openCompareBtn = document.getElementById('position-open-compare-btn');
+
+    var compareDrawer = document.getElementById('position-compare-drawer');
+    var closeModalBtn = document.getElementById('position-close-modal-btn');
+    var modalCloseBottomBtn = document.getElementById('position-modal-close-bottom-btn');
+    var tableContainer = document.getElementById('position-table-container');
+
+    // Checklist Elements
+    var choiceBtns = root.querySelectorAll('.checklist-choice-btn');
+    var memoYesList = document.getElementById('memo-yes-list');
+    var memoMaybeList = document.getElementById('memo-maybe-list');
+    var memoNoList = document.getElementById('memo-no-list');
+    var copyBtn = document.getElementById('intimacy-copy-btn');
+    var copyBtnText = document.getElementById('intimacy-copy-btn-text');
+    var printBtn = document.getElementById('intimacy-print-btn');
+    var resetChecklistBtn = document.getElementById('intimacy-reset-btn');
+    var memoDateEl = document.getElementById('intimacy-memo-date');
+
+    if (memoDateEl) {
+      var now = new Date();
+      var yr = now.getFullYear();
+      var mo = String(now.getMonth() + 1).padStart(2, '0');
+      var da = String(now.getDate()).padStart(2, '0');
+      memoDateEl.textContent = yr + '-' + mo + '-' + da + ' · 纯前端离线生成';
+    }
+
+    // =========================================================================
+    // 3. Dual-Tab 切换逻辑
+    // =========================================================================
+    function switchTab(activeTab) {
+      if (activeTab === 'positions') {
+        tabBtnPositions.classList.add('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+        tabBtnPositions.classList.remove('bg-[#FAF8F5]', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+        tabBtnPositions.setAttribute('aria-selected', 'true');
+
+        tabBtnChecklist.classList.remove('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+        tabBtnChecklist.classList.add('bg-[#FAF8F5]', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+        tabBtnChecklist.setAttribute('aria-selected', 'false');
+
+        panelPositions.classList.remove('hidden');
+        panelChecklist.classList.add('hidden');
+      } else {
+        tabBtnChecklist.classList.add('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+        tabBtnChecklist.classList.remove('bg-[#FAF8F5]', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+        tabBtnChecklist.setAttribute('aria-selected', 'true');
+
+        tabBtnPositions.classList.remove('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+        tabBtnPositions.classList.add('bg-[#FAF8F5]', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+        tabBtnPositions.setAttribute('aria-selected', 'false');
+
+        panelChecklist.classList.remove('hidden');
+        panelPositions.classList.add('hidden');
+      }
+    }
+
+    if (tabBtnPositions && tabBtnChecklist) {
+      tabBtnPositions.addEventListener('click', function() { switchTab('positions'); });
+      tabBtnChecklist.addEventListener('click', function() { switchTab('checklist'); });
+    }
+
+    // =========================================================================
+    // 4. Tab 1: 体位筛选逻辑
+    // =========================================================================
+    function applyFilter(filterKey) {
+      var visibleCount = 0;
+
+      filterButtons.forEach(function(btn) {
+        var key = btn.getAttribute('data-filter');
+        var dot = btn.querySelector('.filter-dot');
+        if (key === filterKey) {
+          btn.classList.remove('bg-white', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+          btn.classList.add('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+          if (dot) {
+            dot.classList.remove('bg-[#15140F]/20');
+            dot.classList.add('bg-rose-400');
+          }
+        } else {
+          btn.classList.remove('bg-[#15140F]', 'text-white', 'border-[#15140F]', 'font-bold', 'shadow-[2px_2px_0_rgba(21,20,15,1)]');
+          btn.classList.add('bg-white', 'text-[#5A5448]', 'border-[#15140F]/15', 'font-semibold');
+          if (dot) {
+            dot.classList.remove('bg-rose-400');
+            dot.classList.add('bg-[#15140F]/20');
+          }
+        }
+      });
+
+      cards.forEach(function(card) {
+        var tags = (card.getAttribute('data-filter-tags') || '').split(' ');
+        var matches = filterKey === 'all' || tags.indexOf(filterKey) !== -1;
+        if (matches) {
+          card.style.display = 'flex';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      if (filterCountEl) {
+        filterCountEl.textContent = '已筛选出 ' + visibleCount + ' / 8 种循证体位';
+      }
+
+      if (resetFilterBtn) {
+        if (filterKey === 'all') {
+          resetFilterBtn.classList.add('hidden');
+        } else {
+          resetFilterBtn.classList.remove('hidden');
+        }
+      }
+    }
+
+    filterButtons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var key = btn.getAttribute('data-filter');
+        if (key) applyFilter(key);
+      });
+    });
+
+    if (resetFilterBtn) {
+      resetFilterBtn.addEventListener('click', function() {
+        applyFilter('all');
+      });
+    }
+
+    // =========================================================================
+    // 5. Tab 1: 两两对比逻辑 (Head-to-Head Compare)
+    // =========================================================================
+    var selectedPositionIds = [];
+
+    function updateCompareUI() {
+      // 1. 卡片按钮状态更新
+      compareToggleBtns.forEach(function(btn) {
+        var posId = btn.getAttribute('data-position-id');
+        var isSelected = selectedPositionIds.indexOf(posId) !== -1;
+        var indicator = btn.querySelector('.compare-checkbox-indicator');
+        var checkIcon = btn.querySelector('.check-icon');
+        var label = btn.querySelector('.compare-btn-label');
+
+        btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        if (isSelected) {
+          btn.classList.remove('bg-white', 'text-[#15140F]');
+          btn.classList.add('bg-[#15140F]', 'text-white');
+          if (indicator) {
+            indicator.classList.remove('bg-white');
+            indicator.classList.add('bg-rose-600', 'border-rose-600');
+          }
+          if (checkIcon) checkIcon.classList.remove('hidden');
+          if (label) label.textContent = '已加入横向对比 (点击取消)';
+        } else {
+          btn.classList.remove('bg-[#15140F]', 'text-white');
+          btn.classList.add('bg-white', 'text-[#15140F]');
+          if (indicator) {
+            indicator.classList.remove('bg-rose-600', 'border-rose-600');
+            indicator.classList.add('bg-white');
+          }
+          if (checkIcon) checkIcon.classList.add('hidden');
+          if (label) label.textContent = '加入横向对比 (最多选 2 项)';
+        }
+      });
+
+      // 2. 悬浮栏状态更新
+      if (selectedPositionIds.length > 0) {
+        floatingBar.classList.remove('hidden');
+        floatingStatus.textContent = '已选择 ' + selectedPositionIds.length + ' / 2 项体位';
+
+        // 渲染 Chip 标签 (纯 DOM 构造)
+        floatingChips.replaceChildren();
+        selectedPositionIds.forEach(function(id) {
+          var posObj = positions.find(function(p) { return p.id === id; });
+          var chip = document.createElement('span');
+          chip.className = 'inline-flex items-center gap-1 rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 font-mono text-[10px] text-[#2A2620]';
+          chip.textContent = posObj ? posObj.name : id;
+          floatingChips.appendChild(chip);
+        });
+
+        if (selectedPositionIds.length >= 2) {
+          openCompareBtn.removeAttribute('disabled');
+          openCompareBtn.textContent = '查看双体位横向比对 (2/2)';
+        } else {
+          openCompareBtn.removeAttribute('disabled');
+          openCompareBtn.textContent = '查看单体位力学详情 (1/2)';
+        }
+      } else {
+        floatingBar.classList.add('hidden');
+        floatingChips.replaceChildren();
+      }
+    }
+
+    compareToggleBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var posId = btn.getAttribute('data-position-id');
+        if (!posId) return;
+
+        var idx = selectedPositionIds.indexOf(posId);
+        if (idx !== -1) {
+          selectedPositionIds.splice(idx, 1);
+        } else {
+          if (selectedPositionIds.length >= 2) {
+            // 超出两项：自动顶替第一项或提醒
+            selectedPositionIds.shift();
+          }
+          selectedPositionIds.push(posId);
+        }
+        updateCompareUI();
+      });
+    });
+
+    if (floatingClearBtn) {
+      floatingClearBtn.addEventListener('click', function() {
+        selectedPositionIds = [];
+        updateCompareUI();
+      });
+    }
+
+    // =========================================================================
+    // 6. 对比弹窗渲染 (Zero innerHTML 模式)
+    // =========================================================================
+    function renderCompareTable() {
+      if (!tableContainer) return;
+      tableContainer.replaceChildren();
+
+      var posA = positions.find(function(p) { return p.id === selectedPositionIds[0]; });
+      var posB = positions.find(function(p) { return p.id === selectedPositionIds[1]; });
+
+      if (!posA) {
+        var emptyNotice = document.createElement('p');
+        emptyNotice.className = 'text-xs text-[#8B8676] py-8 text-center';
+        emptyNotice.textContent = '尚未选择任何体位进行对比，请至少选择 1 项。';
+        tableContainer.appendChild(emptyNotice);
+        return;
+      }
+
+      var table = document.createElement('table');
+      table.className = 'w-full border-collapse text-left text-xs';
+
+      // thead
+      var thead = document.createElement('thead');
+      var trHead = document.createElement('tr');
+      trHead.className = 'border-b-2 border-[#15140F] bg-white';
+
+      var thMetric = document.createElement('th');
+      thMetric.className = 'p-3 font-mono font-bold text-[#15140F] w-1/4 sm:w-1/5';
+      thMetric.textContent = '生理力学指标';
+      trHead.appendChild(thMetric);
+
+      var thA = document.createElement('th');
+      thA.className = 'p-3 font-extrabold text-[#15140F] border-l border-[#15140F]/10 w-3/8 sm:w-2/5';
+      thA.textContent = posA.name + ' (' + posA.en_name + ')';
+      trHead.appendChild(thA);
+
+      var thB = document.createElement('th');
+      thB.className = 'p-3 font-extrabold text-[#15140F] border-l border-[#15140F]/10 w-3/8 sm:w-2/5';
+      thB.textContent = posB ? posB.name + ' (' + posB.en_name + ')' : '待选择对比体位 (可选)';
+      trHead.appendChild(thB);
+
+      thead.appendChild(trHead);
+      table.appendChild(thead);
+
+      // tbody
+      var tbody = document.createElement('tbody');
+
+      function addRow(label, valA, valB, isList) {
+        var tr = document.createElement('tr');
+        tr.className = 'border-b border-[#15140F]/10 hover:bg-[#FAF8F5] transition-colors';
+
+        var tdLabel = document.createElement('td');
+        tdLabel.className = 'p-3 font-bold text-[#15140F] bg-stone-50/50 align-top';
+        tdLabel.textContent = label;
+        tr.appendChild(tdLabel);
+
+        var tdA = document.createElement('td');
+        tdA.className = 'p-3 text-[#2A2620] leading-relaxed border-l border-[#15140F]/10 align-top';
+        if (isList && Array.isArray(valA)) {
+          var ulA = document.createElement('ul');
+          ulA.className = 'space-y-1 list-disc pl-4 text-[11px]';
+          valA.forEach(function(item) {
+            var li = document.createElement('li');
+            li.textContent = item;
+            ulA.appendChild(li);
+          });
+          tdA.appendChild(ulA);
+        } else {
+          tdA.textContent = valA || '--';
+        }
+        tr.appendChild(tdA);
+
+        var tdB = document.createElement('td');
+        tdB.className = 'p-3 text-[#2A2620] leading-relaxed border-l border-[#15140F]/10 align-top';
+        if (!posB) {
+          tdB.className += ' text-[#8B8676] italic';
+          tdB.textContent = '可在体位矩阵中再勾选 1 项体位进行双向比对';
+        } else if (isList && Array.isArray(valB)) {
+          var ulB = document.createElement('ul');
+          ulB.className = 'space-y-1 list-disc pl-4 text-[11px]';
+          valB.forEach(function(item) {
+            var li = document.createElement('li');
+            li.textContent = item;
+            ulB.appendChild(li);
+          });
+          tdB.appendChild(ulB);
+        } else {
+          tdB.textContent = valB || '--';
+        }
+        tr.appendChild(tdB);
+
+        tbody.appendChild(tr);
+      }
+
+      var categoryNameMap = {
+        female_control: '女性主导 / 深度自主',
+        intimacy_close: '温热贴合 / 亲密研磨',
+        low_energy: '低体能消耗 / 放松省力',
+        deep_penetration: '深层缓冲 / 角度改良',
+      };
+
+      var metricLevelMap = {
+        clitoral_high: 'High (阴蒂充分高频贴合/直接刺激)',
+        clitoral_moderate: 'Moderate (中度接触/需伴侣或外置辅助)',
+        clitoral_low: 'Low (间接贴合/需外在玩具协同)',
+        cervical_low: 'Low (极低碰撞/安全缓冲佳/防深部痛)',
+        cervical_moderate: 'Moderate (中等风险/需克制冲程与速度)',
+        cervical_high: 'High (深部冲撞预警/子宫后位慎选)',
+        energy_low: 'Low (轻度省力/适宜久躺放松)',
+        energy_moderate: 'Moderate (中等核心负荷/间歇换位)',
+        energy_high: 'High (高肌力消耗/耐受维持时间短)',
+      };
+
+      addRow('类别定位', categoryNameMap[posA.category] || posA.category, posB ? categoryNameMap[posB.category] : null);
+      addRow('进入轴线力学', posA.coital_angle_desc, posB ? posB.coital_angle_desc : null);
+      addRow('阴蒂可达度指数', metricLevelMap['clitoral_' + posA.clitoral_access] || posA.clitoral_access, posB ? metricLevelMap['clitoral_' + posB.clitoral_access] : null);
+      addRow('宫颈碰撞痛风险', metricLevelMap['cervical_' + posA.cervical_collision_risk] || posA.cervical_collision_risk, posB ? metricLevelMap['cervical_' + posB.cervical_collision_risk] : null);
+      addRow('体能消耗等级', metricLevelMap['energy_' + posA.energy_expenditure] || posA.energy_expenditure, posB ? metricLevelMap['energy_' + posB.energy_expenditure] : null);
+      addRow('骨盆与硬枕改良支点', posA.pelvic_support_advice, posB ? posB.pelvic_support_advice : null);
+      addRow('核心生理优势 (PROS)', posA.pros, posB ? posB.pros : null, true);
+      addRow('潜在局限与不适 (CONS)', posA.cons, posB ? posB.cons : null, true);
+      addRow('伴侣非暴力沟通提示', posA.communication_tip, posB ? posB.communication_tip : null);
+
+      // 科普长文链接行
+      var trLink = document.createElement('tr');
+      trLink.className = 'border-b border-[#15140F]/10 bg-white';
+      var tdLinkLabel = document.createElement('td');
+      tdLinkLabel.className = 'p-3 font-bold text-[#15140F] bg-stone-50/50 align-top';
+      tdLinkLabel.textContent = '深度循证科普';
+      trLink.appendChild(tdLinkLabel);
+
+      var tdLinkA = document.createElement('td');
+      tdLinkA.className = 'p-3 border-l border-[#15140F]/10 align-top';
+      var aA = document.createElement('a');
+      aA.href = baseUrl + 'articles/' + posA.related_article + '/';
+      aA.className = 'inline-flex items-center gap-1 font-bold text-rose-600 hover:text-rose-800 hover:underline';
+      aA.textContent = '阅读《' + (articleMap[posA.related_article] || '体位力学') + '》长文 →';
+      tdLinkA.appendChild(aA);
+      trLink.appendChild(tdLinkA);
+
+      var tdLinkB = document.createElement('td');
+      tdLinkB.className = 'p-3 border-l border-[#15140F]/10 align-top';
+      if (posB) {
+        var aB = document.createElement('a');
+        aB.href = baseUrl + 'articles/' + posB.related_article + '/';
+        aB.className = 'inline-flex items-center gap-1 font-bold text-rose-600 hover:text-rose-800 hover:underline';
+        aB.textContent = '阅读《' + (articleMap[posB.related_article] || '体位力学') + '》长文 →';
+        tdLinkB.appendChild(aB);
+      } else {
+        tdLinkB.textContent = '--';
+      }
+      trLink.appendChild(tdLinkB);
+      tbody.appendChild(trLink);
+
+      table.appendChild(tbody);
+      tableContainer.appendChild(table);
+    }
+
+    function openModal() {
+      renderCompareTable();
+      compareDrawer.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      compareDrawer.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    if (openCompareBtn) openCompareBtn.addEventListener('click', openModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+    if (modalCloseBottomBtn) modalCloseBottomBtn.addEventListener('click', closeModal);
+
+    if (compareDrawer) {
+      compareDrawer.addEventListener('click', function(e) {
+        if (e.target === compareDrawer) closeModal();
+      });
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && compareDrawer && !compareDrawer.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    // =========================================================================
+    // 7. Tab 2: 伴侣探索知情清单状态与实时便签渲染 (Zero innerHTML)
+    // =========================================================================
+    var checklistChoices = new Map(); // itemId -> 'yes' | 'maybe' | 'no'
+
+    // 所有题目的映射表
+    var itemsMap = new Map();
+    checklistConfigs.forEach(function(cat) {
+      cat.items.forEach(function(item) {
+        itemsMap.set(item.id, {
+          id: item.id,
+          title: item.title,
+          physiological_reason: item.physiological_reason,
+          suggestion_text: item.suggestion_text,
+          categoryName: cat.name
+        });
+      });
+    });
+
+    function updateChoiceButtonsUI() {
+      choiceBtns.forEach(function(btn) {
+        var itemId = btn.getAttribute('data-item-id');
+        var choice = btn.getAttribute('data-choice');
+        var current = checklistChoices.get(itemId);
+
+        // 重置所有颜色
+        if (choice === 'yes') {
+          if (current === 'yes') {
+            btn.className = 'checklist-choice-btn rounded-lg border border-emerald-600 bg-emerald-600 text-white px-2.5 py-1 text-xs font-bold shadow-2xs active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          } else {
+            btn.className = 'checklist-choice-btn rounded-lg border border-emerald-300 bg-white text-emerald-800 px-2.5 py-1 text-xs font-semibold hover:bg-emerald-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          }
+        } else if (choice === 'maybe') {
+          if (current === 'maybe') {
+            btn.className = 'checklist-choice-btn rounded-lg border border-amber-600 bg-amber-600 text-white px-2.5 py-1 text-xs font-bold shadow-2xs active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          } else {
+            btn.className = 'checklist-choice-btn rounded-lg border border-amber-300 bg-white text-amber-800 px-2.5 py-1 text-xs font-semibold hover:bg-amber-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          }
+        } else if (choice === 'no') {
+          if (current === 'no') {
+            btn.className = 'checklist-choice-btn rounded-lg border border-rose-600 bg-rose-600 text-white px-2.5 py-1 text-xs font-bold shadow-2xs active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          } else {
+            btn.className = 'checklist-choice-btn rounded-lg border border-rose-300 bg-white text-rose-800 px-2.5 py-1 text-xs font-semibold hover:bg-rose-50 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer transition-all';
+          }
+        }
+      });
+    }
+
+    function renderExplorationMemo() {
+      if (!memoYesList || !memoMaybeList || !memoNoList) return;
+
+      var yesItems = [];
+      var maybeItems = [];
+      var noItems = [];
+
+      checklistChoices.forEach(function(val, id) {
+        var itemData = itemsMap.get(id);
+        if (!itemData) return;
+        if (val === 'yes') yesItems.push(itemData);
+        else if (val === 'maybe') maybeItems.push(itemData);
+        else if (val === 'no') noItems.push(itemData);
+      });
+
+      // 渲染 YES 列表
+      memoYesList.replaceChildren();
+      if (yesItems.length === 0) {
+        var pYes = document.createElement('p');
+        pYes.className = 'text-[#8B8676] italic text-[11px]';
+        pYes.textContent = '（暂未勾选优先探索项）';
+        memoYesList.appendChild(pYes);
+      } else {
+        yesItems.forEach(function(item) {
+          var itemDiv = document.createElement('div');
+          itemDiv.className = 'rounded-lg bg-emerald-50/50 border border-emerald-200/60 p-2 space-y-1';
+          var titleSpan = document.createElement('span');
+          titleSpan.className = 'font-bold text-xs text-emerald-900 block';
+          titleSpan.textContent = '• ' + item.title + ' (' + item.categoryName + ')';
+          itemDiv.appendChild(titleSpan);
+
+          var sugP = document.createElement('p');
+          sugP.className = 'text-[11px] text-[#2A2620] leading-relaxed pl-3 italic';
+          sugP.textContent = item.suggestion_text;
+          itemDiv.appendChild(sugP);
+
+          memoYesList.appendChild(itemDiv);
+        });
+      }
+
+      // 渲染 MAYBE 列表
+      memoMaybeList.replaceChildren();
+      if (maybeItems.length === 0) {
+        var pMaybe = document.createElement('p');
+        pMaybe.className = 'text-[#8B8676] italic text-[11px]';
+        pMaybe.textContent = '（暂未勾选待定探索项）';
+        memoMaybeList.appendChild(pMaybe);
+      } else {
+        maybeItems.forEach(function(item) {
+          var itemDiv = document.createElement('div');
+          itemDiv.className = 'rounded-lg bg-amber-50/50 border border-amber-200/60 p-2 space-y-1';
+          var titleSpan = document.createElement('span');
+          titleSpan.className = 'font-bold text-xs text-amber-900 block';
+          titleSpan.textContent = '• ' + item.title + ' (' + item.categoryName + ')';
+          itemDiv.appendChild(titleSpan);
+
+          var sugP = document.createElement('p');
+          sugP.className = 'text-[11px] text-[#2A2620] leading-relaxed pl-3 italic';
+          sugP.textContent = item.suggestion_text;
+          itemDiv.appendChild(sugP);
+
+          memoMaybeList.appendChild(itemDiv);
+        });
+      }
+
+      // 渲染 NO 列表
+      memoNoList.replaceChildren();
+      if (noItems.length === 0) {
+        var pNo = document.createElement('p');
+        pNo.className = 'text-[#8B8676] italic text-[11px]';
+        pNo.textContent = '（当前无特殊红线避雷项，以双方实时舒适为准）';
+        memoNoList.appendChild(pNo);
+      } else {
+        noItems.forEach(function(item) {
+          var itemDiv = document.createElement('div');
+          itemDiv.className = 'rounded-lg bg-rose-50/50 border border-rose-200/60 p-2 space-y-1';
+          var titleSpan = document.createElement('span');
+          titleSpan.className = 'font-bold text-xs text-rose-900 block';
+          titleSpan.textContent = '• ' + item.title + ' (' + item.categoryName + ')';
+          itemDiv.appendChild(titleSpan);
+
+          var reasonP = document.createElement('p');
+          reasonP.className = 'text-[11px] text-rose-800 leading-relaxed pl-3';
+          reasonP.textContent = '生理边界理由：' + item.physiological_reason;
+          itemDiv.appendChild(reasonP);
+
+          var sugP = document.createElement('p');
+          sugP.className = 'text-[11px] text-[#2A2620] leading-relaxed pl-3 italic';
+          sugP.textContent = item.suggestion_text;
+          itemDiv.appendChild(sugP);
+
+          memoNoList.appendChild(itemDiv);
+        });
+      }
+    }
+
+    choiceBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var itemId = btn.getAttribute('data-item-id');
+        var choice = btn.getAttribute('data-choice');
+        if (!itemId || !choice) return;
+
+        // 若重复点击已选中的，则取消选择
+        if (checklistChoices.get(itemId) === choice) {
+          checklistChoices.delete(itemId);
+        } else {
+          checklistChoices.set(itemId, choice);
+        }
+
+        updateChoiceButtonsUI();
+        renderExplorationMemo();
+      });
+    });
+
+    // 重置所有题目
+    if (resetChecklistBtn) {
+      resetChecklistBtn.addEventListener('click', function() {
+        checklistChoices.clear();
+        updateChoiceButtonsUI();
+        renderExplorationMemo();
+      });
+    }
+
+    // 复制便签纯文本 (Clipboard API)
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        var lines = [];
+        lines.push('========================================');
+        lines.push('【伴侣私密探索知情沟通便签】(know-her 离线生成)');
+        lines.push('========================================');
+        lines.push('亲爱的：在我们的亲密时光里，我希望我们彼此都能感到舒适、安全和被尊重。根据我对自身生理感受的体会，整理了这份温和的知情便签：\n');
+
+        lines.push('01 // 积极期待的探索项 (YES)：');
+        var yesFound = false;
+        checklistChoices.forEach(function(val, id) {
+          if (val === 'yes') {
+            yesFound = true;
+            var it = itemsMap.get(id);
+            if (it) lines.push('  • ' + it.title + ': ' + it.suggestion_text);
+          }
+        });
+        if (!yesFound) lines.push('  （暂未勾选优先探索项）');
+        lines.push('');
+
+        lines.push('02 // 需视环境与沟通再定的探索项 (MAYBE)：');
+        var maybeFound = false;
+        checklistChoices.forEach(function(val, id) {
+          if (val === 'maybe') {
+            maybeFound = true;
+            var it = itemsMap.get(id);
+            if (it) lines.push('  • ' + it.title + ': ' + it.suggestion_text);
+          }
+        });
+        if (!maybeFound) lines.push('  （暂未勾选待定探索项）');
+        lines.push('');
+
+        lines.push('03 // 当前明确的身体边界与红线 (NO)：');
+        var noFound = false;
+        checklistChoices.forEach(function(val, id) {
+          if (val === 'no') {
+            noFound = true;
+            var it = itemsMap.get(id);
+            if (it) lines.push('  • ' + it.title + ': ' + it.suggestion_text);
+          }
+        });
+        if (!noFound) lines.push('  （当前无特殊红线避雷项，以双方实时舒适为准）');
+        lines.push('');
+
+        lines.push('说明：身体的舒适与心理安全感永远排在第一位。任何时候如果感到不适或疼痛，我们都可以随时温柔叫停，无需任何解释或负担。');
+        lines.push('========================================');
+
+        var fullText = lines.join('\n');
+        navigator.clipboard.writeText(fullText).then(function() {
+          if (copyBtnText) {
+            var oldText = copyBtnText.textContent;
+            copyBtnText.textContent = '[ ✓ 便签已复制到剪贴板 ]';
+            setTimeout(function() {
+              copyBtnText.textContent = oldText;
+            }, 2000);
+          }
+        }).catch(function(err) {
+          console.error('Clipboard copy failed', err);
+        });
+      });
+    }
+
+    // 打印便签
+    if (printBtn) {
+      printBtn.addEventListener('click', function() {
+        window.print();
+      });
+    }
+
+    // 初始渲染
+    applyFilter('all');
+    updateCompareUI();
+    renderExplorationMemo();
+  })();
+</script>
