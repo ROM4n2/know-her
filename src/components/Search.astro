@@ -14,12 +14,42 @@ export interface Props {
 }
 
 const { placeholder = '搜索文章…' } = Astro.props;
+
+/** 高频突发场景意图胶囊：口语化描述直连站内真实处置路径，绕开关键词搜索摩擦 */
+const INTENT_PILLS: Array<{ label: string; href: string }> = [
+  { label: '避孕套滑脱破损', href: `${base}guide/decision-tree/#condom` },
+  { label: '紧急避孕 72h 倒计时', href: `${base}tools/?tool=ec-countdown` },
+  { label: '漏服短效口服药', href: `${base}tools/?tool=coc-remedy` },
+  { label: '异常褐血与月经紊乱', href: `${base}tools/?tool=cycle-assess` },
+  { label: '同房疼痛与痉挛', href: `${base}articles/pleasure-dyspareunia-pain/` },
+  { label: '怎么跟医生讲主诉', href: `${base}tools/?tool=clinic-memo&complaint=bleeding` },
+];
 ---
 
 <link rel="stylesheet" href={`${base}pagefind/pagefind-ui.css`} />
 <div id="site-search" data-pagefind-ignore></div>
 
-<script is:inline define:vars={{ base }}>
+{/* 突发场景意图搜索胶囊：不需要组织关键词，直接点选当下困扰 */}
+<div id="search-intent-pills" class="mt-3.5 space-y-2" data-pagefind-ignore>
+  <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#8B8676]">
+    <span class="font-mono font-bold text-rose-600">[ 突发场景快捷入口 ]</span>
+    <span>一时组织不出关键词？直接点选最贴近你当下的困扰</span>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {INTENT_PILLS.map((pill) => (
+      <a
+        href={pill.href}
+        class="intent-pill inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1.5 text-xs font-semibold text-[#2A2620] shadow-2xs hover:border-rose-400 hover:bg-rose-50/50 hover:text-rose-700 active:translate-x-0.5 active:translate-y-0.5 transition-all"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+        <span>{pill.label}</span>
+        <span class="text-rose-600">→</span>
+      </a>
+    ))}
+  </div>
+</div>
+
+<script is:inline define:vars={{ base, searchPlaceholder: placeholder }}>
   window.addEventListener('DOMContentLoaded', function () {
     if (typeof window.PagefindUI !== 'function') {
       console.warn('[search] PagefindUI 未加载（是否已执行构建？）');
@@ -31,7 +61,7 @@ const { placeholder = '搜索文章…' } = Astro.props;
       showImages: false,
       showSubResults: true,
       translations: {
-        placeholder: '搜索文章…',
+        placeholder: searchPlaceholder,
         zero_results: '未找到与「{{ query }}」相关的内容',
         many_results: '找到 {{ count }} 条结果',
         one_result: '找到 {{ count }} 条结果',

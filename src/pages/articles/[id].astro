@@ -145,6 +145,35 @@ const relatedGlossary = allGlossary.filter(
       )}
     </div>
 
+    {/* 医学名词 In-situ 速查：鼠标悬浮或键盘聚焦即原地释义，无需跳转打断阅读心流 */}
+    {relatedGlossary.length > 0 && (
+      <div class="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2" aria-label="本文涉及的医学名词速查">
+        <span class="glossary-inline-badge font-mono text-[11px] font-bold text-[#8B8676]">
+          [ 名词速查 ]
+        </span>
+        {relatedGlossary.map((item) => (
+          <span
+            class="glossary-inline-term group relative inline-flex items-center gap-1 rounded-full border border-[#15140F]/15 bg-[#FAF8F5] px-2.5 py-1 text-[11px] font-semibold text-[#2A2620] cursor-help hover:border-rose-400 hover:text-rose-700 transition-colors"
+            tabindex="0"
+            title={item.data.definition}
+          >
+            <span>{item.data.term}</span>
+            <span class="text-rose-600 font-mono">?</span>
+            <span
+              class="pointer-events-none absolute left-1/2 top-full z-30 hidden w-64 max-w-[calc(100vw-3rem)] -translate-x-1/2 translate-y-2 rounded-xl border border-[#15140F]/15 bg-white p-3 text-left text-[11px] font-normal leading-relaxed text-[#2A2620] shadow-[3px_3px_0_rgba(21,20,15,0.12)] group-hover:block group-focus-within:block"
+            >
+              <span class="mb-1 block font-bold text-[#15140F]">
+                {item.data.term}
+                {item.data.en_term ? ` · ${item.data.en_term}` : ''}
+              </span>
+              <span class="block">{item.data.definition}</span>
+              <span class="mt-1.5 block text-[10px] text-[#8B8676]">出处：{item.data.source}</span>
+            </span>
+          </span>
+        ))}
+      </div>
+    )}
+
     {/* 推荐理由 / 核心看点 Callout + 复制按钮 */}
     <div class="mt-6 rounded-xl border border-rose-100 bg-rose-50/50 p-4 text-sm text-gray-700 leading-relaxed">
       <div class="flex items-center justify-between gap-2 mb-2">

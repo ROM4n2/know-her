@@ -70,6 +70,8 @@ console.log(JSON.stringify(results));
             ["node", "--input-type=module", "-e", node_script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
             cwd=PROJECT_ROOT,
         )

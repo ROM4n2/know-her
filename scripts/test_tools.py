@@ -17,6 +17,11 @@ CONTRACEPTION_DATA_FILE = os.path.join(DATA_DIR, "contraceptionMethods.ts")
 CLINIC_DATA_FILE = os.path.join(DATA_DIR, "clinicQuestions.ts")
 POSITION_DATA_FILE = os.path.join(DATA_DIR, "positionMatrix.ts")
 CHECKLIST_DATA_FILE = os.path.join(DATA_DIR, "intimacyChecklist.ts")
+DECISION_TREE_FILE = os.path.join(DATA_DIR, "decisionTree.ts")
+DECISION_GUIDE_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "DecisionGuide.astro")
+MEMO_EXPORTER_FILE = os.path.join(ROOT_DIR, "src", "lib", "ui", "memoImageExporter.ts")
+SEARCH_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "Search.astro")
+ARTICLE_DETAIL_PAGE = os.path.join(ROOT_DIR, "src", "pages", "articles", "[id].astro")
 
 REQUIRED_COMPONENTS = [
     ("EmergencyCountdown.astro", ["ec-datetime-input", "ec-progress-bar", "contraception-emergency-pill"]),
@@ -343,6 +348,153 @@ def validate_floating_bars(errors: list):
             errors.append(f"组件 {comp_name} 的悬浮对比条 (#{bar_id}) 缺失 'bottom-20' 移动端避让类名")
 
 
+def validate_cross_tool_handoff(errors: list, page_content: str):
+    """验证决策树与工具箱之间的 URL 参数状态透传契约"""
+    # 1. 工具箱页面必须包含 URLSearchParams 参数解析逻辑
+    if "URLSearchParams" not in page_content:
+        errors.append("工具箱主页面 (tools/index.astro) 缺失 URLSearchParams 参数解析处理逻辑")
+
+    # 2. 工具箱页面必须实现 tool -> 锚点平滑滚动映射与参数预填
+    for token in ["sec-ec-countdown", "sec-clinic-memo"]:
+        if token not in page_content:
+            errors.append(f"工具箱主页面缺失工具锚点: {token}")
+
+    # 3. 决策树数据必须至少配置 4 个 directToolLink 直达工具
+    if not os.path.exists(DECISION_TREE_FILE):
+        errors.append(f"决策树数据文件缺失: {DECISION_TREE_FILE}")
+    else:
+        with open(DECISION_TREE_FILE, "r", encoding="utf-8") as f:
+            tree_content = f.read()
+
+        if "directToolLink" not in tree_content:
+            errors.append("decisionTree.ts 未定义 directToolLink 字段")
+        else:
+            link_count = len(re.findall(r"\bdirectToolLink\s*:", tree_content))
+            if link_count < 4:
+                errors.append(
+                    f"decisionTree.ts 配置 directToolLink 的结果卡不足 4 个，当前为 {link_count} 个"
+                )
+
+        if "export interface DecisionOutcome" in tree_content and not re.search(
+            r"directToolLink\?\s*:\s*\{", tree_content
+        ):
+            errors.append("decisionTree.ts 的 DecisionOutcome 接口未声明 directToolLink 可选字段")
+
+    # 4. 决策树组件必须渲染直达工具按钮
+    if not os.path.exists(DECISION_GUIDE_COMPONENT):
+        errors.append(f"决策树组件缺失: {DECISION_GUIDE_COMPONENT}")
+    else:
+        with open(DECISION_GUIDE_COMPONENT, "r", encoding="utf-8") as f:
+            guide_content = f.read()
+        for token in ["dg-tool-link", "directToolLink"]:
+            if token not in guide_content:
+                errors.append(f"DecisionGuide.astro 缺失跨工具直达元素或字段引用: {token}")
+
+
+def validate_emergency_localization(errors: list):
+    """验证紧急避孕本土药品可及性校准与 2 小时服药吸收观察计时器契约"""
+    comp_path = os.path.join(COMPONENTS_DIR, "EmergencyCountdown.astro")
+    if not os.path.exists(comp_path):
+        errors.append("组件缺失: EmergencyCountdown.astro")
+        return
+
+    with open(comp_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    required_tokens = [
+        "ec-vomit-timer-container",
+        "ec-vomit-timer-btn",
+        "ec-vomit-timer-display",
+        "金毓婷",
+        "暂未普及",
+        "米非司酮",
+    ]
+    for token in required_tokens:
+        if token not in content:
+            errors.append(f"EmergencyCountdown.astro 缺失本土化用药或计时器标识: {token}")
+
+    if "2 小时" not in content and "2小时" not in content:
+        errors.append("EmergencyCountdown.astro 缺失服药后 2 小时胃部吸收观察的循证说明")
+
+
+def validate_memo_image_exporter(errors: list):
+    """验证纯前端零依赖 Canvas 纸墨风格便签长图导出器契约"""
+    if not os.path.exists(MEMO_EXPORTER_FILE):
+        errors.append(f"便签长图导出器缺失: {MEMO_EXPORTER_FILE}")
+    else:
+        with open(MEMO_EXPORTER_FILE, "r", encoding="utf-8") as f:
+            exporter_content = f.read()
+
+        for token in ["exportMemoAsImage", "MemoExportOptions", "toBlob", "createElement('canvas')"]:
+            if token not in exporter_content:
+                errors.append(f"memoImageExporter.ts 缺失必要实现标识: {token}")
+
+        if "devicePixelRatio" not in exporter_content:
+            errors.append("memoImageExporter.ts 未按设备像素比 (DPR) 渲染高清长图")
+
+        # 零第三方重型依赖守卫：禁止引入 html2canvas 等外部库
+        for forbidden in ["html2canvas", "dom-to-image", "import("]:
+            if forbidden in exporter_content:
+                errors.append(f"memoImageExporter.ts 引入了违规重型依赖: {forbidden}")
+
+    # 两个便签组件必须接入保存长图按钮
+    for comp_name in ["ClinicMemo.astro", "PositionAndIntimacyGuide.astro"]:
+        comp_path = os.path.join(COMPONENTS_DIR, comp_name)
+        if not os.path.exists(comp_path):
+            errors.append(f"组件缺失: {comp_name}")
+            continue
+        with open(comp_path, "r", encoding="utf-8") as f:
+            comp_content = f.read()
+        for token in ["memo-export-image-btn", "memoImageExporter"]:
+            if token not in comp_content:
+                errors.append(f"组件 {comp_name} 缺失便签长图导出接入标识: {token}")
+
+
+def validate_search_intent_pills(errors: list):
+    """验证首页突发场景意图搜索胶囊与长文医学名词速查悬浮预览契约"""
+    required_intents = [
+        "避孕套滑脱破损",
+        "紧急避孕",
+        "漏服短效口服药",
+        "异常褐血与月经紊乱",
+        "同房疼痛与痉挛",
+        "怎么跟医生讲主诉",
+    ]
+
+    if not os.path.exists(SEARCH_COMPONENT):
+        errors.append(f"搜索组件缺失: {SEARCH_COMPONENT}")
+    else:
+        with open(SEARCH_COMPONENT, "r", encoding="utf-8") as f:
+            search_content = f.read()
+
+        if "search-intent-pills" not in search_content:
+            errors.append("Search.astro 缺失高频场景意图胶囊容器: search-intent-pills")
+
+        if not re.search(r"\bintent-pill\b", search_content):
+            errors.append("Search.astro 缺失意图胶囊样式钩子: intent-pill")
+
+        missing_intents = [intent for intent in required_intents if intent not in search_content]
+        if missing_intents:
+            errors.append(
+                f"Search.astro 高频突发场景意图胶囊不足 6 个，缺失: {'、'.join(missing_intents)}"
+            )
+
+        # 意图胶囊必须指向站内真实路由（决策树 / 工具箱 / 词条 / 科普详情）
+        for route_fragment in ["guide/decision-tree", "tools/?tool=", "articles/"]:
+            if route_fragment not in search_content:
+                errors.append(f"Search.astro 意图胶囊缺失站内直达路由片段: {route_fragment}")
+
+    if not os.path.exists(ARTICLE_DETAIL_PAGE):
+        errors.append(f"文章详情页缺失: {ARTICLE_DETAIL_PAGE}")
+    else:
+        with open(ARTICLE_DETAIL_PAGE, "r", encoding="utf-8") as f:
+            article_content = f.read()
+
+        for token in ["glossary-inline-term", "glossary-inline-badge"]:
+            if token not in article_content:
+                errors.append(f"articles/[id].astro 缺失医学名词 In-situ 速查微标签: {token}")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -402,6 +554,18 @@ def run_tests():
 
     # 6. 验证移动端吸底避让样式 (floating bars)
     validate_floating_bars(errors)
+
+    # 7. 验证决策树与工具箱跨工具状态透传契约
+    validate_cross_tool_handoff(errors, page_content)
+
+    # 8. 验证紧急避孕本土化用药指引与 2 小时服药观察计时器
+    validate_emergency_localization(errors)
+
+    # 9. 验证纯前端 Canvas 便签长图导出器契约
+    validate_memo_image_exporter(errors)
+
+    # 10. 验证首页突发场景意图胶囊与长文医学名词速查悬浮预览
+    validate_search_intent_pills(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
