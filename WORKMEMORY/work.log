@@ -225,3 +225,25 @@ Key Artifacts:
 - scripts/curate_harvester.py (修复候选生成模板中的非法 MedicalDisclaimer 引用)
 - src/content/articles/ (清洗 4 篇受影响的 MDX 文章)
 Tests: `python scripts/test_article_hygiene.py` & `pnpm test` (0 errors, 0 warnings, 32 pages clean)
+
+### 2026-09-26T13:08:00+08:00 | gemini-3.8-flash-high__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 vault-onboard 协议接手仓库：
+1. 基线测试套件验证：运行 `pnpm test`（含 `astro check`、`test:graph` 决策树/词典/工具箱/文章整洁度四维测试、`curate:check`、`astro build`），全套 0 错误 0 警告，32 个静态路由正常生成与 Pagefind 索引完成；
+2. 架构拓扑与符号地图锚定：识别 Astro 7.3.3 + Tailwind v4 + TS strict 架构，基路径 `/know-her` 契约，四大分类与离线无埋点工具链；
+3. 红线与局部 Gotchas 归纳：严禁 MDX 违规引用全局布局（隔离门禁）、外链真实性 200 OK 要求、严格无系统 Emoji 纸墨排版准则；
+4. 机器可读上下文沉淀：根目录生成 `.agent-context.md`。
+
+### 2026-09-26T13:16:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地门诊就诊沟通便签 (ClinicMemo) 与全品类避孕决策矩阵 (ContraceptionMatrix) 4 个子任务。
+不做范围：不改动现有 4 大工具核心逻辑、不引入服务端接口与持久化个人隐私、不新增重型 npm 依赖。
+
+### 2026-09-26T14:03:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+完成 vault-exec 流水线，全面落地《门诊就诊沟通备忘录小抄生成器》(ClinicMemo) 与《全品类现代避孕知情选择与对比矩阵》(ContraceptionMatrix)：
+1. Task-1 [c9319ae]: 建立 `contraceptionMethods.ts` 与 `clinicQuestions.ts` 数据契约，覆盖 10 大现代避孕法与 4 大门诊主诉/急腹症红旗预警，扩展 `scripts/test_tools.py` 自动化契约断言；
+2. Task-2 [e91e67e]: 落地 `ClinicMemo.astro` 纯前端 SOAP 沟通小抄生成器，支持 LMP 智能计算、实时主诉陈述、三连重点追问与 `@media print` 纸质打印；
+3. Task-3 [3535cab]: 落地 `ContraceptionMatrix.astro` 现代避孕矩阵，集成 6 维即时筛选、珍珠指数双条形可视化、双选 PK 浮动栏与对比抽屉，阻断客户端 XSS（零 innerHTML）；
+4. Task-4 [82f41b4]: 重构 `src/pages/tools/index.astro` 聚合页为 3 大临床与生活场景分区（突发意外、日常生理、知情就医）及 6 工具微导航锚点；
+5. 全量回归测试通过：`pnpm test`（`astro check` + `test:graph` + `curate:check` + `astro build`），32 个静态路由与 Pagefind 索引 100% 成功生成，零错误零警告。

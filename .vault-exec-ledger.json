@@ -1,51 +1,51 @@
 {
   "version": "1.0.0",
-  "plan_file": "docs/plans/content_pilot_plan.md",
-  "created_at": "2026-09-24T19:28:43.267568",
-  "last_updated": "2026-09-24T20:13:17.954700",
+  "plan_file": "docs/plans/2026-09-26-clinic-memo-and-contraception-matrix.md",
+  "created_at": "2026-09-26T13:15:33.830382",
+  "last_updated": "2026-09-26T14:01:44.798189",
   "total_tasks": 4,
   "completed_count": 4,
   "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
-      "title": "词条详情页路由与组件装配 [Role: Frontend Builder]",
+      "title": "避孕全景数据与就诊问诊知识库契约 (Data Layer & TDD Contract) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "0ec00d2",
-      "reviewer_verdict": "subagent-smoke-verified",
-      "started_at": "2026-09-24T19:28:49.443549",
-      "completed_at": "2026-09-24T19:41:27.947999"
+      "commit_hash": "c9319ae",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-26T13:15:45.177075",
+      "completed_at": "2026-09-26T13:28:11.327702"
     },
     {
       "id": "Task-2",
-      "title": "首批试点词条 1 — 异常子宫出血的识别与就医时机 [Role: Content Specialist]",
+      "title": "门诊就诊沟通备忘录小抄生成器组件 (ClinicMemo.astro) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "c7f3e4f",
-      "reviewer_verdict": "self-zod-check-PASS",
-      "started_at": "2026-09-24T19:41:28.053155",
-      "completed_at": "2026-09-24T20:05:22.204333"
+      "commit_hash": "e91e67e",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-26T13:28:16.708719",
+      "completed_at": "2026-09-26T13:39:06.079355"
     },
     {
       "id": "Task-3",
-      "title": "首批试点词条 2 — 正常月经周期的四大客观指标 [Role: Content Specialist]",
+      "title": "全品类现代避孕知情选择与对比矩阵组件 (ContraceptionMatrix.astro) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "8dca8fb",
-      "reviewer_verdict": "self-zod-check-PASS",
-      "started_at": "2026-09-24T19:41:28.154983",
-      "completed_at": "2026-09-24T20:05:22.318166"
+      "commit_hash": "3535cab",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-26T13:39:09.939022",
+      "completed_at": "2026-09-26T13:51:40.926059"
     },
     {
       "id": "Task-4",
-      "title": "全链路端到端构建、静态检索与 RSS 综合验收 [Role: QA & Integrator]",
+      "title": "工具箱聚合页集成与流水线全绿核验 (Integration & Gate Verification) [Role: Integration Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "8dca8fb",
-      "reviewer_verdict": "e2e-acceptance-ALL-PASS",
-      "started_at": "2026-09-24T20:05:22.439147",
-      "completed_at": "2026-09-24T20:13:17.954700"
+      "commit_hash": "82f41b4",
+      "reviewer_verdict": "PASS",
+      "started_at": "2026-09-26T13:51:43.452279",
+      "completed_at": "2026-09-26T14:01:44.798158"
     }
   ]
 }
