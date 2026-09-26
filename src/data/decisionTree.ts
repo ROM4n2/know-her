@@ -32,6 +32,12 @@ export interface DecisionOutcome {
   reassuranceNote?: string;
   relatedArticleSlug?: string;
   sourceAuthority: string;
+  /** 跨工具状态透传：一键直达实用工具箱对应计算器并预填参数 */
+  directToolLink?: {
+    toolId: string;
+    urlParams: string;
+    buttonText: string;
+  };
 }
 
 export interface DecisionTreeData {
@@ -221,7 +227,12 @@ export const DECISION_TREE: DecisionTreeData = {
       timelineGuide: "同房后 14 天晨起使用验孕棒测试晨尿，或同房后 10 天前往医院查血 HCG 排除妊娠。",
       reassuranceNote: "紧急避孕药的主要原理是推迟排卵，它绝非堕胎药，如果已经着床怀孕并不会引起流产，也不会损害身体长期生育力，切勿过分自责或恐慌。",
       relatedArticleSlug: "contraception-emergency-pill",
-      sourceAuthority: "世界卫生组织 (WHO) 紧急避孕实况报道"
+      sourceAuthority: "世界卫生组织 (WHO) 紧急避孕实况报道",
+      directToolLink: {
+        toolId: "ec-countdown",
+        urlParams: "tool=ec-countdown&hours=6",
+        buttonText: "启动 72h 紧急避孕倒计时"
+      }
     },
     outcome_condom_72h_standard: {
       id: "outcome_condom_72h_standard",
@@ -238,7 +249,12 @@ export const DECISION_TREE: DecisionTreeData = {
       timelineGuide: "同房后满 14 天测晨尿验孕棒。",
       reassuranceNote: "单次科学补服紧急避孕药不会对长期健康造成不可逆损伤，按说明书使用即可。",
       relatedArticleSlug: "contraception-emergency-pill",
-      sourceAuthority: "世界卫生组织 (WHO) 家庭生育规划指南"
+      sourceAuthority: "世界卫生组织 (WHO) 家庭生育规划指南",
+      directToolLink: {
+        toolId: "ec-countdown",
+        urlParams: "tool=ec-countdown&hours=24",
+        buttonText: "启动 72h 紧急避孕倒计时"
+      }
     },
     outcome_condom_120h: {
       id: "outcome_condom_120h",
@@ -254,7 +270,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       timelineGuide: "事故后 5 天（120h）内为上环终极窗口；事故后 14 天进行验孕复核。",
       relatedArticleSlug: "contraception-emergency-pill",
-      sourceAuthority: "世界卫生组织 (WHO) 紧急避孕临床实践指南"
+      sourceAuthority: "世界卫生组织 (WHO) 紧急避孕临床实践指南",
+      directToolLink: {
+        toolId: "ec-countdown",
+        urlParams: "tool=ec-countdown&hours=96",
+        buttonText: "启动 120h 医疗终极窗口倒计时"
+      }
     },
     outcome_condom_expired: {
       id: "outcome_condom_expired",
@@ -269,7 +290,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       timelineGuide: "同房后 14 天首测 → 月经推迟 3~7 天复测。",
       relatedArticleSlug: "contraception-condom-myths",
-      sourceAuthority: "默沙东诊疗手册大众版"
+      sourceAuthority: "默沙东诊疗手册大众版",
+      directToolLink: {
+        toolId: "clinic-memo",
+        urlParams: "tool=clinic-memo&complaint=bleeding",
+        buttonText: "生成验孕随访主诉便签"
+      }
     },
     outcome_pill_missed_1: {
       id: "outcome_pill_missed_1",
@@ -284,7 +310,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       reassuranceNote: "短效复方口服避孕药对单日漏服有充分的半衰期容错空间，只要及时补上，下丘脑排卵抑制机制依然在起作用。",
       relatedArticleSlug: "contraception-oral-pills",
-      sourceAuthority: "默沙东诊疗手册大众版 激素避孕方法"
+      sourceAuthority: "默沙东诊疗手册大众版 激素避孕方法",
+      directToolLink: {
+        toolId: "coc-remedy",
+        urlParams: "tool=coc-remedy",
+        buttonText: "启动短效药漏服补救计算器"
+      }
     },
     outcome_pill_missed_week1: {
       id: "outcome_pill_missed_week1",
@@ -299,7 +330,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       timelineGuide: "严格执行 7 天避孕套附加防护期。",
       relatedArticleSlug: "contraception-oral-pills",
-      sourceAuthority: "世界卫生组织 (WHO) 与英国 FSRH 避孕用药指南"
+      sourceAuthority: "世界卫生组织 (WHO) 与英国 FSRH 避孕用药指南",
+      directToolLink: {
+        toolId: "coc-remedy",
+        urlParams: "tool=coc-remedy",
+        buttonText: "启动短效药漏服补救计算器"
+      }
     },
     outcome_pill_missed_week2: {
       id: "outcome_pill_missed_week2",
@@ -313,7 +349,12 @@ export const DECISION_TREE: DecisionTreeData = {
         "【防护建议】若此前 7 天均规律服药，通常无需额外紧急避孕，但稳妥起见建议未来 7 天性生活加用避孕套。"
       ],
       relatedArticleSlug: "contraception-oral-pills",
-      sourceAuthority: "默沙东诊疗手册大众版"
+      sourceAuthority: "默沙东诊疗手册大众版",
+      directToolLink: {
+        toolId: "coc-remedy",
+        urlParams: "tool=coc-remedy",
+        buttonText: "启动短效药漏服补救计算器"
+      }
     },
     outcome_pill_missed_week3: {
       id: "outcome_pill_missed_week3",
@@ -327,7 +368,12 @@ export const DECISION_TREE: DecisionTreeData = {
         "【可能现象】在服用第二盒药期间可能会有轻微点滴突破性出血，属于正常现象，不停药继续吃即可。"
       ],
       relatedArticleSlug: "contraception-oral-pills",
-      sourceAuthority: "默沙东诊疗手册大众版"
+      sourceAuthority: "默沙东诊疗手册大众版",
+      directToolLink: {
+        toolId: "coc-remedy",
+        urlParams: "tool=coc-remedy",
+        buttonText: "启动短效药漏服补救计算器"
+      }
     },
     outcome_bleeding_ovulation: {
       id: "outcome_bleeding_ovulation",
@@ -342,7 +388,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       reassuranceNote: "临床统计约 20%~30% 的育龄期女性在一生中经历过排卵期出血，不要过度恐慌焦虑。",
       relatedArticleSlug: "abnormal-uterine-bleeding",
-      sourceAuthority: "国际妇产科联合会 (FIGO) 临床指导原则"
+      sourceAuthority: "国际妇产科联合会 (FIGO) 临床指导原则",
+      directToolLink: {
+        toolId: "cycle-assess",
+        urlParams: "tool=cycle-assess",
+        buttonText: "启动月经四大指标自测"
+      }
     },
     outcome_bleeding_tailing: {
       id: "outcome_bleeding_tailing",
@@ -356,7 +407,12 @@ export const DECISION_TREE: DecisionTreeData = {
         "【就医界限】只要总经期未超过 8 天（FIGO 国际标准），均属于健康范畴；若拖尾超过 10 天以上建议做妇科经阴道 B 超排查息肉。"
       ],
       relatedArticleSlug: "normal-menstrual-cycle",
-      sourceAuthority: "默沙东诊疗手册大众版 月经周期"
+      sourceAuthority: "默沙东诊疗手册大众版 月经周期",
+      directToolLink: {
+        toolId: "cycle-assess",
+        urlParams: "tool=cycle-assess",
+        buttonText: "启动月经四大指标自测"
+      }
     },
     outcome_bleeding_red_flag: {
       id: "outcome_bleeding_red_flag",
@@ -375,7 +431,12 @@ export const DECISION_TREE: DecisionTreeData = {
         "阴道出血伴随 38.5℃ 以上高热与异味脓性白带"
       ],
       relatedArticleSlug: "abnormal-uterine-bleeding",
-      sourceAuthority: "中华医学会妇产科学分会 急腹症诊疗规范"
+      sourceAuthority: "中华医学会妇产科学分会 急腹症诊疗规范",
+      directToolLink: {
+        toolId: "clinic-memo",
+        urlParams: "tool=clinic-memo&complaint=pelvic-pain",
+        buttonText: "生成急诊主诉沟通便签"
+      }
     },
     outcome_bleeding_chronic: {
       id: "outcome_bleeding_chronic",
@@ -390,7 +451,12 @@ export const DECISION_TREE: DecisionTreeData = {
       ],
       timelineGuide: "建议在下次月经完全干净后 3~5 天（不同房）前往医院检查最为准确。",
       relatedArticleSlug: "body-hpv-vaccine-screening",
-      sourceAuthority: "默沙东诊疗手册大众版 妇科症状诊断"
+      sourceAuthority: "默沙东诊疗手册大众版 妇科症状诊断",
+      directToolLink: {
+        toolId: "clinic-memo",
+        urlParams: "tool=clinic-memo&complaint=bleeding",
+        buttonText: "生成门诊主诉沟通便签"
+      }
     }
   }
 };

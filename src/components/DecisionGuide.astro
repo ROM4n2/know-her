@@ -155,6 +155,14 @@ const treeJson = JSON.stringify(DECISION_TREE);
       </div>
       <div class="flex items-center gap-3">
         <a
+          id="dg-tool-link"
+          href="#"
+          class="hidden items-center gap-1 rounded-lg border border-[#15140F] bg-[#15140F] px-3 py-1.5 font-bold text-white shadow-[2px_2px_0_rgba(21,20,15,0.25)] hover:bg-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all"
+        >
+          <span id="dg-tool-link-text">启动工具</span>
+          <span>→</span>
+        </a>
+        <a
           id="dg-article-link"
           href="#"
           class="hidden font-semibold text-rose-600 hover:text-rose-700 transition-colors items-center gap-1"
@@ -205,6 +213,8 @@ const treeJson = JSON.stringify(DECISION_TREE);
     const reassuranceText = document.getElementById('dg-reassurance-text');
     const authorityText = document.getElementById('dg-authority-text');
     const articleLink = document.getElementById('dg-article-link');
+    const toolLink = document.getElementById('dg-tool-link');
+    const toolLinkText = document.getElementById('dg-tool-link-text');
     const recheckBtn = document.getElementById('dg-recheck-btn');
     const copyOutcomeBtn = document.getElementById('dg-copy-outcome-btn');
     const copyText = document.getElementById('dg-copy-text');
@@ -383,6 +393,18 @@ const treeJson = JSON.stringify(DECISION_TREE);
       } else {
         articleLink.classList.add('hidden');
         articleLink.classList.remove('inline-flex');
+      }
+
+      // 跨工具直达：透传 URL 参数并自动聚焦定位
+      if (outcome.directToolLink) {
+        toolLink.classList.remove('hidden');
+        toolLink.classList.add('inline-flex');
+        toolLink.href = `${siteBase}tools/?${outcome.directToolLink.urlParams}`;
+        toolLinkText.textContent = `[ ${outcome.directToolLink.buttonText} ]`;
+        toolLink.dataset.toolId = outcome.directToolLink.toolId;
+      } else {
+        toolLink.classList.add('hidden');
+        toolLink.classList.remove('inline-flex');
       }
     }
 

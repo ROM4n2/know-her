@@ -204,6 +204,83 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     </section>
   </main>
 
+  {/* 跨工具状态接驳：解析 URL 参数，自动平滑滚动聚焦并预填控件 */}
+  <script is:inline>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var toolId = params.get('tool');
+      if (!toolId) return;
+
+      var toolSectionMap = {
+        'ec-countdown': 'sec-ec-countdown',
+        'coc-remedy': 'sec-coc-remedy',
+        'cycle-assess': 'sec-cycle-assess',
+        'arousal-brakes': 'sec-arousal-brakes',
+        'position-intimacy': 'sec-position-intimacy',
+        'contraception-matrix': 'sec-contraception-matrix',
+        'clinic-memo': 'sec-clinic-memo',
+      };
+
+      var sectionId = toolSectionMap[toolId];
+      if (!sectionId) return;
+
+      // 1. 紧急避孕倒计时：按 hours 参数预填事发时间
+      var hoursParam = params.get('hours');
+      if (toolId === 'ec-countdown' && hoursParam !== null) {
+        var hours = parseFloat(hoursParam);
+        if (!isNaN(hours) && hours >= 0) {
+          var ecInput = document.getElementById('ec-datetime-input');
+          if (ecInput) {
+            var past = new Date(Date.now() - hours * 3600 * 1000);
+            var pad = function (n) {
+              return String(n).padStart(2, '0');
+            };
+            ecInput.value =
+              past.getFullYear() +
+              '-' +
+              pad(past.getMonth() + 1) +
+              '-' +
+              pad(past.getDate()) +
+              'T' +
+              pad(past.getHours()) +
+              ':' +
+              pad(past.getMinutes());
+            ecInput.dispatchEvent(new Event('input', { bubbles: true }));
+            ecInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      }
+
+      // 2. 门诊备忘录：按 complaint 参数激活对应主诉 Tab（兼容文章 slug 别名）
+      var complaint = params.get('complaint');
+      if (toolId === 'clinic-memo' && complaint) {
+        var complaintAliasMap = {
+          'abnormal-uterine-bleeding': 'bleeding',
+          'body-dysmenorrhea': 'pelvic-pain',
+          'body-bacterial-vaginosis': 'discharge-itch',
+          'contraception-condoms': 'contraception-routine',
+        };
+        var symptomId = complaintAliasMap[complaint] || complaint;
+        var tab = document.querySelector(
+          '.clinic-symptom-tab[data-symptom-id="' + symptomId + '"]'
+        );
+        if (tab) tab.click();
+      }
+
+      // 3. 平滑滚动聚焦目标工具并短暂高亮
+      var targetSection = document.getElementById(sectionId);
+      if (targetSection) {
+        window.requestAnimationFrame(function () {
+          targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          targetSection.classList.add('ring-2', 'ring-rose-400', 'ring-offset-2', 'rounded-2xl');
+          window.setTimeout(function () {
+            targetSection.classList.remove('ring-2', 'ring-rose-400', 'ring-offset-2', 'rounded-2xl');
+          }, 2400);
+        });
+      }
+    })();
+  </script>
+
   {/* 底部免责与隐私说明卡片 */}
   <section class="rounded-2xl border border-[#15140F]/15 bg-white p-6 text-xs sm:text-sm space-y-3 shadow-[2px_2px_0_rgba(21,20,15,0.06)]">
     <h3 class="font-bold text-[#15140F] flex items-center gap-1.5 text-sm sm:text-base">
