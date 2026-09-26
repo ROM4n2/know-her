@@ -331,6 +331,16 @@ def create_draft_pr(candidate: dict) -> bool:
 
     print(f"\n🚀 开始自动化 PR 流程: {branch_name}")
     try:
+        # 防重复守卫：该候选分支若已有待审 PR，直接跳过，避免每日重复刷 PR
+        dup = subprocess.run(
+            ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
+            capture_output=True,
+            text=True,
+        )
+        if dup.returncode == 0 and dup.stdout.strip() not in ("", "[]"):
+            print(f"  ⏭️ 分支 {branch_name} 已存在待审 PR，跳过本次候选生成")
+            return True
+
         # 创建分支
         subprocess.run(["git", "checkout", "-b", branch_name], check=True)
 
@@ -359,11 +369,16 @@ def create_draft_pr(candidate: dict) -> bool:
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
 
         # Git push (带重试机制，防止网络抖动)
+        # --force-with-lease：候选分支为机器生成的临时草稿分支，上次运行若在 PR 创建前中断，
+        # 远端会残留陈旧分支导致常规 push non-fast-forward 永久卡死流水线
         print(f"  ⬆️ 正在推送分支 {branch_name} 至远端 GitHub...")
         pushed = False
         for attempt in range(1, 4):
             try:
-                subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+                subprocess.run(
+                    ["git", "push", "--force-with-lease", "-u", "origin", branch_name],
+                    check=True,
+                )
                 pushed = True
                 break
             except subprocess.CalledProcessError:
