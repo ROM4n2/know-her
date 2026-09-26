@@ -8,8 +8,8 @@ import EmergencyCountdown from '../../components/tools/EmergencyCountdown.astro'
 import CocRemedyCalculator from '../../components/tools/CocRemedyCalculator.astro';
 import CycleAssessment from '../../components/tools/CycleAssessment.astro';
 import ArousalBrakesChecklist from '../../components/tools/ArousalBrakesChecklist.astro';
-import ClinicMemo from '../../components/tools/ClinicMemo.astro';
 import ContraceptionMatrix from '../../components/tools/ContraceptionMatrix.astro';
+import ClinicMemo from '../../components/tools/ClinicMemo.astro';
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -18,7 +18,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 
 <Base
   title="循证健康计算器与避孕工具箱 | know-her"
-  description="免费、免注册、零隐私泄露的女性健康离线交互工具箱：包含紧急避孕 72h/120h 黄金窗口倒计时、短效避孕药漏服分周补救计算器、月经四大客观指标与经量打分评估。"
+  description="免费、免注册、零隐私泄露的女性健康离线交互工具箱：涵盖紧急避孕 72h 倒计时、短效避孕药漏服补救、月经四大指标自测、双重控制油门刹车自评、现代避孕全景对比矩阵与门诊就医备忘录小抄。"
 >
   {/* 面包屑导航 */}
   <nav class="mb-6 flex items-center gap-2 text-xs text-[#8B8676]">
@@ -28,7 +28,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
   </nav>
 
   {/* 页面 Header */}
-  <header class="mb-8 space-y-3">
+  <header class="mb-8 space-y-4">
     <div class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200/80 px-3 py-1 text-xs font-semibold text-rose-700 shadow-2xs">
       <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
       <span>离线交互 · 循证行动工具箱</span>
@@ -41,76 +41,155 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     </p>
 
     {/* 工具锚点快捷跳转 */}
-    <div class="flex flex-wrap items-center gap-2 pt-2 text-xs">
-      <span class="text-[#8B8676]">快速定位：</span>
-      <a
-        href="#sec-ec-countdown"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        紧急避孕 72h/120h 倒计时
-      </a>
-      <a
-        href="#sec-coc-remedy"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        短效药漏服分周补救
-      </a>
-      <a
-        href="#sec-cycle-assess"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        月经四大指标与经量自测
-      </a>
-      <a
-        href="#sec-arousal-brakes"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        性唤起油门与刹车盘点
-      </a>
-      <a
-        href="#sec-clinic-memo"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        门诊就诊沟通备忘录小抄
-      </a>
-      <a
-        href="#sec-contraception-matrix"
-        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
-      >
-        避孕知情选择与对比矩阵
-      </a>
-    </div>
+    <nav aria-label="工具快速定位" class="rounded-2xl border border-[#15140F]/10 bg-white/70 backdrop-blur-xs p-3.5 sm:p-4 shadow-2xs space-y-2.5">
+      <div class="flex items-center justify-between text-xs text-[#8B8676]">
+        <span class="font-medium text-[#15140F] flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"/>
+          </svg>
+          <span>快速定位 6 大实用工具：</span>
+        </span>
+        <span class="text-[11px] text-[#8B8676] hidden sm:inline">纯前端计算 · 零隐私上传</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <a
+          href="#sec-ec-countdown"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-rose-600 font-bold">[01]</span>
+          <span>紧急避孕 72h/120h 倒计时</span>
+        </a>
+        <a
+          href="#sec-coc-remedy"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-rose-600 font-bold">[02]</span>
+          <span>短效药漏服分周补救</span>
+        </a>
+        <a
+          href="#sec-cycle-assess"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-emerald-600 font-bold">[03]</span>
+          <span>月经四大指标与经量自测</span>
+        </a>
+        <a
+          href="#sec-arousal-brakes"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-emerald-600 font-bold">[04]</span>
+          <span>性唤起油门与刹车盘点</span>
+        </a>
+        <a
+          href="#sec-contraception-matrix"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-amber-700 font-bold">[05]</span>
+          <span>避孕知情选择与对比矩阵</span>
+        </a>
+        <a
+          href="#sec-clinic-memo"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+        >
+          <span class="font-mono text-[10px] text-amber-700 font-bold">[06]</span>
+          <span>门诊就诊沟通备忘录小抄</span>
+        </a>
+      </div>
+    </nav>
   </header>
 
-  {/* 工具 1：紧急避孕倒计时 */}
-  <section id="sec-ec-countdown" class="mb-12 scroll-mt-20">
-    <EmergencyCountdown />
-  </section>
+  {/* 3 大临床与生活场景分区 */}
+  <main class="space-y-14">
+    {/* 场景一：突发意外与黄金救援窗口 */}
+    <section id="scenario-emergency" class="space-y-6">
+      <div class="border-b border-[#15140F]/15 pb-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-sm">
+            [ 场景一 ]
+          </span>
+          <h2 class="text-lg sm:text-xl font-bold text-[#15140F] tracking-tight">
+            突发意外与黄金救援窗口
+          </h2>
+        </div>
+        <span class="text-xs text-[#8B8676]">时效至上 · 降低非意愿妊娠风险</span>
+      </div>
+      <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed -mt-2">
+        应对避孕事故、药片漏服等紧急状况。依据 WHO 与临床处方规范，分秒必争推演最佳干预节点与递进处置阶梯。
+      </p>
 
-  {/* 工具 2：短效药漏服补救计算 */}
-  <section id="sec-coc-remedy" class="mb-12 scroll-mt-20">
-    <CocRemedyCalculator />
-  </section>
+      <div class="space-y-8">
+        {/* 工具 1：紧急避孕倒计时 */}
+        <section id="sec-ec-countdown" class="scroll-mt-20">
+          <EmergencyCountdown />
+        </section>
 
-  {/* 工具 3：月经指标自测 */}
-  <section id="sec-cycle-assess" class="mb-12 scroll-mt-20">
-    <CycleAssessment />
-  </section>
+        {/* 工具 2：短效药漏服补救计算 */}
+        <section id="sec-coc-remedy" class="scroll-mt-20">
+          <CocRemedyCalculator />
+        </section>
+      </div>
+    </section>
 
-  {/* 工具 4：性唤起油门与刹车自测 */}
-  <section id="sec-arousal-brakes" class="mb-12 scroll-mt-20">
-    <ArousalBrakesChecklist />
-  </section>
+    {/* 场景二：日常生理与身体自主管理 */}
+    <section id="scenario-daily-cycle" class="space-y-6">
+      <div class="border-b border-[#15140F]/15 pb-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-sm">
+            [ 场景二 ]
+          </span>
+          <h2 class="text-lg sm:text-xl font-bold text-[#15140F] tracking-tight">
+            日常生理与身体自主管理
+          </h2>
+        </div>
+        <span class="text-xs text-[#8B8676]">指标量化 · 破除性心理内耗</span>
+      </div>
+      <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed -mt-2">
+        告别经期玄学推测。基于 FIGO 国际月经四大客观维度与双重控制模型，量化评估月经健康与身心唤起机制。
+      </p>
 
-  {/* 工具 5：门诊就医沟通备忘录小抄 */}
-  <section id="sec-clinic-memo" class="mb-12 scroll-mt-20">
-    <ClinicMemo />
-  </section>
+      <div class="space-y-8">
+        {/* 工具 3：月经指标自测 */}
+        <section id="sec-cycle-assess" class="scroll-mt-20">
+          <CycleAssessment />
+        </section>
 
-  {/* 工具 6：全品类现代避孕知情选择与对比矩阵 */}
-  <section id="sec-contraception-matrix" class="mb-12 scroll-mt-20">
-    <ContraceptionMatrix />
-  </section>
+        {/* 工具 4：性唤起油门与刹车自测 */}
+        <section id="sec-arousal-brakes" class="scroll-mt-20">
+          <ArousalBrakesChecklist />
+        </section>
+      </div>
+    </section>
+
+    {/* 场景三：知情决策与门诊就医沟通 */}
+    <section id="scenario-clinic-contraception" class="space-y-6">
+      <div class="border-b border-[#15140F]/15 pb-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-sm">
+            [ 场景三 ]
+          </span>
+          <h2 class="text-lg sm:text-xl font-bold text-[#15140F] tracking-tight">
+            知情决策与门诊就医沟通
+          </h2>
+        </div>
+        <span class="text-xs text-[#8B8676]">消除壁垒 · 结构化门诊准备</span>
+      </div>
+      <p class="text-xs sm:text-sm text-[#5A5448] leading-relaxed -mt-2">
+        打破信息不对称与就医紧张感。全维度横向比对现代避孕方案真实有效率与医学禁忌，一键生成结构化门诊就医沟通备忘录小抄。
+      </p>
+
+      <div class="space-y-8">
+        {/* 工具 5：全品类现代避孕知情选择与对比矩阵 */}
+        <section id="sec-contraception-matrix" class="scroll-mt-20">
+          <ContraceptionMatrix />
+        </section>
+
+        {/* 工具 6：门诊就医沟通备忘录小抄 */}
+        <section id="sec-clinic-memo" class="scroll-mt-20">
+          <ClinicMemo />
+        </section>
+      </div>
+    </section>
+  </main>
 
   {/* 底部免责与隐私说明卡片 */}
   <section class="rounded-2xl border border-[#15140F]/15 bg-white p-6 text-xs sm:text-sm space-y-3 shadow-[2px_2px_0_rgba(21,20,15,0.06)]">
