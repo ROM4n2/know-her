@@ -1,0 +1,1084 @@
+---
+/**
+ * ClinicMemo.astro — 门诊就诊沟通备忘录小抄生成器
+ * 遵循妇产科 SOAP (Subjective, Objective, Assessment, Plan) 临床问诊标准
+ * 纯客户端离线生成，零个人数据上传与留存，页面刷新即销毁
+ */
+import {
+  CLINIC_SYMPTOM_CONFIGS,
+  RED_FLAG_SYMPTOMS,
+} from '../../data/clinicQuestions';
+
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+// 序列化只读知识库数据供客户端原生轻量交互使用
+const clinicConfigsJson = JSON.stringify(
+  CLINIC_SYMPTOM_CONFIGS.map((c) => ({
+    id: c.id,
+    title: c.title,
+    badge: c.badge,
+    description: c.description,
+    subCategories: c.subCategories,
+    recommendedQuestions: c.recommendedQuestions,
+    relatedArticle: c.relatedArticle,
+  }))
+);
+
+const redFlagsJson = JSON.stringify(RED_FLAG_SYMPTOMS);
+
+// 文章标题映射
+const articleTitleMap: Record<string, string> = {
+  'abnormal-uterine-bleeding': '异常子宫出血排查指南',
+  'body-dysmenorrhea': '痛经与盆腔痛应对指南',
+  'body-bacterial-vaginosis': '细菌性阴道病与阴道菌群科普',
+  'contraception-condoms': '避孕套科学使用指南',
+};
+---
+
+<div
+  id="clinic-memo-root"
+  class:list={[
+    "rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-8 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-8",
+    className
+  ]}
+>
+  {/* 顶部标题区 */}
+  <header class="border-b border-[#15140F]/10 pb-5 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+          <svg class="w-5 h-5 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+          </svg>
+        </span>
+        <div>
+          <h2 class="text-lg sm:text-xl font-extrabold text-[#15140F] tracking-tight">
+            [ 门诊就医沟通备忘录小抄生成器 ]
+          </h2>
+          <p class="text-xs text-[#5A5448]">
+            公立医院妇科门诊平均单次面诊仅 3~5 分钟。在候诊 1 分钟内，结构化整理发作时长、出血与疼痛特征、既往避孕与验孕史，生成高信息密度问诊便签。
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-[11px] font-mono">
+        <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-800">
+          SOAP 临床规范
+        </span>
+        <span class="rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 font-medium text-[#5A5448]">
+          本地离线无痕
+        </span>
+      </div>
+    </div>
+  </header>
+
+  {/* Step 1: 主诉分类选择 */}
+  <section class="space-y-4">
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+      <div class="flex items-center gap-2">
+        <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+          STEP 01
+        </span>
+        <h3 class="text-sm sm:text-base font-bold text-[#15140F]">
+          选择核心就诊主诉（4 大常见门诊诉求）
+        </h3>
+      </div>
+      <span class="text-xs text-[#8B8676]">单选主要不适</span>
+    </div>
+
+    {/* 4 大主诉卡片切换 */}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" id="clinic-symptom-tabs">
+      {CLINIC_SYMPTOM_CONFIGS.map((symptom, idx) => (
+        <button
+          type="button"
+          data-symptom-id={symptom.id}
+          class:list={[
+            "clinic-symptom-tab text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative",
+            idx === 0
+              ? "border-[#15140F] bg-[#15140F] text-white shadow-[2px_2px_0_rgba(21,20,15,1)]"
+              : "border-[#15140F]/15 bg-[#FAF8F5] text-[#15140F] hover:border-[#15140F]/40 active:translate-x-0.5 active:translate-y-0.5"
+          ]}
+        >
+          <div class="flex items-center justify-between mb-1.5">
+            <span class:list={[
+              "clinic-tab-badge text-[10px] font-mono px-2 py-0.5 rounded-full font-bold",
+              idx === 0 ? "bg-white/20 text-white" : "bg-[#15140F]/10 text-[#5A5448]"
+            ]}>
+              {symptom.badge}
+            </span>
+            <span class:list={[
+              "clinic-tab-indicator w-2 h-2 rounded-full",
+              idx === 0 ? "bg-rose-400" : "bg-transparent"
+            ]}></span>
+          </div>
+          <div class="font-bold text-xs sm:text-sm tracking-tight mb-1">
+            {symptom.title}
+          </div>
+          <p class:list={[
+            "clinic-tab-desc text-[11px] leading-relaxed line-clamp-2",
+            idx === 0 ? "text-stone-300" : "text-[#5A5448]"
+          ]}>
+            {symptom.description}
+          </p>
+        </button>
+      ))}
+    </div>
+
+    {/* 细分表现选择 */}
+    <div class="rounded-2xl border border-[#15140F]/10 bg-[#FAF8F5] p-4 sm:p-5 space-y-3.5">
+      <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+        <label class="text-xs font-bold text-[#15140F] flex items-center gap-1.5">
+          <span>具体症状细分特征：</span>
+          <span class="text-[11px] font-normal text-[#8B8676]">（勾选最贴合的医学表述）</span>
+        </label>
+      </div>
+
+      <div id="clinic-subcategories-wrap" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+        {/* 由客户端 JS 根据当前选中的主诉动态挂载 */}
+      </div>
+
+      {/* 疼痛分级滑块（仅在选择盆腔疼痛时显示） */}
+      <div id="clinic-pain-block" class="hidden pt-3 border-t border-[#15140F]/10 space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-bold text-[#15140F] flex items-center gap-1">
+            <span>视觉模拟疼痛评分 (NRS 0 - 10)：</span>
+          </label>
+          <span id="clinic-pain-badge" class="font-mono text-xs font-bold text-rose-600">
+            5 / 10 分（中度疼痛）
+          </span>
+        </div>
+        <input
+          type="range"
+          id="clinic-pain-slider"
+          min="0"
+          max="10"
+          value="5"
+          class="w-full accent-rose-600 cursor-pointer"
+        />
+        <div class="flex justify-between text-[10px] text-[#8B8676] font-mono">
+          <span>0 无痛</span>
+          <span>1-3 轻微可耐受</span>
+          <span class="font-bold text-[#15140F]">4-6 影响工作/生活</span>
+          <span>7-9 严重剧痛</span>
+          <span class="text-rose-600 font-bold">10 极度撕裂痛</span>
+        </div>
+      </div>
+
+      {/* 发作时程选择与补充 */}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-[#15140F]">
+            发作时长 / 频次：
+          </label>
+          <select
+            id="clinic-duration-select"
+            class="w-full rounded-xl border border-[#15140F]/20 bg-white px-3 py-2 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+          >
+            <option value="突发不足24小时">突发不足 24 小时（急骤起病）</option>
+            <option value="持续 2-3 天" selected>持续 2 ~ 3 天</option>
+            <option value="持续 1-2 周">持续 1 ~ 2 周</option>
+            <option value="近 1-3 个月反复出现">近 1 ~ 3 个月反复出现</option>
+            <option value="长期持续超过半年以上">长期持续超过半年以上</option>
+            <option value="经期前后固定发作">每个月经周期固定时段发作</option>
+          </select>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="block text-xs font-bold text-[#15140F]">
+            其他症状补充（选填）：
+          </label>
+          <input
+            type="text"
+            id="clinic-notes-input"
+            maxlength="50"
+            placeholder="例如：伴有腰酸、近两天明显加重等…"
+            class="w-full rounded-xl border border-[#15140F]/20 bg-white px-3 py-2 text-xs text-[#15140F] placeholder-[#8B8676]/60 focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* Step 2: 核心体征与既往史快填 */}
+  <section class="space-y-4">
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+      <div class="flex items-center gap-2">
+        <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+          STEP 02
+        </span>
+        <h3 class="text-sm sm:text-base font-bold text-[#15140F]">
+          核心病史与体征录入（妇科医生必问依据）
+        </h3>
+      </div>
+      <span class="text-xs text-[#8B8676]">排除急症与排卵/妊娠相关</span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* 末次月经日期 LMP */}
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-bold text-[#15140F]">
+            末次月经 (LMP) 第一天：
+          </label>
+          <span id="clinic-lmp-elapsed-badge" class="font-mono text-[11px] text-rose-600 font-bold">
+            距今 -- 天
+          </span>
+        </div>
+        <input
+          type="date"
+          id="clinic-lmp-input"
+          class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-2 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+        />
+        <p class="text-[10px] text-[#8B8676] leading-tight">
+          请选择最近一次来月经的【开始第一天】
+        </p>
+      </div>
+
+      {/* 月经周期天数 */}
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-[#15140F]">
+          平常月经周期长度（天）：
+        </label>
+        <input
+          type="number"
+          id="clinic-cycle-input"
+          min="15"
+          max="100"
+          value="28"
+          class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-2 text-xs font-mono text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs"
+        />
+        <p class="text-[10px] text-[#8B8676] leading-tight">
+          两次月经第一天的间隔天数（通常 21~35 天）
+        </p>
+      </div>
+
+      {/* 近期避孕方式与激素史 */}
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-[#15140F]">
+          近期避孕与性行为史：
+        </label>
+        <select
+          id="clinic-contraception-select"
+          class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-2 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+        >
+          <option value="全程规律使用男用安全套" selected>全程规律使用男用安全套</option>
+          <option value="无保护性生活（未采取可靠避孕）">无保护性生活（未采取可靠避孕）</option>
+          <option value="规律服用复方短效避孕药 (COC)">规律服用复方短效避孕药 (COC)</option>
+          <option value="短效避孕药近期有漏服情况">短效避孕药近期有漏服情况</option>
+          <option value="放置有左炔诺孕酮节育系统 (曼月乐)">放置有左炔诺孕酮节育系统 (曼月乐)</option>
+          <option value="放置有含铜宫内节育器 (非激素环)">放置有含铜宫内节育器 (非激素环)</option>
+          <option value="已放置皮下埋植避孕剂">已放置皮下埋植避孕剂</option>
+          <option value="近 5 天内曾紧急口服紧急避孕药">近 5 天内曾紧急口服紧急避孕药</option>
+          <option value="安全期推算 / 体外射精（非可靠避孕）">安全期推算 / 体外射精（非可靠避孕）</option>
+          <option value="暂无性生活 / 无避孕需求">暂无性生活 / 无避孕需求</option>
+        </select>
+        <p class="text-[10px] text-[#8B8676] leading-tight">
+          医生会据此判断是否为药物不良反应或排卵改变
+        </p>
+      </div>
+
+      {/* 自测早孕试纸情况 */}
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-[#15140F]">
+          尿早孕试纸自测状态：
+        </label>
+        <select
+          id="clinic-pregnancy-select"
+          class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-2 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
+        >
+          <option value="已测尿早孕试纸：阴性（一条杠）" selected>已测尿早孕试纸：阴性（一条杠）</option>
+          <option value="近期尚未自测早孕试纸">近期尚未自测早孕试纸</option>
+          <option value="已测尿早孕试纸：弱阳性 / 阳性（两条杠）">已测尿早孕试纸：弱阳性 / 阳性（两条杠）</option>
+          <option value="医院抽血查 HCG 阴性（近期已排查）">医院抽血查 HCG 阴性（近期已排查）</option>
+          <option value="医院查血 HCG 阳性（已确认妊娠）">医院查血 HCG 阳性（已确认妊娠）</option>
+        </select>
+        <p class="text-[10px] text-[#8B8676] leading-tight">
+          任何育龄期异常出血或腹痛均须首先排查异位妊娠
+        </p>
+      </div>
+    </div>
+
+    {/* 急腹症红旗预警体征（多选） */}
+    <div class="rounded-2xl border border-rose-200/90 bg-rose-50/40 p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between border-b border-rose-200/70 pb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="rounded-sm bg-rose-600 px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            RED FLAGS
+          </span>
+          <span class="text-xs sm:text-sm font-bold text-rose-950">
+            [ ! 急腹症与重度大出血红旗体征筛查 ]
+          </span>
+        </div>
+        <span class="text-[11px] text-rose-800 font-medium">若有符合请勾选</span>
+      </div>
+
+      <p class="text-[11px] text-rose-900 leading-relaxed">
+        如出现以下任一伴随症状，高度提示妇科急腹症（如宫外孕破裂、黄体破裂、急性盆腔腹膜炎）或活动性大出血休克风险，需立即前往急诊科：
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+        {RED_FLAG_SYMPTOMS.map((rf) => (
+          <label class="clinic-redflag-label flex items-start gap-2.5 p-2.5 rounded-xl bg-white/90 border border-rose-200/80 hover:border-rose-400 transition-colors cursor-pointer select-none">
+            <input
+              type="checkbox"
+              class="clinic-redflag-cb mt-0.5 rounded accent-rose-600 cursor-pointer"
+              data-id={rf.id}
+              data-label={rf.label}
+              data-alert={rf.emergencyAlert}
+            />
+            <div class="space-y-0.5">
+              <span class="font-bold text-[#15140F] block">
+                {rf.label}
+              </span>
+              <span class="text-[11px] text-[#5A5448] leading-tight block">
+                {rf.description}
+              </span>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      {/* 实时红旗预警横幅（勾选时弹出） */}
+      <div id="clinic-step2-alert" class="hidden rounded-xl border-2 border-rose-600 bg-rose-100/90 p-3.5 text-xs text-rose-950 space-y-1 shadow-2xs">
+        <div class="font-extrabold flex items-center gap-1 text-sm text-rose-900">
+          <span>[ ! 紧急急诊就医警示 ]</span>
+        </div>
+        <p class="leading-relaxed font-medium" id="clinic-step2-alert-text">
+          你勾选了急腹症或重度大出血高危体征！这可能提示异位妊娠破裂大出血、急性黄体破裂或严重感染，不可等待常规预约门诊排队，请立即由同伴陪同前往公立医院急诊科就诊！
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* Step 3: 实时渲染结果卡片 (Editorial Note Card) */}
+  <section class="space-y-3">
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+      <div class="flex items-center gap-2">
+        <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+          STEP 03
+        </span>
+        <h3 class="text-sm sm:text-base font-bold text-[#15140F]">
+          实时生成就诊沟通备忘录小抄（可复制/打印递交）
+        </h3>
+      </div>
+      <span class="text-xs text-[#8B8676]">随填随变 · 即时成稿</span>
+    </div>
+
+    {/* 便签卡容器 */}
+    <div
+      id="clinic-memo-container"
+      class="clinic-memo-container rounded-2xl border-2 border-[#15140F] bg-[#FAF8F5] p-5 sm:p-7 shadow-[4px_4px_0_rgba(21,20,15,1)] space-y-6"
+    >
+      {/* 便签 Header */}
+      <div class="border-b-2 border-dashed border-[#15140F]/20 pb-4 space-y-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-sm bg-[#15140F] text-white">
+              CLINIC MEMO
+            </span>
+            <span class="text-xs font-extrabold text-[#15140F] tracking-wide">
+              [ 妇科门诊就医沟通备忘录便签 ]
+            </span>
+          </div>
+          <span id="memo-date-display" class="font-mono text-xs text-[#8B8676]">
+            2026-09-26 · 候诊准备
+          </span>
+        </div>
+        <p class="text-[11px] text-[#5A5448]">
+          * 临床提示：本便签供候诊自查与面诊直接对照陈述使用。医生负有法定隐私保密义务，如实告知末次月经与性接触史是排除宫外孕等致命急症的医学前提。
+        </p>
+      </div>
+
+      {/* 模块 01: 门诊主诉陈述 */}
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs font-bold text-[#15140F]">
+            [ 01 // 门诊主诉标准陈述 (SOAP 格式) ]
+          </span>
+          <span class="text-[10px] text-[#8B8676]">面诊第 1 句话清晰表达</span>
+        </div>
+        <div
+          id="memo-chief-complaint"
+          class="rounded-xl border border-[#15140F]/20 bg-white p-3.5 font-mono text-xs sm:text-sm text-[#15140F] leading-relaxed select-all"
+        >
+          患者主诉：正在生成中…
+        </div>
+      </div>
+
+      {/* 模块 02: 关键病史与体征速览 */}
+      <div class="space-y-2">
+        <span class="font-mono text-xs font-bold text-[#15140F] block">
+          [ 02 // 关键病史速览与红旗预警 ]
+        </span>
+
+        {/* 紧急红旗警告提示（默认隐藏，勾选时高亮） */}
+        <div
+          id="memo-redflag-notice"
+          class="hidden rounded-xl border-2 border-rose-600 bg-rose-50 p-3.5 space-y-1.5 text-xs text-rose-950 font-medium"
+        >
+          <div class="font-bold text-rose-900 flex items-center gap-1.5">
+            <span>[ ! 存在急腹症危险体征提示 ]</span>
+          </div>
+          <div id="memo-redflag-text" class="leading-relaxed">
+            --
+          </div>
+        </div>
+
+        {/* 核心体征清单 */}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div class="rounded-xl border border-[#15140F]/15 bg-white p-2.5 space-y-1">
+            <span class="text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+              末次月经时间 (LMP)
+            </span>
+            <span id="memo-lmp-text" class="font-mono font-bold text-[#15140F] block">
+              未填写/不详
+            </span>
+          </div>
+
+          <div class="rounded-xl border border-[#15140F]/15 bg-white p-2.5 space-y-1">
+            <span class="text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+              平常月经周期与天数
+            </span>
+            <span id="memo-cycle-text" class="font-mono font-bold text-[#15140F] block">
+              约 28 天
+            </span>
+          </div>
+
+          <div class="rounded-xl border border-[#15140F]/15 bg-white p-2.5 space-y-1">
+            <span class="text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+              近期避孕方式与性生活
+            </span>
+            <span id="memo-contraception-text" class="font-medium text-[#15140F] block">
+              全程规律使用男用安全套
+            </span>
+          </div>
+
+          <div class="rounded-xl border border-[#15140F]/15 bg-white p-2.5 space-y-1">
+            <span class="text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+              早孕自测与排查情况
+            </span>
+            <span id="memo-pregnancy-text" class="font-medium text-[#15140F] block">
+              已测尿早孕试纸：阴性（一条杠）
+            </span>
+          </div>
+        </div>
+
+        {/* 补充体征（疼痛评分或自定义备忘） */}
+        <div id="memo-extra-wrap" class="hidden rounded-xl border border-[#15140F]/15 bg-white p-2.5 text-xs text-[#5A5448] space-y-1">
+          <span class="text-[10px] font-bold text-[#8B8676] uppercase tracking-wider block">
+            伴随评估与补充备忘
+          </span>
+          <p id="memo-extra-text" class="text-xs text-[#15140F] font-mono leading-relaxed">
+            --
+          </p>
+        </div>
+      </div>
+
+      {/* 模块 03: 3 个建议向医生重点确认的专业问题 */}
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs font-bold text-[#15140F]">
+            [ 03 // 建议向医生确认的 3 个重点问题 ]
+          </span>
+          <span class="text-[10px] text-[#8B8676]">循证问诊清单 · 避免信息遗漏</span>
+        </div>
+        <ol id="memo-questions-list" class="space-y-2 text-xs text-[#2A2620]">
+          {/* 由客户端 JS 动态挂载 */}
+        </ol>
+      </div>
+
+      {/* 打印专用注脚 */}
+      <div class="border-t border-[#15140F]/15 pt-3 text-[10px] text-[#8B8676] leading-relaxed">
+        * 本小抄由患者根据个人真实生理状态通过 know-her 离线生成，纯前端运算绝无云端数据留存，不替代执业医师面对面体格检查与处方建议。
+      </div>
+
+      {/* 操作按钮组（打印时隐藏） */}
+      <div class="clinic-no-print flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#15140F]/10">
+        <div class="flex flex-wrap items-center gap-2">
+          {/* 一键复制按钮 */}
+          <button
+            type="button"
+            id="clinic-copy-btn"
+            class="clinic-copy-btn inline-flex items-center gap-2 rounded-xl border border-[#15140F] bg-[#15140F] px-4 py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-[#2A2620] active:translate-x-0.5 active:translate-y-0.5 shadow-[2px_2px_0_rgba(21,20,15,1)] transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+            </svg>
+            <span id="clinic-copy-btn-text">[ 复制就医便签小抄 ]</span>
+          </button>
+
+          {/* 打印按钮 */}
+          <button
+            type="button"
+            id="clinic-print-btn"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-[#15140F]/30 bg-white px-3.5 py-2.5 text-xs font-bold text-[#15140F] hover:bg-[#FAF8F5] active:translate-x-0.5 active:translate-y-0.5 shadow-2xs transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-[#5A5448]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24-1.076-.672-2.03-1.27-2.829H18.55c-.598.799-1.03 1.753-1.27 2.829m-10.56 0A7.5 7.5 0 0 1 12 11.25a7.5 7.5 0 0 1 5.28 2.579m-10.56 0A9 9 0 0 0 3 20.25h18a9 9 0 0 0-3.72-6.421M6 6h12a3 3 0 0 1 3 3v3H3V9a3 3 0 0 1 3-3Z" />
+            </svg>
+            <span>[ 打印便签 ]</span>
+          </button>
+
+          {/* 重置按钮 */}
+          <button
+            type="button"
+            id="clinic-reset-btn"
+            class="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-medium text-[#8B8676] hover:text-[#15140F] hover:border-stone-400 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            <span>[ 重置 ]</span>
+          </button>
+        </div>
+
+        {/* 关联科普外键链接 */}
+        <div class="text-xs">
+          <a
+            id="clinic-related-article-link"
+            href={`${base}articles/abnormal-uterine-bleeding/`}
+            class="inline-flex items-center gap-1 font-bold text-rose-600 hover:text-rose-700 underline underline-offset-4 transition-colors"
+          >
+            <span id="clinic-related-article-title">
+              深度科普：阅读《异常子宫出血排查指南》
+            </span>
+            <span>→</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+{/* 嵌入只读静态数据供客户端原生脚本使用 */}
+<script type="application/json" id="clinic-configs-data" set:html={clinicConfigsJson}></script>
+<script type="application/json" id="clinic-redflags-data" set:html={redFlagsJson}></script>
+<script type="application/json" id="clinic-article-map" set:html={JSON.stringify(articleTitleMap)}></script>
+
+<style>
+  @media print {
+    body * {
+      visibility: hidden !important;
+    }
+    #clinic-memo-container,
+    #clinic-memo-container * {
+      visibility: visible !important;
+    }
+    #clinic-memo-container {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 24px !important;
+      border: 1px solid #15140F !important;
+      box-shadow: none !important;
+      background: #ffffff !important;
+      color: #15140F !important;
+    }
+    .clinic-no-print {
+      display: none !important;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    const configsElem = document.getElementById('clinic-configs-data');
+    const articleMapElem = document.getElementById('clinic-article-map');
+
+    if (!configsElem) return;
+
+    const configs = JSON.parse(configsElem.textContent || '[]');
+    const articleTitles = JSON.parse(articleMapElem?.textContent || '{}');
+
+    // DOM 元素引用
+    const tabButtons = document.querySelectorAll('.clinic-symptom-tab');
+    const subcatWrap = document.getElementById('clinic-subcategories-wrap');
+    const painBlock = document.getElementById('clinic-pain-block');
+    const painSlider = document.getElementById('clinic-pain-slider');
+    const painBadge = document.getElementById('clinic-pain-badge');
+    const durationSelect = document.getElementById('clinic-duration-select');
+    const notesInput = document.getElementById('clinic-notes-input');
+
+    const lmpInput = document.getElementById('clinic-lmp-input');
+    const lmpElapsedBadge = document.getElementById('clinic-lmp-elapsed-badge');
+    const cycleInput = document.getElementById('clinic-cycle-input');
+    const contraceptionSelect = document.getElementById('clinic-contraception-select');
+    const pregnancySelect = document.getElementById('clinic-pregnancy-select');
+    const redFlagCheckboxes = document.querySelectorAll('.clinic-redflag-cb');
+    const step2Alert = document.getElementById('clinic-step2-alert');
+    const step2AlertText = document.getElementById('clinic-step2-alert-text');
+
+    const memoDateDisplay = document.getElementById('memo-date-display');
+    const memoChiefComplaint = document.getElementById('memo-chief-complaint');
+    const memoRedflagNotice = document.getElementById('memo-redflag-notice');
+    const memoRedflagText = document.getElementById('memo-redflag-text');
+    const memoLmpText = document.getElementById('memo-lmp-text');
+    const memoCycleText = document.getElementById('memo-cycle-text');
+    const memoContraceptionText = document.getElementById('memo-contraception-text');
+    const memoPregnancyText = document.getElementById('memo-pregnancy-text');
+    const memoExtraWrap = document.getElementById('memo-extra-wrap');
+    const memoExtraText = document.getElementById('memo-extra-text');
+    const memoQuestionsList = document.getElementById('memo-questions-list');
+    const relatedArticleLink = document.getElementById('clinic-related-article-link');
+    const relatedArticleTitle = document.getElementById('clinic-related-article-title');
+
+    const copyBtn = document.getElementById('clinic-copy-btn');
+    const copyBtnText = document.getElementById('clinic-copy-btn-text');
+    const printBtn = document.getElementById('clinic-print-btn');
+    const resetBtn = document.getElementById('clinic-reset-btn');
+
+    // 内部状态
+    let currentSymptomId = configs[0]?.id || 'bleeding';
+    let currentSubcategory = configs[0]?.subCategories?.[0] || '';
+
+    // 初始化日期为今天
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    if (memoDateDisplay) {
+      memoDateDisplay.textContent = `${todayStr} · 候诊准备`;
+    }
+
+    // 默认设定 LMP 为约 14 天前（处于月经中期）
+    const defaultLmp = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+    if (lmpInput) {
+      lmpInput.value = defaultLmp.toISOString().split('T')[0];
+    }
+
+    function calculateLmpDays(dateStr) {
+      if (!dateStr) return null;
+      const target = new Date(dateStr);
+      if (isNaN(target.getTime())) return null;
+      const diffTime = today.getTime() - target.getTime();
+      return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function renderSubcategories() {
+      const currentConfig = configs.find(c => c.id === currentSymptomId) || configs[0];
+      if (!subcatWrap || !currentConfig) return;
+
+      subcatWrap.replaceChildren();
+      currentConfig.subCategories.forEach((sub, idx) => {
+        const isChecked = sub === currentSubcategory || (idx === 0 && !currentConfig.subCategories.includes(currentSubcategory));
+        if (isChecked) {
+          currentSubcategory = sub;
+        }
+
+        const label = document.createElement('label');
+        label.className = `flex items-start gap-2 p-2.5 rounded-xl border transition-colors cursor-pointer select-none ${
+          isChecked
+            ? 'bg-white border-[#15140F] shadow-2xs font-bold text-[#15140F]'
+            : 'bg-white/80 border-[#15140F]/15 hover:border-[#15140F]/30 text-[#2A2620]'
+        }`;
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'clinic-subcategory-choice';
+        radio.value = sub;
+        radio.checked = isChecked;
+        radio.className = 'mt-0.5 accent-[#15140F] cursor-pointer';
+
+        radio.addEventListener('change', () => {
+          currentSubcategory = sub;
+          renderSubcategories();
+          updateMemo();
+        });
+
+        const span = document.createElement('span');
+        span.className = 'text-xs leading-relaxed';
+        span.textContent = sub;
+
+        label.appendChild(radio);
+        label.appendChild(span);
+        subcatWrap.appendChild(label);
+      });
+    }
+
+    function updatePainDisplay() {
+      if (!painSlider || !painBadge) return;
+      const val = parseInt(painSlider.value, 10);
+      let desc = '无痛';
+      if (val >= 1 && val <= 3) desc = '轻微隐痛';
+      else if (val >= 4 && val <= 6) desc = '中度疼痛，影响日常生活';
+      else if (val >= 7 && val <= 9) desc = '重度剧痛，难以忍受';
+      else if (val === 10) desc = '极度撕裂刀割样剧痛';
+      painBadge.textContent = `${val} / 10 分（${desc}）`;
+    }
+
+    function updateMemo() {
+      const currentConfig = configs.find(c => c.id === currentSymptomId) || configs[0];
+      if (!currentConfig) return;
+
+      // 1. 计算 LMP 距今天数
+      const lmpVal = lmpInput?.value || '';
+      const daysSinceLmp = calculateLmpDays(lmpVal);
+      if (lmpElapsedBadge) {
+        if (daysSinceLmp !== null) {
+          if (daysSinceLmp < 0) {
+            lmpElapsedBadge.textContent = '未来日期，请核对';
+            lmpElapsedBadge.className = 'font-mono text-[11px] text-amber-600 font-bold';
+          } else {
+            lmpElapsedBadge.textContent = `距今约 ${daysSinceLmp} 天`;
+            lmpElapsedBadge.className = 'font-mono text-[11px] text-rose-600 font-bold';
+          }
+        } else {
+          lmpElapsedBadge.textContent = '距今 -- 天';
+          lmpElapsedBadge.className = 'font-mono text-[11px] text-[#8B8676]';
+        }
+      }
+
+      // 2. 收集急腹症红旗
+      const activeRedFlags = [];
+      redFlagCheckboxes.forEach(cb => {
+        if (cb.checked) {
+          activeRedFlags.push({
+            id: cb.dataset.id || '',
+            label: cb.dataset.label || '',
+            alert: cb.dataset.alert || '',
+          });
+        }
+      });
+
+      // 急腹症横幅响应
+      if (step2Alert && step2AlertText) {
+        if (activeRedFlags.length > 0) {
+          step2Alert.classList.remove('hidden');
+          step2AlertText.textContent = `检测到 ${activeRedFlags.map(r => r.label).join('、')}！${activeRedFlags[0].alert}`;
+        } else {
+          step2Alert.classList.add('hidden');
+        }
+      }
+
+      // 3. 构建 SOAP 主诉字符串
+      const onset = durationSelect?.value || '持续 2-3 天';
+      const cycleLen = cycleInput?.value || '28';
+      const contra = contraceptionSelect?.value || '未填写';
+      const preg = pregnancySelect?.value || '未填写';
+      const notes = notesInput?.value?.trim() || '';
+      const painScore = painSlider?.value || '5';
+
+      const parts = [`患者主诉：${currentConfig.title}`];
+      if (currentSubcategory) {
+        parts.push(`具体特征为【${currentSubcategory}】`);
+      }
+      if (currentSymptomId === 'pelvic-pain') {
+        parts.push(`自评疼痛评分(NRS)：${painScore}/10 分`);
+      }
+      parts.push(`发作时长：${onset}`);
+      if (lmpVal) {
+        parts.push(`末次月经时间(LMP)：${lmpVal}${daysSinceLmp !== null && daysSinceLmp >= 0 ? `（距今约 ${daysSinceLmp} 天）` : ''}`);
+      } else {
+        parts.push(`末次月经时间(LMP)：未填写/不详`);
+      }
+      parts.push(`平常月经周期：约 ${cycleLen} 天`);
+      parts.push(`近期避孕用药史：${contra}`);
+      parts.push(`自测尿早孕：${preg}`);
+      if (activeRedFlags.length > 0) {
+        parts.push(`伴随急腹症高危体征：${activeRedFlags.map(r => r.label).join('、')}`);
+      }
+      if (notes) {
+        parts.push(`患者补充情况：${notes}`);
+      }
+
+      const chiefComplaintText = parts.join('；') + '。';
+      if (memoChiefComplaint) {
+        memoChiefComplaint.textContent = chiefComplaintText;
+      }
+
+      // 4. 更新模块 02 关键病史
+      if (memoLmpText) {
+        memoLmpText.textContent = lmpVal
+          ? `${lmpVal}${daysSinceLmp !== null && daysSinceLmp >= 0 ? ` (距今 ${daysSinceLmp} 天)` : ''}`
+          : '未填写 / 不详';
+      }
+      if (memoCycleText) {
+        memoCycleText.textContent = `约 ${cycleLen} 天 (正常参考 21~35 天)`;
+      }
+      if (memoContraceptionText) {
+        memoContraceptionText.textContent = contra;
+      }
+      if (memoPregnancyText) {
+        memoPregnancyText.textContent = preg;
+      }
+
+      // 红旗警示在模块 02 中呈现
+      if (memoRedflagNotice && memoRedflagText) {
+        if (activeRedFlags.length > 0) {
+          memoRedflagNotice.classList.remove('hidden');
+          memoRedflagText.replaceChildren();
+          const strongTitle = document.createElement('strong');
+          strongTitle.textContent = `【急腹症/大出血高危体征】已勾选：${activeRedFlags.map(r => `【${r.label}】`).join(' ')}`;
+          const alertSpan = document.createElement('span');
+          alertSpan.className = 'text-rose-900 block mt-1';
+          alertSpan.textContent = activeRedFlags[0].alert;
+          memoRedflagText.appendChild(strongTitle);
+          memoRedflagText.appendChild(alertSpan);
+        } else {
+          memoRedflagNotice.classList.add('hidden');
+        }
+      }
+
+      // 补充信息展示
+      if (memoExtraWrap && memoExtraText) {
+        const extraBits = [];
+        if (currentSymptomId === 'pelvic-pain') {
+          extraBits.push(`自评疼痛评分(NRS)：${painScore}/10 分`);
+        }
+        if (notes) {
+          extraBits.push(`患者补充说明：${notes}`);
+        }
+        if (extraBits.length > 0) {
+          memoExtraWrap.classList.remove('hidden');
+          memoExtraText.textContent = extraBits.join('；');
+        } else {
+          memoExtraWrap.classList.add('hidden');
+        }
+      }
+
+      // 5. 更新模块 03 推荐向医生确认的问题
+      if (memoQuestionsList) {
+        memoQuestionsList.replaceChildren();
+        const questionsToShow = (currentConfig.recommendedQuestions || []).slice(0, 3);
+        questionsToShow.forEach((q, idx) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-start gap-2 p-2 rounded-xl bg-white border border-[#15140F]/15';
+          const numBadge = document.createElement('span');
+          numBadge.className = 'flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#15140F] text-[10px] font-mono font-bold text-white';
+          numBadge.textContent = String(idx + 1);
+          const qSpan = document.createElement('span');
+          qSpan.className = 'text-xs text-[#2A2620] leading-relaxed';
+          qSpan.textContent = q;
+          li.appendChild(numBadge);
+          li.appendChild(qSpan);
+          memoQuestionsList.appendChild(li);
+        });
+      }
+
+      // 6. 更新文章关联链接与标题
+      if (relatedArticleLink && relatedArticleTitle) {
+        const slug = currentConfig.relatedArticle || 'abnormal-uterine-bleeding';
+        const rawBase = relatedArticleLink.getAttribute('href') || '';
+        // 保持 base 路径前缀
+        const rootBase = rawBase.split('/articles/')[0] || '';
+        const cleanBase = rootBase.endsWith('/') ? rootBase : `${rootBase}/`;
+        relatedArticleLink.setAttribute('href', `${cleanBase}articles/${slug}/`);
+        const artTitle = articleTitles[slug] || '相关深度指南';
+        relatedArticleTitle.textContent = `深度科普：阅读《${artTitle}》`;
+      }
+    }
+
+    // 切换主诉 Tab
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const symId = btn.getAttribute('data-symptom-id') || 'bleeding';
+        currentSymptomId = symId;
+
+        tabButtons.forEach(b => {
+          const isTarget = b === btn;
+          b.className = `clinic-symptom-tab text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+            isTarget
+              ? 'border-[#15140F] bg-[#15140F] text-white shadow-[2px_2px_0_rgba(21,20,15,1)]'
+              : 'border-[#15140F]/15 bg-[#FAF8F5] text-[#15140F] hover:border-[#15140F]/40 active:translate-x-0.5 active:translate-y-0.5'
+          }`;
+          const badge = b.querySelector('.clinic-tab-badge');
+          if (badge) {
+            badge.className = `clinic-tab-badge text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+              isTarget ? 'bg-white/20 text-white' : 'bg-[#15140F]/10 text-[#5A5448]'
+            }`;
+          }
+          const indicator = b.querySelector('.clinic-tab-indicator');
+          if (indicator) {
+            indicator.className = `clinic-tab-indicator w-2 h-2 rounded-full ${
+              isTarget ? 'bg-rose-400' : 'bg-transparent'
+            }`;
+          }
+          const desc = b.querySelector('.clinic-tab-desc');
+          if (desc) {
+            desc.className = `clinic-tab-desc text-[11px] leading-relaxed line-clamp-2 ${
+              isTarget ? 'text-stone-300' : 'text-[#5A5448]'
+            }`;
+          }
+        });
+
+        // 控制疼痛滑块显隐
+        if (painBlock) {
+          if (currentSymptomId === 'pelvic-pain') {
+            painBlock.classList.remove('hidden');
+          } else {
+            painBlock.classList.add('hidden');
+          }
+        }
+
+        renderSubcategories();
+        updateMemo();
+      });
+    });
+
+    // 表单输入与改变事件监听
+    painSlider?.addEventListener('input', () => {
+      updatePainDisplay();
+      updateMemo();
+    });
+
+    [durationSelect, notesInput, lmpInput, cycleInput, contraceptionSelect, pregnancySelect].forEach(el => {
+      el?.addEventListener('input', updateMemo);
+      el?.addEventListener('change', updateMemo);
+    });
+
+    redFlagCheckboxes.forEach(cb => {
+      cb.addEventListener('change', updateMemo);
+    });
+
+    // 复制功能
+    copyBtn?.addEventListener('click', async () => {
+      const currentConfig = configs.find(c => c.id === currentSymptomId) || configs[0];
+      const lmpVal = lmpInput?.value || '未填写/不详';
+      const daysSinceLmp = calculateLmpDays(lmpInput?.value || '');
+      const cycleLen = cycleInput?.value || '28';
+      const contra = contraceptionSelect?.value || '未填写';
+      const preg = pregnancySelect?.value || '未填写';
+      const notes = notesInput?.value?.trim() || '';
+      const painScore = painSlider?.value || '5';
+
+      const activeRedFlags = [];
+      redFlagCheckboxes.forEach(cb => {
+        if (cb.checked) {
+          activeRedFlags.push({
+            label: cb.dataset.label || '',
+            alert: cb.dataset.alert || '',
+          });
+        }
+      });
+
+      const lines = [
+        '【know-her 门诊就诊沟通备忘录便签】',
+        `主诉类别：[ ${currentConfig.title} ]`,
+        `记录时间：${todayStr} (本地离线无痕生成)`,
+        '',
+      ];
+
+      if (activeRedFlags.length > 0) {
+        lines.push('----------------------------------------');
+        lines.push('[ ! 紧急急诊预警 · 建议立即急诊评估 ]');
+        activeRedFlags.forEach(rf => {
+          lines.push(`* ${rf.label}: ${rf.alert}`);
+        });
+        lines.push('----------------------------------------');
+        lines.push('');
+      }
+
+      lines.push('[ 01 // 门诊主诉陈述 (SOAP 格式) ]');
+      lines.push(memoChiefComplaint?.textContent?.trim() || '');
+      lines.push('');
+
+      lines.push('[ 02 // 关键病史与体征速览 ]');
+      lines.push(`• 末次月经 (LMP)：${lmpVal}${daysSinceLmp !== null && daysSinceLmp >= 0 ? ` (距今约 ${daysSinceLmp} 天)` : ''}`);
+      lines.push(`• 平常月经周期：约 ${cycleLen} 天`);
+      lines.push(`• 近期避孕史：${contra}`);
+      lines.push(`• 尿早孕自测：${preg}`);
+      if (currentSymptomId === 'pelvic-pain') {
+        lines.push(`• 疼痛评分 (NRS)：${painScore}/10 分`);
+      }
+      if (activeRedFlags.length > 0) {
+        lines.push(`• 急腹症高危体征：${activeRedFlags.map(r => r.label).join('、')}`);
+      }
+      if (notes) {
+        lines.push(`• 患者补充情况：${notes}`);
+      }
+      lines.push('');
+
+      lines.push('[ 03 // 建议向医生确认的重点问题 ]');
+      const questionsToShow = (currentConfig.recommendedQuestions || []).slice(0, 3);
+      questionsToShow.forEach((q, idx) => {
+        lines.push(`${idx + 1}. ${q}`);
+      });
+      lines.push('');
+
+      lines.push('----------------------------------------');
+      lines.push('* 说明：本小抄为患者就诊前的结构化辅助工具，供候诊准备与医生对照翻阅使用。');
+      lines.push('* 医生负有法定隐私保密义务，如实告知末次月经与性接触史是排除宫外孕等急症的医学前提。');
+
+      const fullText = lines.join('\n');
+
+      try {
+        await navigator.clipboard.writeText(fullText);
+        if (copyBtnText) {
+          const originText = copyBtnText.textContent;
+          copyBtnText.textContent = '已复制到剪贴板！';
+          setTimeout(() => {
+            copyBtnText.textContent = originText;
+          }, 2500);
+        }
+      } catch {
+        alert('请长按选中便签文字进行手动复制。');
+      }
+    });
+
+    // 打印功能
+    printBtn?.addEventListener('click', () => {
+      window.print();
+    });
+
+    // 重置功能
+    resetBtn?.addEventListener('click', () => {
+      currentSymptomId = configs[0]?.id || 'bleeding';
+      currentSubcategory = configs[0]?.subCategories?.[0] || '';
+
+      if (lmpInput) lmpInput.value = defaultLmp.toISOString().split('T')[0];
+      if (cycleInput) cycleInput.value = '28';
+      if (durationSelect) durationSelect.selectedIndex = 1;
+      if (contraceptionSelect) contraceptionSelect.selectedIndex = 0;
+      if (pregnancySelect) pregnancySelect.selectedIndex = 0;
+      if (notesInput) notesInput.value = '';
+      if (painSlider) painSlider.value = '5';
+
+      redFlagCheckboxes.forEach(cb => {
+        cb.checked = false;
+      });
+
+      if (painBlock) painBlock.classList.add('hidden');
+
+      // 恢复 Tab 状态
+      tabButtons.forEach((b, idx) => {
+        const isTarget = idx === 0;
+        b.className = `clinic-symptom-tab text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+          isTarget
+            ? 'border-[#15140F] bg-[#15140F] text-white shadow-[2px_2px_0_rgba(21,20,15,1)]'
+            : 'border-[#15140F]/15 bg-[#FAF8F5] text-[#15140F] hover:border-[#15140F]/40 active:translate-x-0.5 active:translate-y-0.5'
+        }`;
+        const badge = b.querySelector('.clinic-tab-badge');
+        if (badge) {
+          badge.className = `clinic-tab-badge text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+            isTarget ? 'bg-white/20 text-white' : 'bg-[#15140F]/10 text-[#5A5448]'
+          }`;
+        }
+        const indicator = b.querySelector('.clinic-tab-indicator');
+        if (indicator) {
+          indicator.className = `clinic-tab-indicator w-2 h-2 rounded-full ${
+            isTarget ? 'bg-rose-400' : 'bg-transparent'
+          }`;
+        }
+        const desc = b.querySelector('.clinic-tab-desc');
+        if (desc) {
+          desc.className = `clinic-tab-desc text-[11px] leading-relaxed line-clamp-2 ${
+            isTarget ? 'text-stone-300' : 'text-[#5A5448]'
+          }`;
+        }
+      });
+
+      renderSubcategories();
+      updatePainDisplay();
+      updateMemo();
+    });
+
+    // 初始执行一次
+    renderSubcategories();
+    updatePainDisplay();
+    updateMemo();
+  })();
+</script>
