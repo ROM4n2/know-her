@@ -1483,7 +1483,7 @@ const articleMapJson = JSON.stringify(articleTitleMap);
         navigator.clipboard.writeText(fullText).then(function() {
           if (copyBtnText) {
             var oldText = copyBtnText.textContent;
-            copyBtnText.textContent = '[ ✓ 便签已复制到剪贴板 ]';
+            copyBtnText.textContent = '[ 便签已复制到剪贴板 ]';
             setTimeout(function() {
               copyBtnText.textContent = oldText;
             }, 2000);
