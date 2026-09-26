@@ -325,6 +325,24 @@ def validate_checklist_data(errors: list):
         errors.append(f"INTIMACY_CHECKLIST_CONFIGS 包含的题目项不足 15 项，当前共 {total_items_count} 项")
 
 
+def validate_floating_bars(errors: list):
+    """验证悬浮对比条容器在移动端的吸底避让 (bottom-20)"""
+    bars = [
+        ("ContraceptionMatrix.astro", "matrix-floating-bar"),
+        ("PositionAndIntimacyGuide.astro", "position-floating-bar"),
+    ]
+    for comp_name, bar_id in bars:
+        comp_path = os.path.join(COMPONENTS_DIR, comp_name)
+        if not os.path.exists(comp_path):
+            errors.append(f"组件缺失: {comp_name}")
+            continue
+        with open(comp_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        match = re.search(rf'<div[^>]*id=["\']{bar_id}["\'][^>]*>', content, re.DOTALL)
+        if not match or "bottom-20" not in match.group(0):
+            errors.append(f"组件 {comp_name} 的悬浮对比条 (#{bar_id}) 缺失 'bottom-20' 移动端避让类名")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -381,6 +399,9 @@ def run_tests():
 
     # 5. 验证伴侣知情探索契约
     validate_checklist_data(errors)
+
+    # 6. 验证移动端吸底避让样式 (floating bars)
+    validate_floating_bars(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
