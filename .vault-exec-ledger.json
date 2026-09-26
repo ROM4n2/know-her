@@ -1,61 +1,61 @@
 {
   "version": "1.0.0",
-  "plan_file": "docs/plans/2026-09-26-phase1-high-risk-hardening.md",
-  "created_at": "2026-09-26T21:31:15.813877",
-  "last_updated": "2026-09-26T22:05:30.291608",
+  "plan_file": "docs/plans/2026-09-26-phase2-experience-and-distribution.md",
+  "created_at": "2026-09-26T22:27:15.186490",
+  "last_updated": "2026-09-26T22:48:47",
   "total_tasks": 5,
-  "completed_count": 5,
-  "active_task_id": null,
+  "completed_count": 4,
+  "active_task_id": "Task-5",
   "tasks": [
     {
       "id": "Task-1",
-      "title": "修复移动端吸底导航遮挡悬浮对比条与触控避让 (Floating Bar Z-Index & Offset) [Role: TDD Builder]",
+      "title": "决策树与工具箱的 URL 参数状态透传与自动聚焦定位 (Cross-tool State Hand-off) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "1c3753c",
+      "commit_hash": "1cb5ba2",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T21:31:26.326137",
-      "completed_at": "2026-09-26T21:34:56.880101"
+      "started_at": "2026-09-26T22:27:23.312715",
+      "completed_at": "2026-09-26T22:48:47"
     },
     {
       "id": "Task-2",
-      "title": "根除 4 处 `innerHTML` 残留，切换为纯 DOM 安全构建 (Zero-innerHTML Enforcement) [Role: TDD Builder]",
+      "title": "72h 紧急避孕本土药品指南校准与 2h 服药吸收观察计时器 (Local EC & Vomit Observation Timer) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "cd5f479",
+      "commit_hash": "b33ff5a",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T21:35:03.019495",
-      "completed_at": "2026-09-26T21:41:29.212954"
+      "started_at": null,
+      "completed_at": "2026-09-26T22:48:47"
     },
     {
       "id": "Task-3",
-      "title": "修复 `curate.py` 403 异常漏报 Bug 与 Zod 协议校验 (Link Probe & URL Protocol Hardening) [Role: TDD Builder]",
+      "title": "纯前端零依赖 Canvas 纸墨质感便签长图导出器 (Editorial Canvas Memo Exporter) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "9b184bb",
+      "commit_hash": "a64aeb9",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T21:41:32.856958",
-      "completed_at": "2026-09-26T21:50:39.345420"
+      "started_at": null,
+      "completed_at": "2026-09-26T22:48:47"
     },
     {
       "id": "Task-4",
-      "title": "补齐 `DailyCard` 存储异常防护与净化 `AgePreferenceBanner` 彩色 Emoji (Storage Resilience & Editorial Purity) [Role: TDD Builder]",
+      "title": "首页突发场景意图搜索胶囊与长文医学名词 In-situ Tooltip 悬浮预览 (Search Intent Pills & Glossary Popover) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "d05eac3",
+      "commit_hash": "7e9399e",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T21:50:44.456114",
-      "completed_at": "2026-09-26T21:59:06.857140"
+      "started_at": null,
+      "completed_at": "2026-09-26T22:48:47"
     },
     {
       "id": "Task-5",
-      "title": "优化 CI/CD 流水线，消除 master 分支双重构建与死锁风险 (CI/CD Pipeline Optimization) [Role: Integration Builder]",
-      "status": "completed",
+      "title": "实用工具箱与全站全流水线回归核验 (Full Regression & Gate Verification) [Role: Integration Builder]",
+      "status": "pending",
       "implementer": "TDD",
-      "commit_hash": "4a5de86",
+      "commit_hash": null,
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T21:59:09.534712",
-      "completed_at": "2026-09-26T22:05:30.291569"
+      "started_at": null,
+      "completed_at": null
     }
   ]
 }
