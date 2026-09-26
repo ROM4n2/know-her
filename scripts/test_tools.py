@@ -15,6 +15,8 @@ ARTICLES_DIR = os.path.join(ROOT_DIR, "src", "content", "articles")
 DATA_DIR = os.path.join(ROOT_DIR, "src", "data")
 CONTRACEPTION_DATA_FILE = os.path.join(DATA_DIR, "contraceptionMethods.ts")
 CLINIC_DATA_FILE = os.path.join(DATA_DIR, "clinicQuestions.ts")
+POSITION_DATA_FILE = os.path.join(DATA_DIR, "positionMatrix.ts")
+CHECKLIST_DATA_FILE = os.path.join(DATA_DIR, "intimacyChecklist.ts")
 
 REQUIRED_COMPONENTS = [
     ("EmergencyCountdown.astro", ["ec-datetime-input", "ec-progress-bar", "contraception-emergency-pill"]),
@@ -196,6 +198,132 @@ def validate_clinic_data(errors: list):
                 errors.append(f"急腹症红旗预警 [索引 {idx}] 缺失 'id' 字段")
 
 
+def validate_position_data(errors: list):
+    """验证体位力学全景数据集契约"""
+    if not os.path.exists(POSITION_DATA_FILE):
+        errors.append(f"体位力学数据集文件缺失: {POSITION_DATA_FILE}")
+        return
+
+    with open(POSITION_DATA_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if "POSITION_METHODS" not in content or "export const POSITION_METHODS" not in content:
+        errors.append("positionMatrix.ts 未导出 POSITION_METHODS")
+        return
+
+    arr_str = extract_array_block(content, "POSITION_METHODS")
+    if not arr_str:
+        errors.append("无法解析 POSITION_METHODS 数组内容")
+        return
+
+    positions = extract_objects_from_array(arr_str)
+    if len(positions) < 8:
+        errors.append(f"POSITION_METHODS 包含的体位不足 8 种，当前为 {len(positions)} 种")
+
+    required_fields = [
+        "id", "name", "en_name", "category",
+        "clitoral_access", "cervical_collision_risk", "energy_expenditure",
+        "pelvic_support_advice", "coital_angle_desc", "pros", "cons",
+        "communication_tip", "related_article"
+    ]
+
+    for idx, block in enumerate(positions):
+        for field in required_fields:
+            if not re.search(rf"\b{field}\s*:", block):
+                errors.append(f"体位力学数据 [索引 {idx}] 缺失必要字段: '{field}'")
+
+        art_match = re.search(r"\brelated_article\s*:\s*['\"]([^'\"]+)['\"]", block)
+        if art_match:
+            slug = art_match.group(1).strip()
+            art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{slug}{ext}")) for ext in [".mdx", ".md"])
+            if not art_found:
+                errors.append(f"体位力学数据 [索引 {idx}] 关联的外键文章不存在: {slug}")
+        else:
+            errors.append(f"体位力学数据 [索引 {idx}] 未能解析出 related_article 值")
+
+
+def validate_checklist_data(errors: list):
+    """验证伴侣知情探索题库契约"""
+    if not os.path.exists(CHECKLIST_DATA_FILE):
+        errors.append(f"伴侣知情清单数据集文件缺失: {CHECKLIST_DATA_FILE}")
+        return
+
+    with open(CHECKLIST_DATA_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if "INTIMACY_CHECKLIST_CONFIGS" not in content or "export const INTIMACY_CHECKLIST_CONFIGS" not in content:
+        errors.append("intimacyChecklist.ts 未导出 INTIMACY_CHECKLIST_CONFIGS")
+        return
+
+    arr_str = extract_array_block(content, "INTIMACY_CHECKLIST_CONFIGS")
+    if not arr_str:
+        errors.append("无法解析 INTIMACY_CHECKLIST_CONFIGS 数组内容")
+        return
+
+    categories = extract_objects_from_array(arr_str)
+    if len(categories) < 5:
+        errors.append(f"INTIMACY_CHECKLIST_CONFIGS 包含的分类不足 5 个，当前为 {len(categories)} 个")
+
+    category_fields = ["id", "name", "description", "items"]
+    item_fields = ["id", "title", "physiological_reason", "suggestion_text"]
+    total_items_count = 0
+
+    for cat_idx, cat_block in enumerate(categories):
+        for field in category_fields:
+            if not re.search(rf"\b{field}\s*:", cat_block):
+                errors.append(f"清单分类 [索引 {cat_idx}] 缺失必要字段: '{field}'")
+
+        items_arr_match = re.search(r"\bitems\s*:\s*\[", cat_block)
+        if not items_arr_match:
+            errors.append(f"清单分类 [索引 {cat_idx}] 未能定位 items 数组")
+            continue
+
+        start_pos = items_arr_match.end() - 1
+        depth = 0
+        in_string = False
+        quote_char = ""
+        items_arr_str = ""
+        i = start_pos
+        while i < len(cat_block):
+            c = cat_block[i]
+            if in_string:
+                if c == "\\":
+                    i += 2
+                    continue
+                if c == quote_char:
+                    in_string = False
+                i += 1
+                continue
+            if c in ("'", '"', '`'):
+                in_string = True
+                quote_char = c
+                i += 1
+                continue
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    items_arr_str = cat_block[start_pos : i + 1]
+                    break
+            i += 1
+
+        if not items_arr_str:
+            errors.append(f"清单分类 [索引 {cat_idx}] 无法解析 items 数组结构")
+            continue
+
+        items = extract_objects_from_array(items_arr_str)
+        total_items_count += len(items)
+
+        for item_idx, item_block in enumerate(items):
+            for field in item_fields:
+                if not re.search(rf"\b{field}\s*:", item_block):
+                    errors.append(f"清单分类 [索引 {cat_idx}] 题目项 [索引 {item_idx}] 缺失字段: '{field}'")
+
+    if total_items_count < 15:
+        errors.append(f"INTIMACY_CHECKLIST_CONFIGS 包含的题目项不足 15 项，当前共 {total_items_count} 项")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -237,13 +365,19 @@ def run_tests():
     # 3. 验证就医问诊契约
     validate_clinic_data(errors)
 
+    # 4. 验证体位力学数据集契约
+    validate_position_data(errors)
+
+    # 5. 验证伴侣知情探索契约
+    validate_checklist_data(errors)
+
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
         for err in errors:
             print(f"   • {err}")
         sys.exit(1)
 
-    print(f"🎉 实用工具箱与数据契约测试全绿！组件、避孕全景数据与就诊问诊知识库 100% 合规！")
+    print(f"🎉 实用工具箱与数据契约测试全绿！组件、避孕全景数据、就诊问诊知识库、体位力学与伴侣清单 100% 合规！")
 
 
 if __name__ == "__main__":
