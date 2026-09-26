@@ -4,6 +4,7 @@ name: CI
 # fork PR 零凭据原则：本文件不引用任何仓库 secret 值
 on:
   push:
+    branches-ignore: [ master ]
   pull_request:
 
 permissions:
