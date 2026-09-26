@@ -193,8 +193,9 @@ def cmd_check_links(args):
             with open(fpath, "r", encoding="utf-8") as f:
                 meta, _ = parse_frontmatter(f.read())
             meta["filename"] = fname
+            meta["id"] = fname[:-4]
             article_list.append(meta)
-        article_list.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+        article_list.sort(key=lambda x: (x.get("pubDate", ""), x.get("id", "")), reverse=True)
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         bj_time = now_utc + datetime.timedelta(hours=8)
         day_of_year = bj_time.timetuple().tm_yday
@@ -232,11 +233,12 @@ def cmd_daily(args):
         fpath = os.path.join(ARTICLES_DIR, fname)
         with open(fpath, "r", encoding="utf-8") as f:
             meta, _ = parse_frontmatter(f.read())
+        meta["filename"] = fname
         meta["id"] = fname[:-4]
         article_list.append(meta)
 
-    # 按发布时间倒序排序（与 Astro 页面加载顺序一致）
-    article_list.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+    # 按发布时间倒序排序（与 Astro 页面加载顺序一致），并以 id 倒序作为决胜键
+    article_list.sort(key=lambda x: (x.get("pubDate", ""), x.get("id", "")), reverse=True)
 
     if args.date:
         d = datetime.date.fromisoformat(args.date)
@@ -246,8 +248,8 @@ def cmd_daily(args):
         d = bj_time.date()
 
     day_of_year = d.timetuple().tm_yday
-    idx = day_of_year % len(article_list)
-    today_article = article_list[idx]
+    today_idx = (day_of_year - 1) % len(article_list)
+    today_article = article_list[today_idx]
 
     cat = CATEGORY_NAMES.get(today_article.get("category", ""), today_article.get("category", "未知"))
     print(f"📅 【{d.isoformat()}】今日精选科普排期：\n")

@@ -336,5 +336,5 @@ export function getDayOfYear(date: Date = new Date()): number {
 export function getTodayIndex(totalCount: number, date?: Date): number {
   if (totalCount <= 0) return 0;
   const day = getDayOfYear(date);
-  return day % totalCount;
+  return (day - 1) % totalCount;
 }

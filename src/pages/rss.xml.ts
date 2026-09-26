@@ -9,7 +9,7 @@ export async function GET(context: APIContext) {
     .filter((entry: CollectionEntry<'articles'>) => !entry.id.startsWith('_'))
     .sort(
       (a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) =>
-        b.data.pubDate.getTime() - a.data.pubDate.getTime(),
+        b.data.pubDate.getTime() - a.data.pubDate.getTime() || b.id.localeCompare(a.id),
     );
 
   const base = import.meta.env.BASE_URL.endsWith('/')

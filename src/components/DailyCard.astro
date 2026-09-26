@@ -152,6 +152,22 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
     var quizContainer = document.getElementById('quiz-container');
     if (!quizContainer) return;
 
+    function safeGetItem(key, fallback) {
+      try {
+        var val = localStorage.getItem(key);
+        return val !== null ? val : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+    function safeSetItem(key, val) {
+      try {
+        localStorage.setItem(key, val);
+      } catch (e) {
+        /* 隐私模式或无权限时静默吞掉，不中断交互 */
+      }
+    }
+
     var correctIdx = parseInt(quizContainer.dataset.correctIndex, 10);
     var options = quizContainer.querySelectorAll('.quiz-btn');
     var explanation = document.getElementById('quiz-explanation');
@@ -166,21 +182,21 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
     var LAST_QUIZ_KEY = 'know_her_last_quiz_' + today;
 
     // 读取连续打卡天数
-    var savedStreak = parseInt(localStorage.getItem(STREAK_KEY) || '1', 10);
-    var lastDate = localStorage.getItem(LAST_DATE_KEY);
+    var savedStreak = parseInt(safeGetItem(STREAK_KEY, '1'), 10) || 1;
+    var lastDate = safeGetItem(LAST_DATE_KEY, null);
 
     if (lastDate) {
       var diffDays = Math.floor((new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
       if (diffDays > 1) {
         // 中断了，重置为 1
         savedStreak = 1;
-        localStorage.setItem(STREAK_KEY, '1');
+        safeSetItem(STREAK_KEY, '1');
       }
     }
     if (streakNum) streakNum.textContent = savedStreak;
 
     // 检查今日是否已答题
-    var recordedAnswer = localStorage.getItem(LAST_QUIZ_KEY);
+    var recordedAnswer = safeGetItem(LAST_QUIZ_KEY, null);
     if (recordedAnswer !== null) {
       applyResult(parseInt(recordedAnswer, 10));
     }
@@ -189,7 +205,7 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
       btn.addEventListener('click', function () {
         if (quizContainer.dataset.answered === 'true') return;
         var chosen = parseInt(btn.dataset.index, 10);
-        localStorage.setItem(LAST_QUIZ_KEY, chosen.toString());
+        safeSetItem(LAST_QUIZ_KEY, chosen.toString());
 
         // 计算打卡
         if (lastDate !== today) {
@@ -203,8 +219,8 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
           } else {
             savedStreak = 1;
           }
-          localStorage.setItem(STREAK_KEY, savedStreak.toString());
-          localStorage.setItem(LAST_DATE_KEY, today);
+          safeSetItem(STREAK_KEY, savedStreak.toString());
+          safeSetItem(LAST_DATE_KEY, today);
           if (streakNum) streakNum.textContent = savedStreak;
         }
 

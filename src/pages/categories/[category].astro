@@ -15,7 +15,10 @@ export async function getStaticPaths() {
   return categoryKeys.map((catKey) => {
     const filtered = allArticles
       .filter((entry: CollectionEntry<'articles'>) => !entry.id.startsWith('_') && entry.data.category === catKey)
-      .sort((a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+      .sort(
+        (a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) =>
+          b.data.pubDate.getTime() - a.data.pubDate.getTime() || b.id.localeCompare(a.id),
+      );
     return {
       params: { category: catKey },
       props: {
