@@ -13,7 +13,7 @@
 		"curate:links": "python scripts/curate.py check-links",
 		"curate:today": "python scripts/curate.py daily",
 		"curate:harvest": "python scripts/curate_harvester.py",
-		"test:graph": "python scripts/test_decision_tree.py && python scripts/test_glossary.py && python scripts/test_tools.py && python scripts/test_article_hygiene.py",
+		"test:graph": "python scripts/test_decision_tree.py && python scripts/test_glossary.py && python scripts/test_tools.py && python scripts/test_article_hygiene.py && python scripts/test_security_contracts.py",
 		"test": "pnpm check && pnpm test:graph && pnpm curate:check && pnpm build"
 	},
 	"dependencies": {

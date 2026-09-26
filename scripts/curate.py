@@ -147,9 +147,20 @@ def check_single_url(url: str, fname: str, src_name: str) -> bool:
                 with urllib.request.urlopen(alt_req, timeout=15) as alt_resp:
                     print(f"✅ [降级探测成功 {alt_resp.status} OK] {fname}")
                     return True
-            except Exception:
-                print(f"⚠️ [BOT_BLOCKED] 目标站点设置了防爬机制，但链接存在。")
-                return True
+            except urllib.error.HTTPError as retry_e:
+                if retry_e.code in (404, 410, 500, 502, 503):
+                    print(f"❌ [403重试后发现失效 {retry_e.code}] {fname} ({src_name}) -> {url}")
+                    return False
+                elif retry_e.code == 403:
+                    # Truly blocked by bot wall on second try
+                    print(f"⚠️ [BOT_BLOCKED 403] 目标站点设置了严格防爬机制 (确认403)。")
+                    return True
+                else:
+                    print(f"❌ [403重试失败 {retry_e.code}] {fname} ({src_name}) -> {url}")
+                    return False
+            except Exception as retry_err:
+                print(f"❌ [403重试异常中断: {retry_err}] {fname} ({src_name}) -> {url}")
+                return False
         elif e.code in (404, 410, 500, 502, 503):
             print(f"❌ [{e.code} BROKEN] {fname} ({src_name}) -> {url}")
             return False

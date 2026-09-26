@@ -16,7 +16,13 @@ const articles = defineCollection({
     /** 标签列表 */
     tags: z.array(z.string()).default([]),
     /** 权威来源原文链接（直达外链） */
-    source_url: z.string().url(),
+    source_url: z
+      .string()
+      .url()
+      .refine(
+        (u) => /^https?:\/\//i.test(u),
+        { message: '链接必须以 http:// 或 https:// 开头，严禁使用其他协议' }
+      ),
     /** 来源平台或媒体机构名称（如“果壳”、“谈性说爱”、“WHO”、“丁香医生”） */
     source_name: z.string(),
     /** 原文作者（可选） */
