@@ -268,4 +268,16 @@ Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
 5. Task-5 [4a5de86]: 优化 CI/CD 触发拓扑（`ci.yml` 忽略 master 分支避免与 `deploy.yml` 双重构建），为 `deploy.yml` 与 `daily-routine.yml` 补充 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头；
 6. 验证：`pnpm test`（`astro check` + 5 套测试脚本 `test:graph` + `curate:check` + `astro build`）100% 全绿，35 页面静态生成与 Pagefind 索引正常。
 
+### 2026-09-26T23:05:00+08:00 | glm-5-3-flash__codebuddy | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, browser-devtools(mcp)
+完成 vault-exec 流水线 Phase 2《现有体验穿透、本土化校准与视觉分发》5/5 任务（TDD RED→GREEN，docs/plans/2026-09-26-phase2-experience-and-distribution.md）：
+1. Task-1 [1cb5ba2]: 决策树与工具箱跨工具状态透传——`DecisionOutcome.directToolLink` 契约（12 张结果卡中 12 处直达配置）+ `DecisionGuide.astro` `[ 启动工具 → ]` 直达按钮 + `tools/index.astro` 解析 `URLSearchParams`（`tool` 平滑滚动聚焦高亮、`hours` 预填倒计时、`complaint` 激活门诊主诉 Tab，兼容文章 slug 别名映射）；
+2. Task-2 [b33ff5a]: 紧急避孕本土药品可及性校准（72h 窗口标注左炔诺孕酮 OTC 金毓婷 1.5mg/0.75mg×12h 与药房外卖 24h 可及；120h 窗口明确醋酸乌利司他国内零售暂未普及、次选急诊米非司酮 10mg/25mg 或含铜 IUD）+ 落地 `#ec-vomit-timer-container` 服药后 2 小时胃部吸收观察计时器（MM:SS 倒计时、单实例 setInterval 管理、pagehide 释放、到期安心提示与重置）；
+3. Task-3 [a64aeb9]: 新建 `src/lib/ui/memoImageExporter.ts` 纯原生 Canvas 2D 纸墨长图导出器（零第三方依赖、DPR≥2 高清、双线印章徽标、rose-600 栏目标题、逐字折行、免责声明+时间戳、toBlob 下载并在微信内置浏览器自动新窗长按保存），接入 `ClinicMemo` 与 `PositionAndIntimacyGuide` 保存长图按钮（组件级唯一 ID 规避同页重复 ID 冲突）；
+4. Task-4 [7e9399e]: 首页 `search-intent-pills` 6 大突发场景意图胶囊直连决策树/工具箱/科普词条，`Search.astro` 顺带修复 placeholder 死参数；文章详情页顶部 `glossary-inline-term` In-situ 名词速查悬浮卡（纯 CSS group-hover/focus-within 原地释义+出处，不打断阅读心流）；
+5. Task-5 [272e3db / 9717c7c]: 全流水线回归核验 100% 全绿（astro check 0 错误 + 5 套契约门禁 + curate:check + 35 路由构建 + Pagefind 索引）；修复跨平台门禁阻塞——Windows GBK 控制台导致 emoji 输出 UnicodeEncodeError、`test_security_contracts.py` subprocess 未显式 UTF-8 解码，统一改为 `python -X utf8`（package.json）+ 显式 `encoding="utf-8"`；
+6. 额外验证：Node 24 原生 TS 运行时 + 最小 Canvas 桩对 memoImageExporter 做了 9 项运行时断言冒烟（1800x1790 画布、PNG blob、下载文件名非法字符净化、折行/墨框/墨线绘制），全通过后临时文件已清理；构建产物 grep 确认四大任务新钩子全部真实渲染。
+台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean，共 6 个原子提交。
+
+
 

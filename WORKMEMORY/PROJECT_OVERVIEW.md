@@ -112,8 +112,15 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 本地存储异常防护与排版净化：`DailyCard` 增加 `safeGetItem` / `safeSetItem` 的 `try...catch` 降级容灾（防御 Safari 无痕模式崩溃）；净化 `AgePreferenceBanner` 中彩色 Emoji ⏰ 为单色学术印章 `[ 年龄确认 ]`；统一跨端积日模运算公式 `(day - 1) % totalCount` 与稳定排序；
      - CI/CD 拓扑优化与客户端 CSP 注入：`ci.yml` 忽略 master 分支避免双重构建，为 `deploy.yml` 与 `daily-routine.yml` 增加 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头。
 
+  21. Phase 2 现有体验穿透、本土化校准与视觉分发落地（vault-exec 5/5 结项）：
+     - 跨工具状态透传：`decisionTree.ts` 结果卡新增 `directToolLink`（toolId/urlParams/buttonText），工具箱 `/tools/` 解析 `?tool=&hours=&complaint=` 自动平滑滚动聚焦高亮并预填倒计时/门诊主诉 Tab（兼容文章 slug 别名映射）；
+     - 紧急避孕本土校准：72h 窗口首选左炔诺孕酮 OTC（金毓婷 1.5mg 或 0.75mg 双片间隔 12h，药房与外卖 24h 可及）；120h 窗口明确醋酸乌利司他国内零售药房暂未普及（防盲目代购延误时效），次选急诊低剂量米非司酮 (10mg/25mg) 或含铜 IUD；新增服药后 2 小时胃部吸收观察计时器（2h 内呕吐须补服原剂量）；
+     - 纯前端零依赖 Canvas 便签长图导出器 `src/lib/ui/memoImageExporter.ts`（纸墨排版、DPR≥2、toBlob 下载、微信内置浏览器自动新窗长按保存），接入门诊便签与伴侣探索便签；
+     - 首页 6 大突发场景意图胶囊（绕开关键词搜索摩擦）与文章详情页医学名词 In-situ 悬浮速查（原地释义不打断阅读）。
+
 ## 高频坑（踩过的雷区）
 
+- 现象：Windows 中文控制台（GBK 代码页）下运行 `pnpm test`，Python 门禁脚本打印 Emoji 直接 UnicodeEncodeError、`test_security_contracts.py` 的 node 子进程 stdout 解码失败 → 根因：脚本未固定 IO/子进程编码，依赖宿主 locale → 解法：package.json 所有 python 调用统一加 `-X utf8`（PEP 540 UTF-8 模式，跨平台安全），subprocess 显式 `encoding="utf-8", errors="replace"`。
 - 现象：Zod 原生 `z.string().url()` 放行 `javascript:alert(1)` → 根因：RFC 3986 规范视其为合法 URL 方案 → 解法：必须链式追加 `.refine(u => /^https?:\/\//i.test(u))` 限制仅放行 http/https 协议。
 - 现象：Safari 无痕浏览模式或限制性 iframe 下访问 `localStorage` 抛出 `SecurityError` 导致整页脚本崩溃中断 → 根因：浏览器隐私沙盒直接禁止访问 Storage API → 解法：必须使用 `try...catch` 包裹所有 `getItem` / `setItem` 操作，并在失败时优雅降级为内存变量。
 - 现象：悬浮组件在移动端被吸底导航栏覆盖无法点击 → 根因：全局移动底栏占据 `h-[56px] z-50`，而悬浮组件类名为 `bottom-6 z-40` → 解法：移动端断点追加 `bottom-20`（80px），桌面端恢复 `sm:bottom-6`。
