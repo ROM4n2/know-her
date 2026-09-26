@@ -99,9 +99,25 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 落地 `ContraceptionMatrix.astro`（全品类现代避孕知情选择与对比矩阵）：集成 6 维多标签即时筛选、珍珠指数典型/完美年失败率柱状对比、双选 PK 浮动条与侧边横向对比抽屉（零 innerHTML 严防 XSS）；
      - 重构 `src/pages/tools/index.astro` 为 3 大临床与生活场景分区（场景一：突发意外与黄金救援窗口、场景二：日常生理与身体自主管理、场景三：知情决策与门诊就医沟通）及 `[01]`~`[06]` 微导航定位；
      - 扩展 `scripts/test_tools.py` 自动化门禁，全站通过 `pnpm test` 全链路回归。
+  19. 性生理力学与伴侣探索知情清单落地（方案 C 落地）：
+     - 突破单一插入迷思与网络低俗姿势误导，扩容 3 篇性生理力学深度长文（女上位掌控度与深部痛防护、侧卧匙羹力学与低耗能、后入位曲度与子宫后位避坑）；
+     - 词典库同步扩容至 28 个医学词条（新增子宫后位、深部性交痛、解剖进入角度），每日速测题库扩充至 25 题 100% 覆盖；
+     - 建立 `positionMatrix.ts`（8 种循证体位、3 维力学条形指标）与 `intimacyChecklist.ts`（5 大脱敏分类 16 项点选与非暴力沟通话术）；
+     - 落地第 7 大纯前端离线交互工具 `PositionAndIntimacyGuide.astro`，支持体位 6 维标签即时筛选、双选横向 PK 对比抽屉、Yes/No/Maybe 亲密沟通便签实时生成、一键复制与纸质打印；
+     - 全站静态页面扩充至 35 个路由。
+  20. 蜂群审查全景高危与阻塞缺陷系统性加固（Phase 1 落地）：
+     - 修复移动端吸底导航遮挡悬浮对比条：`ContraceptionMatrix` 与 `PositionAndIntimacyGuide` 悬浮条调整为 `bottom-20 sm:bottom-6`，彻底避开 56px 底栏；`scripts/test_tools.py` 新增自动化断言；
+     - 根除 4 处 `innerHTML` 残留：重构 `CycleAssessment`、`ArousalBrakesChecklist`、`DecisionGuide` 与 `DailyCard` 为纯 DOM 安全构建（`replaceChildren` / `createElement`），并在 `scripts/test_article_hygiene.py` 新增全组件零 innerHTML 静态门禁；
+     - 修复 `curate.py` 403 异常漏报漏洞与 Zod `source_url` 协议校验：阻断 `javascript:` 等伪协议注入，403 重试遇 404/网络中断正确返回 False 阻断；编写 `scripts/test_security_contracts.py` 接入全量测试；
+     - 本地存储异常防护与排版净化：`DailyCard` 增加 `safeGetItem` / `safeSetItem` 的 `try...catch` 降级容灾（防御 Safari 无痕模式崩溃）；净化 `AgePreferenceBanner` 中彩色 Emoji ⏰ 为单色学术印章 `[ 年龄确认 ]`；统一跨端积日模运算公式 `(day - 1) % totalCount` 与稳定排序；
+     - CI/CD 拓扑优化与客户端 CSP 注入：`ci.yml` 忽略 master 分支避免双重构建，为 `deploy.yml` 与 `daily-routine.yml` 增加 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头。
 
 ## 高频坑（踩过的雷区）
 
+- 现象：Zod 原生 `z.string().url()` 放行 `javascript:alert(1)` → 根因：RFC 3986 规范视其为合法 URL 方案 → 解法：必须链式追加 `.refine(u => /^https?:\/\//i.test(u))` 限制仅放行 http/https 协议。
+- 现象：Safari 无痕浏览模式或限制性 iframe 下访问 `localStorage` 抛出 `SecurityError` 导致整页脚本崩溃中断 → 根因：浏览器隐私沙盒直接禁止访问 Storage API → 解法：必须使用 `try...catch` 包裹所有 `getItem` / `setItem` 操作，并在失败时优雅降级为内存变量。
+- 现象：悬浮组件在移动端被吸底导航栏覆盖无法点击 → 根因：全局移动底栏占据 `h-[56px] z-50`，而悬浮组件类名为 `bottom-6 z-40` → 解法：移动端断点追加 `bottom-20`（80px），桌面端恢复 `sm:bottom-6`。
+- 现象：外链探测遇到 403 封锁时死链被误判为 200 通过 → 根因：重试逻辑中宽泛的 `except Exception:` 直接 `return True` 吞掉了 404/网络错误 → 解法：精确区分 HTTP 状态码，重试遇 404/410/500/网络中断坚决返回 `False`，仅二次确认 403 放行。
 - 现象：GitHub Actions 中 `setup-python@v5` 配置 `cache: "pip"` 导致 Action 启动即挂（exit 1） → 根因：仓库内仅使用 Python 标准库而未提供 `requirements.txt` 或 `pyproject.toml`，pip 缓存插件探测失败直接抛错中断 → 解法：移除 `cache: "pip"`，全标准库轻量运行零外部下载。
 - 现象：Pipeline B 自动合成导读产生机械模板病句与假自证 → 根因：大模型盲目将标题插值进固定句式，PR 脚本自己替人勾选版权合规 → 解法：机器只抓取真实候选与元数据生成 TODO 草稿骨架，核心导读由人工通读原文提炼，PR Checklist 默认未勾选强制人工核验。
 - 现象：外链探针频繁扫描导致告警噪音 → 根因：push/daily/weekly 三通道全量重扫 → 解法：分层降频——晨检仅测今日精选，PR 仅测变更文件，全库深度体检降为周度任务，支持 1in7 风格的五态判定。

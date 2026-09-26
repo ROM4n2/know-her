@@ -253,3 +253,19 @@ Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
 4. Task-4 [7112930]: 挂载组件至 `src/pages/tools/index.astro`「场景二：日常生理与身体自主管理」，更新顶部快速定位微导航为 7 大工具体系；
 5. 全量回归测试通过：`pnpm test`（`astro check` + `test:graph` + `curate:check` + `astro build`），全站静态页面扩充至 35 个路由，Pagefind 全文索引 100% 成功生成，零错误零警告。
 
+### 2026-09-26T21:30:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地全景蜂群审计（vault-team）10 项 P0/P1 高危缺陷加固计划（docs/plans/2026-09-26-phase1-high-risk-hardening.md）。
+不做范围：不推进 0-to-1 新功能、不改动业务主干逻辑与既有页面布局、不引入破坏性架构变更。
+
+### 2026-09-26T22:12:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+完成 vault-exec 流水线，全面落地 5 大高危止血与缺陷加固任务：
+1. Task-1 [1c3753c]: 修复移动底栏遮挡悬浮条（`ContraceptionMatrix` 与 `PositionAndIntimacyGuide` 改为 `bottom-20 sm:bottom-6` 避让 56px 导航），`scripts/test_tools.py` 补充自动化断言；
+2. Task-2 [cd5f479]: 根除 4 处 `innerHTML` 残留（`CycleAssessment`, `ArousalBrakesChecklist`, `DecisionGuide`, `DailyCard` 切换为 `replaceChildren` / `createElement` 纯 DOM 安全构建），`scripts/test_article_hygiene.py` 新增全组件零 innerHTML 静态门禁；
+3. Task-3 [9b184bb]: 修复 `curate.py` 403 异常漏报与 Zod `source_url` 协议校验（拦截 `javascript:` 等伪协议注入，403 重试遇 404/网络中断正确返回 False 阻断），编写 `scripts/test_security_contracts.py` 并接入 `test:graph`；
+4. Task-4 [d05eac3]: 补齐 `DailyCard` 本地存储 `safeGetItem` / `safeSetItem` 的 `try...catch` 降级容灾，净化 `AgePreferenceBanner` 中彩色 Emoji ⏰ 为单色学术印章 `[ 年龄确认 ]`，统一跨端积日模运算公式 `(day - 1) % totalCount` 与确定性二级排序；
+5. Task-5 [4a5de86]: 优化 CI/CD 触发拓扑（`ci.yml` 忽略 master 分支避免与 `deploy.yml` 双重构建），为 `deploy.yml` 与 `daily-routine.yml` 补充 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头；
+6. 验证：`pnpm test`（`astro check` + 5 套测试脚本 `test:graph` + `curate:check` + `astro build`）100% 全绿，35 页面静态生成与 Pagefind 索引正常。
+
+
