@@ -268,6 +268,54 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '金赛研究所的双重控制模型表明：女性更普遍具有“响应性欲望”（在安全、无压力的温和身体接触后才涌现情欲）。当工作压力、疲惫、身体自卑等“刹车片”被踩下时，大脑会本能优先切断情欲通道，这属于极为正常的自我保护机制，绝非性冷淡。',
   },
+  'contraception-condoms': {
+    articleId: 'contraception-condoms',
+    question: '根据世界卫生组织（WHO）实况报道，规范且全程使用安全套，其避孕有效率可达？',
+    options: [
+      '约 75%',
+      '高达 98%，且是唯一能阻断大多数性传播感染的双重防护屏障',
+      '只有 80%，无法作为可靠避孕手段',
+    ],
+    correctIndex: 1,
+    explanation:
+      '世界卫生组织（WHO）指出，在每次同房均规范全程佩戴且规避滑脱破损的前提下，安全套避孕有效率高达 98%，且是人类迄今为止唯一能同时阻断艾滋病毒与大多数性传播感染（STIs）的双重防护屏障。',
+  },
+  'pleasure-woman-on-top-mechanics': {
+    articleId: 'pleasure-woman-on-top-mechanics',
+    question: '在女性主导的女上位（Woman-on-top）体位中，其预防深部性交痛的核心解剖学优势是什么？',
+    options: [
+      '阴道容积会自然扩大两倍以上',
+      '女性可自主控制下潜深度、进入角度（Coital Angle）与运动节奏，避免宫颈猛烈受撞',
+      '阴蒂可以完全脱离任何身体接触',
+    ],
+    correctIndex: 1,
+    explanation:
+      '女上位赋予女性完全的主动权，能自由调整骨盆倾斜角与下潜深度，主动规避阴茎轴线对准宫颈造成的剧烈顶撞，同时可通过身体前倾实现阴蒂与耻骨联合的紧密贴合。',
+  },
+  'pleasure-side-lying-spooning': {
+    articleId: 'pleasure-side-lying-spooning',
+    question: '在体能透支或腰酸疲惫时，侧卧匙羹式（Spooning）在力学与生理上的最大优势是？',
+    options: [
+      '进入速度与冲击力达到峰值',
+      '完全消除双方体重压迫，骨盆微倾（15~20度）实现盆底肌群深度放松，且易于长程慢速亲密',
+      '必须借助专业吊床悬挂才能完成',
+    ],
+    correctIndex: 1,
+    explanation:
+      '侧卧位（匙羹式）无需双腿或腰腹承担体重压迫，骨盆自然微倾，能极大降低盆底肌张力与交感神经过度兴奋，解放双手进行抚触，适合疲惫时进行长程放松的温和探索。',
+  },
+  'pleasure-rear-entry-angles': {
+    articleId: 'pleasure-rear-entry-angles',
+    question: '针对约 20% 子宫后位（Retroverted Uterus）的女性，在尝试后入位时容易引发下腹钝痛，最有效的力学避坑调整是？',
+    options: [
+      '加快冲击速度以越过痛点',
+      '在腹部或骨盆下垫硬枕、改变脊柱与大腿迎角，避免阴茎轴线笔直冲撞后倾的宫颈与直肠陷凹',
+      '必须严格禁止任何形式的亲密接触',
+    ],
+    correctIndex: 1,
+    explanation:
+      '子宫后位女性的宫颈朝向前上方，子宫体倒向后方直肠陷凹。后入位时阴茎轴线易直接顶撞后穹窿与子宫后壁。在下腹部下方垫枕可使骨盆前倾并抬高臀位，有效改变力学进入角度并提供生理限位缓冲，规避深部撞击痛。',
+  },
 };
 
 /**
