@@ -245,7 +245,7 @@ const treeJson = JSON.stringify(DECISION_TREE);
         questionHintBox.classList.add('hidden');
       }
 
-      optionsContainer.innerHTML = '';
+      optionsContainer.replaceChildren();
       node.options.forEach((opt) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -326,11 +326,21 @@ const treeJson = JSON.stringify(DECISION_TREE);
       outcomeHeadline.textContent = outcome.headline;
 
       // 行动清单
-      actionsList.innerHTML = '';
+      actionsList.replaceChildren();
       outcome.actionItems.forEach((act, idx) => {
         const item = document.createElement('div');
         item.className = 'flex items-start gap-2.5 p-3 rounded-xl bg-gray-50/80 border border-gray-100';
-        item.innerHTML = `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold shrink-0 mt-0.5">${idx + 1}</span><span class="leading-relaxed">${act}</span>`;
+
+        const numSpan = document.createElement('span');
+        numSpan.className = 'inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold shrink-0 mt-0.5';
+        numSpan.textContent = String(idx + 1);
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'leading-relaxed';
+        textSpan.textContent = act;
+
+        item.appendChild(numSpan);
+        item.appendChild(textSpan);
         actionsList.appendChild(item);
       });
 
@@ -345,7 +355,7 @@ const treeJson = JSON.stringify(DECISION_TREE);
       // 警惕体征
       if (outcome.redFlags && outcome.redFlags.length > 0) {
         redflagsBox.classList.remove('hidden');
-        redflagsList.innerHTML = '';
+        redflagsList.replaceChildren();
         outcome.redFlags.forEach((rf) => {
           const li = document.createElement('li');
           li.textContent = rf;

@@ -265,7 +265,13 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       if (hasWarning) {
         adviceBox.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5 space-y-3';
         cycleTitle.textContent = '[ 指标偏离提醒 ] 存在客观偏差项，建议持续关注或择机面诊';
-        cycleDesc.innerHTML = notes.join('<br>');
+        cycleDesc.replaceChildren();
+        notes.forEach(function(note, idx) {
+          var p = document.createElement('p');
+          p.textContent = note;
+          if (idx > 0) p.className = 'mt-1.5';
+          cycleDesc.appendChild(p);
+        });
         doctorTip.classList.remove('hidden');
       } else {
         adviceBox.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 space-y-3';

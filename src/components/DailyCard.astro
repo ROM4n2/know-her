@@ -235,13 +235,25 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
         if (isCorrect) {
           explanation.classList.add('border-emerald-200', 'bg-emerald-50/60');
           if (explanationTitle) {
-            explanationTitle.innerHTML = '<span class=\"font-mono font-bold text-emerald-700 mr-1.5\">[ 回答正确 ]</span> 循证医学原理解析';
+            explanationTitle.replaceChildren();
+            var tagSpan = document.createElement('span');
+            tagSpan.className = 'font-mono font-bold text-emerald-700 mr-1.5';
+            tagSpan.textContent = '[ 回答正确 ]';
+            var textNode = document.createTextNode(' 循证医学原理解析');
+            explanationTitle.appendChild(tagSpan);
+            explanationTitle.appendChild(textNode);
             explanationTitle.classList.add('text-emerald-800');
           }
         } else {
           explanation.classList.add('border-rose-200', 'bg-rose-50/60');
           if (explanationTitle) {
-            explanationTitle.innerHTML = '<span class=\"font-mono font-bold text-rose-700 mr-1.5\">[ 认知突破 ]</span> 循证医学原理解析';
+            explanationTitle.replaceChildren();
+            var tagSpan = document.createElement('span');
+            tagSpan.className = 'font-mono font-bold text-rose-700 mr-1.5';
+            tagSpan.textContent = '[ 认知突破 ]';
+            var textNode = document.createTextNode(' 循证医学原理解析');
+            explanationTitle.appendChild(tagSpan);
+            explanationTitle.appendChild(textNode);
             explanationTitle.classList.add('text-rose-800');
           }
         }

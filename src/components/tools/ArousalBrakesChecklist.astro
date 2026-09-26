@@ -223,19 +223,42 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         resTitle.textContent = '[ 阻力显著 · 优先松开刹车 ] 此时猛踩油门只会适得其反';
         balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-200 text-rose-900';
         balanceBadge.textContent = `刹车超载 (${brakeCount}项) · 阻力沉重`;
-        resDesc.innerHTML = `你的大脑神经系统目前处于高度防御戒备状态（检测到了 ${brakeCount} 项抑制源）。在演化本能上，大脑处理生存威胁的优先级绝对高于繁衍愉悦。此时伴侣无论如何催促或进行肢体试探，只会引发你的反感与烦躁。<br><br><strong>临床应对策略</strong>：彻底放弃今晚必须完成性生活的目标！优先针对性解决这几个刹车（如反锁房门、痛快洗个热水澡、坦诚告知疲惫并要求单纯拥抱）。先松开刹车，身体才能感知安全。`;
+        resDesc.replaceChildren();
+        var p1 = document.createElement('p');
+        p1.textContent = `你的大脑神经系统目前处于高度防御戒备状态（检测到了 ${brakeCount} 项抑制源）。在演化本能上，大脑处理生存威胁的优先级绝对高于繁衍愉悦。此时伴侣无论如何催促或进行肢体试探，只会引发你的反感与烦躁。`;
+        var p2 = document.createElement('p');
+        p2.className = 'mt-2';
+        var strong2 = document.createElement('strong');
+        strong2.textContent = '临床应对策略';
+        p2.appendChild(strong2);
+        p2.appendChild(document.createTextNode('：彻底放弃今晚必须完成性生活的目标！优先针对性解决这几个刹车（如反锁房门、痛快洗个热水澡、坦诚告知疲惫并要求单纯拥抱）。先松开刹车，身体才能感知安全。'));
+        resDesc.appendChild(p1);
+        resDesc.appendChild(p2);
       } else if (brakeCount >= 1 && gasCount < 2) {
         resCard.className = 'rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-3.5';
         resTitle.textContent = '[ 中度制动 · 需微调环境与卸载顾虑 ]';
         balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900';
         balanceBadge.textContent = `轻微制动 (${brakeCount}刹车 / ${gasCount}油门)`;
-        resDesc.innerHTML = `当前存在 1~2 项潜意识顾虑在牵制你的情欲通路。你并不排斥亲近，但身体还未完全进入无戒备状态。<br><br><strong>建议行动</strong>：给彼此 15~20 分钟的过渡缓冲期，可以通过肩颈精油按摩、调暗灯光或放轻音乐来逐步增加油门分量。`;
+        resDesc.replaceChildren();
+        var p1 = document.createElement('p');
+        p1.textContent = '当前存在 1~2 项潜意识顾虑在牵制你的情欲通路。你并不排斥亲近，但身体还未完全进入无戒备状态。';
+        var p2 = document.createElement('p');
+        p2.className = 'mt-2';
+        var strong2 = document.createElement('strong');
+        strong2.textContent = '建议行动';
+        p2.appendChild(strong2);
+        p2.appendChild(document.createTextNode('：给彼此 15~20 分钟的过渡缓冲期，可以通过肩颈精油按摩、调暗灯光或放轻音乐来逐步增加油门分量。'));
+        resDesc.appendChild(p1);
+        resDesc.appendChild(p2);
       } else if (gasCount >= 3 && brakeCount <= 1) {
         resCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 space-y-3.5';
         resTitle.textContent = '[ 阻力极低 · 响应性欲望就绪 ] 身心处于充沛的安全与接纳状态';
         balanceBadge.className = 'font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900';
         balanceBadge.textContent = `通畅顺滑 (${gasCount}油门 / ${brakeCount}刹车)`;
-        resDesc.innerHTML = `大脑抑制系统几乎完全静默，安全感与信任感充盈。即使此前脑海中没有自发性的情欲冲动，在这种状态下只要开始温和漫长的前戏与爱抚，你的身体会在 15~20 分钟内非常自然地分泌润滑并完成生殖器深部充血。`;
+        resDesc.replaceChildren();
+        var p = document.createElement('p');
+        p.textContent = '大脑抑制系统几乎完全静默，安全感与信任感充盈。即使此前脑海中没有自发性的情欲冲动，在这种状态下只要开始温和漫长的前戏与爱抚，你的身体会在 15~20 分钟内非常自然地分泌润滑并完成生殖器深部充血。';
+        resDesc.appendChild(p);
       } else {
         resCard.className = 'rounded-2xl border border-stone-300 bg-white p-5 space-y-3.5';
         resTitle.textContent = '[ 处于动态平衡期 ]';
