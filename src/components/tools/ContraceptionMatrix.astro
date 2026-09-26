@@ -90,6 +90,7 @@ const articleMapJson = JSON.stringify(articleTitleMap);
 
 <div
   id="contraception-matrix-root"
+  data-base-url={base}
   class:list={[
     "rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-8 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-8",
     className
@@ -551,6 +552,8 @@ const articleMapJson = JSON.stringify(articleTitleMap);
 
 <script is:inline>
   (function () {
+    const rootElem = document.getElementById('contraception-matrix-root');
+    const baseUrl = (rootElem?.getAttribute('data-base-url') || '/').replace(/\/+$/, '') + '/';
     const methodsDataElem = document.getElementById('contraception-methods-data');
     const articleMapElem = document.getElementById('contraception-article-map');
     if (!methodsDataElem) return;
@@ -877,8 +880,6 @@ const articleMapJson = JSON.stringify(articleTitleMap);
       const mB = methods.find((item) => item.id === selectedMethodIds[1]);
       if (!mA || !mB) return;
 
-      const baseHref = document.querySelector('nav a[href]')?.getAttribute('href') || '/';
-
       const wrapper = document.createElement('div');
       wrapper.className = 'overflow-x-auto';
 
@@ -1050,7 +1051,7 @@ const articleMapJson = JSON.stringify(articleTitleMap);
       // 12. 深度科普指南
       function createArticleCell(m) {
         const link = document.createElement('a');
-        link.href = baseHref.replace(/\/$/, '') + '/articles/' + m.related_article + '/';
+        link.href = `${baseUrl}articles/${m.related_article}/`;
         link.className = 'inline-flex items-center gap-1 font-bold text-rose-600 hover:text-rose-800 hover:underline';
         link.textContent = '阅读《' + (articleTitleMap[m.related_article] || '科普') + '》指南 →';
         return link;
