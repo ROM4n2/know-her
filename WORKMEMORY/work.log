@@ -239,11 +239,17 @@ Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
 执行 vault-exec 流水线：落地门诊就诊沟通便签 (ClinicMemo) 与全品类避孕决策矩阵 (ContraceptionMatrix) 4 个子任务。
 不做范围：不改动现有 4 大工具核心逻辑、不引入服务端接口与持久化个人隐私、不新增重型 npm 依赖。
 
-### 2026-09-26T14:03:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+### 2026-09-26T19:24:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
 Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
-完成 vault-exec 流水线，全面落地《门诊就诊沟通备忘录小抄生成器》(ClinicMemo) 与《全品类现代避孕知情选择与对比矩阵》(ContraceptionMatrix)：
-1. Task-1 [c9319ae]: 建立 `contraceptionMethods.ts` 与 `clinicQuestions.ts` 数据契约，覆盖 10 大现代避孕法与 4 大门诊主诉/急腹症红旗预警，扩展 `scripts/test_tools.py` 自动化契约断言；
-2. Task-2 [e91e67e]: 落地 `ClinicMemo.astro` 纯前端 SOAP 沟通小抄生成器，支持 LMP 智能计算、实时主诉陈述、三连重点追问与 `@media print` 纸质打印；
-3. Task-3 [3535cab]: 落地 `ContraceptionMatrix.astro` 现代避孕矩阵，集成 6 维即时筛选、珍珠指数双条形可视化、双选 PK 浮动栏与对比抽屉，阻断客户端 XSS（零 innerHTML）；
-4. Task-4 [82f41b4]: 重构 `src/pages/tools/index.astro` 聚合页为 3 大临床与生活场景分区（突发意外、日常生理、知情就医）及 6 工具微导航锚点；
-5. 全量回归测试通过：`pnpm test`（`astro check` + `test:graph` + `curate:check` + `astro build`），32 个静态路由与 Pagefind 索引 100% 成功生成，零错误零警告。
+执行 vault-exec 流水线：落地性生理力学矩阵、伴侣知情清单与深度科普体系（方案 C）4 个子任务。
+不做范围：不引入低俗猎奇/男性中心视角、不持久化私密偏好到 localStorage/服务端、不引入重型前端第三方依赖。
+
+### 2026-09-26T20:18:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+完成 vault-exec 流水线，全面落地《性生理力学矩阵、伴侣知情探索清单与深度科普体系》(方案 C)：
+1. Task-1 [e0da636]: 落地 3 篇性生理学深度长文（女上位掌控度与深部痛防护、侧卧匙羹力学与低耗能、后入位曲度与子宫后位避坑）、3 大医学词典词条（子宫后位、深部性交痛、解剖进入角度），扩充每日速测至 25 题闭环；
+2. Task-2 [e3a393c]: 建立 `positionMatrix.ts`（8 种循证体位、3 维力学条形指标、外键文章映射）与 `intimacyChecklist.ts`（5 大脱敏分类 16 项探索点选与非暴力沟通话术），扩展 `scripts/test_tools.py` 自动化测试契约；
+3. Task-3 [e65affa]: 落地第 7 大纯前端离线交互工具 `PositionAndIntimacyGuide.astro`，支持体位 6 维多标签即时筛选、双选横向 PK 对比抽屉、Yes/No/Maybe 亲密沟通便签实时生成、一键复制、纸质打印 (@media print) 与安全无注入 DOM 渲染 (Zero innerHTML)；
+4. Task-4 [7112930]: 挂载组件至 `src/pages/tools/index.astro`「场景二：日常生理与身体自主管理」，更新顶部快速定位微导航为 7 大工具体系；
+5. 全量回归测试通过：`pnpm test`（`astro check` + `test:graph` + `curate:check` + `astro build`），全站静态页面扩充至 35 个路由，Pagefind 全文索引 100% 成功生成，零错误零警告。
+

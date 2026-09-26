@@ -19,10 +19,20 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
 
 ## 当前状态
 
-- **最新架构决策（ADR-0002）已全面落地并成功上线**：
-  1. `src/content.config.ts`：轻量科普博客 Schema（`contraception` 避孕、`pleasure` 愉悦、`body` 身体、`intimacy` 亲密四大主题）；
-  2. 交互升级：首页分类实时客户端筛选、一句话导读卡片流、文章详情页醒目原出处直达跳转；
-  3. 已上线 22 篇精选权威科普导读（涵盖避孕、愉悦、身体、亲密四大领域，新增性唤起帐篷效应、CAT协调对位法、响应性欲望与双重控制模型）；所有 22 篇外链 100% 在线探测 200 OK；
+- **当前状态（2026-09-26 方案 C 落地后）**：
+  - **科普长文库**：25 篇精选权威科普导读（覆盖避孕、愉悦、身体、亲密四大领域，新增女上位深度控制与深部痛防护、侧卧匙羹与剪刀式力学低耗能、后入位入径力学与子宫后位撞击痛避坑）；
+  - **两性医学词典**：28 个高频词条（新增《子宫后位》、《深部性交痛》、《解剖进入角度》）；
+  - **每日 30 秒速测**：25 道循证知情题 1:1 闭环覆盖全库 25 篇文章；
+  - **纯前端离线实用工具箱（/tools/）扩充至 7 大工具**：
+    1. 紧急避孕 72h / 120h 黄金窗口倒计时（`EmergencyCountdown`）
+    2. 短效口服避孕药 (COC) 漏服分周补救计算器（`CocRemedyCalculator`）
+    3. 月经四大指标与经量自测评估（`CycleAssessment`）
+    4. 性唤起“油门与刹车”双重控制模型自测盘点器（`ArousalBrakesChecklist`）
+    5. 体位生理力学矩阵与伴侣探索知情清单（`PositionAndIntimacyGuide`）
+    6. 全品类现代避孕知情选择与对比矩阵（`ContraceptionMatrix`）
+    7. 门诊就诊沟通备忘录小抄生成器（`ClinicMemo`）
+  - **全站静态路由**：35 个静态页面 + Pagefind 本地全文检索 100% 成功生成，全链路测试门禁（`pnpm test`）零错误零警告。
+
   4. 生产流水线打通：GitHub Actions CI 校验通过，Deploy to GitHub Pages 自动化发布通过，线上 `https://rom4n2.github.io/know-her/` 实测 200 OK，CSS/JS 资源与 Pagefind 索引正常；
   5. 每日任务与互动闭环上线：首页置顶「今日精选科普 + 每日一答 30 秒速测」组件（确定性积日轮换、localStorage 连续打卡记天数）；配置 `.github/workflows/daily-routine.yml` 每天北京时间 08:00 定时全库外链 200 探针巡检并播报；CLI 支持 `pnpm curate:today` 查看每日排期；
   6. 开源规范达标：建立高标准 `README.md`、MIT `LICENSE`、`CONTRIBUTING.md` 与 `CODE_OF_CONDUCT.md`，GitHub 社区健康度跃升至 85%+；
