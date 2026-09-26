@@ -108,8 +108,13 @@ const base = import.meta.env.BASE_URL.endsWith('/')
             计算中
           </span>
         </div>
-        <div class="text-xs text-[#5A5448]">
-          适用于：<strong>左炔诺孕酮</strong>（毓婷、安婷等 OTC）
+        <div class="space-y-1 text-xs text-[#5A5448]">
+          <div>
+            首选用药：<strong>左炔诺孕酮 OTC</strong>（1.5mg 单片装如金毓婷，或 0.75mg 双片装间隔 12 小时）
+          </div>
+          <div class="text-[11px] text-[#8B8676]">
+            国内连锁药房、便利店与外卖平台 24 小时均可购得，无需处方。
+          </div>
         </div>
         <div class="text-xs font-mono font-bold" id="ec-72-remaining">
           剩余：-- 小时
@@ -124,8 +129,13 @@ const base = import.meta.env.BASE_URL.endsWith('/')
             计算中
           </span>
         </div>
-        <div class="text-xs text-[#5A5448]">
-          适用于：<strong>醋酸乌利司他</strong> 或 <strong>急诊放置含铜IUD</strong>
+        <div class="space-y-1 text-xs text-[#5A5448]">
+          <div>
+            终极方案：<strong>急诊放置含铜 IUD</strong>，或遵医嘱处方 <strong>低剂量米非司酮 (10mg / 25mg)</strong>
+          </div>
+          <div class="text-[11px] text-[#8B8676]">
+            醋酸乌利司他国内零售药房暂未普及，切勿盲目检索代购而延误黄金时效。
+          </div>
         </div>
         <div class="text-xs font-mono font-bold" id="ec-120-remaining">
           剩余：-- 小时
@@ -152,6 +162,66 @@ const base = import.meta.env.BASE_URL.endsWith('/')
           <span>查阅紧急避孕药避坑导读</span>
           <span>→</span>
         </a>
+      </div>
+    </div>
+
+    {/* 服药后 2 小时胃部吸收观察计时器 */}
+    <div
+      id="ec-vomit-timer-container"
+      class="rounded-2xl border border-[#15140F]/12 bg-[#FAF8F5] p-4 sm:p-5 space-y-3"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#15140F]/10 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+            OBSERVE 2H
+          </span>
+          <h4 class="text-xs sm:text-sm font-bold text-[#15140F]">
+            [ 服药后 2 小时胃部吸收观察计时器 ]
+          </h4>
+        </div>
+        <span class="text-[10px] text-[#8B8676]">纯本地计时 · 零数据上传</span>
+      </div>
+
+      <p class="text-[11px] sm:text-xs text-[#5A5448] leading-relaxed">
+        <strong class="text-[#15140F]">循证要点：</strong>
+        服药后 2 小时内若发生呕吐，药物可能尚未被充分吸收，必须立即补服同等剂量 1 片；超过 2 小时后药物已基本吸收完全，即使呕吐也无需重复补服。
+      </p>
+
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-baseline gap-2">
+          <span
+            id="ec-vomit-timer-display"
+            class="font-mono text-2xl sm:text-3xl font-extrabold text-rose-600 tabular-nums"
+          >
+            120:00
+          </span>
+          <span id="ec-vomit-timer-status" class="text-[11px] font-medium text-[#8B8676]">
+            尚未开启观察
+          </span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <button
+            type="button"
+            id="ec-vomit-timer-btn"
+            class="rounded-xl border border-[#15140F] bg-[#15140F] px-3.5 py-2 text-xs font-bold text-white shadow-[2px_2px_0_rgba(21,20,15,0.25)] hover:bg-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            [ 我已服药，开启 2 小时吸收观察计时 ]
+          </button>
+          <button
+            type="button"
+            id="ec-vomit-timer-reset-btn"
+            class="rounded-xl border border-[#15140F]/20 bg-white px-3 py-2 text-xs font-medium text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            [ 重置计时 ]
+          </button>
+        </div>
+      </div>
+
+      <div
+        id="ec-vomit-timer-note"
+        class="hidden rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-[11px] sm:text-xs text-emerald-900 leading-relaxed"
+      >
+        2 小时观察期已满：药物已被充分吸收，此刻起即使呕吐也无需补服。请按计划在无保护行为后第 14 天使用晨尿验孕棒确认避孕效果。
       </div>
     </div>
   </div>
@@ -246,7 +316,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         adviceCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5 space-y-2.5';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-rose-950';
         adviceTitle.textContent = '[ 超出72小时口服窗口 · 需急诊介入 ] 常规药失效，需医院处置';
-        adviceDesc.textContent = '常规左炔诺孕酮（毓婷）已基本无效，请勿盲目大剂量滥服！请在 120 小时（5天）内前往公立医院妇科急诊，由医生评估急诊放置含铜宫内节育器（IUD，避孕有效率仍高达 99% 以上）或开具处方类紧急避孕药（醋酸乌利司他）。';
+        adviceDesc.textContent = '常规左炔诺孕酮（毓婷）已基本无效，请勿盲目大剂量滥服！请在 120 小时（5天）内前往公立医院妇科急诊，由医生评估急诊放置含铜宫内节育器（IUD，避孕有效率仍高达 99% 以上），或由医生评估开具处方低剂量米非司酮 (10mg / 25mg)。注意：醋酸乌利司他国内零售药房暂未普及，切勿盲目检索代购而延误黄金时效。';
       } else {
         adviceCard.className = 'rounded-2xl border border-stone-200 bg-stone-100 p-4 sm:p-5 space-y-2.5';
         adviceTitle.className = 'font-bold text-sm sm:text-base text-stone-900';
@@ -264,6 +334,86 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         setDefaultTime(hoursAgo);
       });
     });
+
+    // ===== 服药后 2 小时胃部吸收观察计时器 =====
+    const vomitTimerDisplay = document.getElementById('ec-vomit-timer-display');
+    const vomitTimerStatus = document.getElementById('ec-vomit-timer-status');
+    const vomitTimerBtn = document.getElementById('ec-vomit-timer-btn');
+    const vomitTimerResetBtn = document.getElementById('ec-vomit-timer-reset-btn');
+    const vomitTimerNote = document.getElementById('ec-vomit-timer-note');
+
+    const VOMIT_OBSERVE_SECONDS = 120 * 60;
+    let vomitTimerId = null;
+    let vomitRemaining = VOMIT_OBSERVE_SECONDS;
+
+    function formatVomitClock(totalSeconds) {
+      const safe = Math.max(0, totalSeconds);
+      const mins = Math.floor(safe / 60);
+      const secs = safe % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function renderVomitTimer() {
+      if (vomitTimerDisplay) vomitTimerDisplay.textContent = formatVomitClock(vomitRemaining);
+    }
+
+    // 单一计时器实例管理：创建前必先清理，杜绝多个 interval 叠加造成的内存泄漏
+    function stopVomitTimer() {
+      if (vomitTimerId !== null) {
+        clearInterval(vomitTimerId);
+        vomitTimerId = null;
+      }
+    }
+
+    function completeVomitTimer() {
+      stopVomitTimer();
+      vomitRemaining = 0;
+      renderVomitTimer();
+      if (vomitTimerStatus) vomitTimerStatus.textContent = '观察期已结束（药物已充分吸收）';
+      if (vomitTimerNote) vomitTimerNote.classList.remove('hidden');
+      if (vomitTimerDisplay) {
+        vomitTimerDisplay.classList.remove('text-rose-600');
+        vomitTimerDisplay.classList.add('text-emerald-700');
+      }
+    }
+
+    function startVomitTimer() {
+      stopVomitTimer();
+      vomitRemaining = VOMIT_OBSERVE_SECONDS;
+      renderVomitTimer();
+      if (vomitTimerNote) vomitTimerNote.classList.add('hidden');
+      if (vomitTimerDisplay) {
+        vomitTimerDisplay.classList.remove('text-emerald-700');
+        vomitTimerDisplay.classList.add('text-rose-600');
+      }
+      if (vomitTimerStatus) vomitTimerStatus.textContent = '观察中：2 小时内呕吐需原剂量补服';
+      vomitTimerId = setInterval(() => {
+        vomitRemaining -= 1;
+        if (vomitRemaining <= 0) {
+          completeVomitTimer();
+          return;
+        }
+        renderVomitTimer();
+      }, 1000);
+    }
+
+    function resetVomitTimer() {
+      stopVomitTimer();
+      vomitRemaining = VOMIT_OBSERVE_SECONDS;
+      renderVomitTimer();
+      if (vomitTimerNote) vomitTimerNote.classList.add('hidden');
+      if (vomitTimerDisplay) {
+        vomitTimerDisplay.classList.remove('text-emerald-700');
+        vomitTimerDisplay.classList.add('text-rose-600');
+      }
+      if (vomitTimerStatus) vomitTimerStatus.textContent = '尚未开启观察';
+    }
+
+    vomitTimerBtn?.addEventListener('click', startVomitTimer);
+    vomitTimerResetBtn?.addEventListener('click', resetVomitTimer);
+
+    // 页面卸载时释放计时器资源
+    window.addEventListener('pagehide', stopVomitTimer);
 
     // 初始化
     setDefaultTime(2);
