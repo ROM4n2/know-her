@@ -9,6 +9,7 @@ import CocRemedyCalculator from '../../components/tools/CocRemedyCalculator.astr
 import CycleAssessment from '../../components/tools/CycleAssessment.astro';
 import ArousalBrakesChecklist from '../../components/tools/ArousalBrakesChecklist.astro';
 import ClinicMemo from '../../components/tools/ClinicMemo.astro';
+import ContraceptionMatrix from '../../components/tools/ContraceptionMatrix.astro';
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -72,6 +73,12 @@ const base = import.meta.env.BASE_URL.endsWith('/')
       >
         门诊就诊沟通备忘录小抄
       </a>
+      <a
+        href="#sec-contraception-matrix"
+        class="rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+      >
+        避孕知情选择与对比矩阵
+      </a>
     </div>
   </header>
 
@@ -98,6 +105,11 @@ const base = import.meta.env.BASE_URL.endsWith('/')
   {/* 工具 5：门诊就医沟通备忘录小抄 */}
   <section id="sec-clinic-memo" class="mb-12 scroll-mt-20">
     <ClinicMemo />
+  </section>
+
+  {/* 工具 6：全品类现代避孕知情选择与对比矩阵 */}
+  <section id="sec-contraception-matrix" class="mb-12 scroll-mt-20">
+    <ContraceptionMatrix />
   </section>
 
   {/* 底部免责与隐私说明卡片 */}

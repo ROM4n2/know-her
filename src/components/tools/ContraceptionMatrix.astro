@@ -1,0 +1,1065 @@
+---
+/**
+ * ContraceptionMatrix.astro — 全品类现代避孕知情选择与对比矩阵组件
+ * 基于 WHO MEC（避孕方法选用的医学资格标准）与 CDC/ACOG 避孕有效率金标准构建
+ * 纯客户端离线计算，零个人数据上传与留存，页面刷新即销毁
+ */
+import {
+  CONTRACEPTION_METHODS,
+  type ContraceptionMethod
+} from '../../data/contraceptionMethods';
+
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+// 类别与中文标签映射
+const categoryBadgeMap: Record<ContraceptionMethod['category'], string> = {
+  barrier: '物理屏障',
+  hormonal_short: '短效激素',
+  hormonal_long: '长效可逆 (LARC)',
+  non_hormonal_long: '长效非激素 (LARC)',
+  emergency: '事后紧急补救',
+  permanent: '永久不可逆绝育',
+};
+
+// 激素类型标签映射
+const hormoneTypeMap: Record<ContraceptionMethod['hormone_type'], string> = {
+  none: '不含外源激素',
+  combined: '雌孕复方激素',
+  progestin_only: '单纯孕激素',
+};
+
+// 科普文章标题映射
+const articleTitleMap: Record<string, string> = {
+  'contraception-condoms': '避孕套科学使用指南',
+  'contraception-oral-pills': '口服避孕药科学使用指南',
+  'contraception-iud-guide': '宫内节育器与皮埋科学指南',
+  'contraception-emergency-pill': '紧急避孕药应对指南',
+};
+
+// 计算筛选标签
+function getFilterTags(method: ContraceptionMethod): string[] {
+  const tags: string[] = ['all'];
+  if (method.protects_sti) {
+    tags.push('sti');
+  }
+  if (method.category === 'hormonal_long' || method.category === 'non_hormonal_long') {
+    tags.push('larc');
+  }
+  if (method.hormone_type === 'none') {
+    tags.push('non-hormonal');
+  }
+  if (['lng-ius', 'combined-oral-pill', 'etonogestrel-implant'].includes(method.id)) {
+    tags.push('menses-benefit');
+  }
+  if (method.category === 'emergency' || method.id === 'copper-iud') {
+    tags.push('emergency');
+  }
+  return tags;
+}
+
+// 珍珠指数进度条宽度比例计算 (0% ~ 22% 映射到 4% ~ 100%)
+function getBarWidth(rateStr: string): number {
+  const nums = rateStr.match(/[\d.]+/g);
+  if (!nums) return 4;
+  const val = parseFloat(nums[nums.length - 1]);
+  return Math.max(4, Math.min(100, Math.round((val / 22) * 100)));
+}
+
+// 珍珠指数条色值类名
+function getBarColorClass(rateStr: string): string {
+  const nums = rateStr.match(/[\d.]+/g);
+  if (!nums) return 'bg-emerald-600';
+  const val = parseFloat(nums[nums.length - 1]);
+  if (val <= 0.5) return 'bg-emerald-600';
+  if (val <= 3) return 'bg-teal-600';
+  if (val <= 8) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+const methodsJson = JSON.stringify(CONTRACEPTION_METHODS);
+const articleMapJson = JSON.stringify(articleTitleMap);
+---
+
+<div
+  id="contraception-matrix-root"
+  class:list={[
+    "rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-8 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-8",
+    className
+  ]}
+>
+  {/* 顶部标题区 */}
+  <header class="border-b border-[#15140F]/10 pb-5 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+          <svg class="w-5 h-5 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+          </svg>
+        </span>
+        <div>
+          <h2 class="text-lg sm:text-xl font-extrabold text-[#15140F] tracking-tight">
+            [ 全品类现代避孕知情选择与对比矩阵 ]
+          </h2>
+          <p class="text-xs text-[#5A5448]">
+            基于世界卫生组织《避孕方法选用的医学资格标准》（WHO MEC 第 5 版）与 CDC/ACOG 避孕有效率金标准构建。客观量化典型使用年失败率（Pearl Index）与个体禁忌，破除信息差，支持两两横向对比。
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-[11px] font-mono">
+        <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-800">
+          WHO MEC 5th
+        </span>
+        <span class="rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 font-medium text-[#5A5448]">
+          珍珠指数收录
+        </span>
+      </div>
+    </div>
+  </header>
+
+  {/* 多维即时筛选工具栏 */}
+  <section class="space-y-3">
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+      <div class="flex items-center gap-2">
+        <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+          FILTER 01
+        </span>
+        <h3 class="text-sm font-bold text-[#15140F]">
+          按核心需求与医学特征即时筛选
+        </h3>
+      </div>
+      <span id="matrix-filter-count" class="text-xs font-mono text-[#8B8676]">
+        已收录 10 种现代避孕方式
+      </span>
+    </div>
+
+    <div class="matrix-filter-container flex flex-wrap items-center gap-2 pt-1" id="matrix-filter-buttons">
+      <button
+        type="button"
+        data-filter="all"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F] bg-[#15140F] text-white px-3.5 py-1.5 text-xs font-bold shadow-[2px_2px_0_rgba(21,20,15,1)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+        <span>[ 全部收录 (10) ]</span>
+      </button>
+
+      <button
+        type="button"
+        data-filter="sti"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+        <span>[ 预防性传播疾病 (STI) ]</span>
+      </button>
+
+      <button
+        type="button"
+        data-filter="larc"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+        <span>[ 长效可逆省心 (≥3年) ]</span>
+      </button>
+
+      <button
+        type="button"
+        data-filter="non-hormonal"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+        <span>[ 无任何激素 (Non-hormonal) ]</span>
+      </button>
+
+      <button
+        type="button"
+        data-filter="menses-benefit"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+        <span>[ 改善经量过多/痛经 ]</span>
+      </button>
+
+      <button
+        type="button"
+        data-filter="emergency"
+        class="matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5"
+      >
+        <span class="filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20"></span>
+        <span>[ 紧急事后补救 ]</span>
+      </button>
+
+      <button
+        type="button"
+        id="matrix-reset-filter-btn"
+        class="hidden text-xs text-[#8B8676] hover:text-[#15140F] underline cursor-pointer ml-1"
+      >
+        重置筛选
+      </button>
+    </div>
+  </section>
+
+  {/* 卡片矩阵网格 (Card Grid) */}
+  <section class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="matrix-cards-grid">
+      {CONTRACEPTION_METHODS.map((method) => {
+        const filterTags = getFilterTags(method);
+        return (
+          <article
+            class="matrix-card flex flex-col justify-between rounded-2xl border border-[#15140F]/15 bg-[#FAF8F5]/30 p-5 shadow-[2px_2px_0_rgba(21,20,15,0.06)] hover:border-[#15140F]/30 hover:shadow-[3px_3px_0_rgba(21,20,15,0.12)] transition-all"
+            data-method-id={method.id}
+            data-filter-tags={filterTags.join(' ')}
+          >
+            <div class="space-y-4">
+              {/* 卡片顶部类别与标题 */}
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="rounded-full border border-[#15140F]/15 bg-stone-100 px-2.5 py-0.5 text-[10px] font-mono font-bold text-[#5A5448]">
+                    [ {categoryBadgeMap[method.category]} ]
+                  </span>
+                  <span class="text-[10px] font-mono text-[#8B8676]">
+                    ID: {method.id}
+                  </span>
+                </div>
+                <h4 class="text-base font-extrabold text-[#15140F] tracking-tight leading-snug">
+                  {method.name}
+                </h4>
+                <p class="text-[11px] font-mono text-[#8B8676] truncate" title={method.en_name}>
+                  {method.en_name}
+                </p>
+              </div>
+
+              {/* 珍珠指数年失败率可视化对比 */}
+              <div class="rounded-xl border border-[#15140F]/10 bg-white p-3 space-y-2.5">
+                <div class="flex items-center justify-between text-[11px] font-mono">
+                  <span class="font-bold text-[#15140F]">[ 珍珠指数年失败率 ]</span>
+                  <span class="text-[10px] text-[#8B8676]">越低越可靠</span>
+                </div>
+
+                {/* 典型使用 */}
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-[#5A5448]">典型使用 (现实环境):</span>
+                    <span class="font-mono font-bold text-[#15140F]">{method.failure_rate_typical}</span>
+                  </div>
+                  <div class="h-2.5 w-full overflow-hidden rounded-full bg-[#15140F]/10 p-0.5">
+                    <div
+                      class:list={[
+                        "h-full rounded-full transition-all duration-300",
+                        getBarColorClass(method.failure_rate_typical)
+                      ]}
+                      style={`width: ${getBarWidth(method.failure_rate_typical)}%`}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* 完美使用 */}
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-[#5A5448]">完美使用 (零失误):</span>
+                    <span class="font-mono font-bold text-[#15140F]">{method.failure_rate_perfect}</span>
+                  </div>
+                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#15140F]/10">
+                    <div
+                      class="h-full rounded-full bg-[#15140F]/40 transition-all duration-300"
+                      style={`width: ${getBarWidth(method.failure_rate_perfect)}%`}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 核心生理属性网格 */}
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                {/* 有效时长 */}
+                <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 space-y-0.5">
+                  <span class="text-[10px] font-mono text-[#8B8676] block">有效时长</span>
+                  <span class="font-bold text-[#15140F] block truncate" title={method.duration}>{method.duration}</span>
+                </div>
+
+                {/* 生育力恢复 */}
+                <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 space-y-0.5">
+                  <span class="text-[10px] font-mono text-[#8B8676] block">生育力恢复</span>
+                  <span class="font-bold text-[#15140F] block">{method.fertility_return}</span>
+                </div>
+
+                {/* 外源激素 */}
+                <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 space-y-0.5">
+                  <span class="text-[10px] font-mono text-[#8B8676] block">激素成分</span>
+                  <span class="font-bold text-[#15140F] block">{hormoneTypeMap[method.hormone_type]}</span>
+                </div>
+
+                {/* STI 防护 */}
+                <div class:list={[
+                  "rounded-xl border p-2.5 space-y-0.5",
+                  method.protects_sti
+                    ? "bg-emerald-50/90 border-emerald-300 text-emerald-900"
+                    : "bg-white border-[#15140F]/10 text-[#5A5448]"
+                ]}>
+                  <span class="text-[10px] font-mono text-[#8B8676] block">STI / HIV 防护</span>
+                  <span class="font-bold block flex items-center gap-1">
+                    {method.protects_sti ? (
+                      <>
+                        <svg class="w-3.5 h-3.5 text-emerald-700 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                        <span class="text-emerald-800">有效阻断</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg class="w-3.5 h-3.5 text-[#8B8676] shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <span>不防 STI</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {/* 月经影响标签 */}
+              <div class="rounded-xl border border-[#15140F]/10 bg-white p-2.5 text-xs space-y-1">
+                <span class="text-[10px] font-mono text-[#8B8676] block font-bold">
+                  [ 月经周期与经量影响 ]
+                </span>
+                <p class="text-xs text-[#2A2620] leading-relaxed">
+                  {method.menses_effect}
+                </p>
+              </div>
+
+              {/* 折叠区域：优劣势与 WHO MEC 禁忌 */}
+              <details class="matrix-card-details group rounded-xl border border-[#15140F]/15 bg-white overflow-hidden transition-all text-xs">
+                <summary class="flex items-center justify-between p-3 cursor-pointer select-none font-bold text-[#15140F] hover:bg-[#FAF8F5] transition-colors">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    <span>[ 展开临床优势与 WHO MEC 禁忌 ]</span>
+                  </span>
+                  <svg class="w-4 h-4 text-[#8B8676] group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </summary>
+                <div class="p-3.5 pt-2 space-y-3.5 border-t border-[#15140F]/10 bg-[#FAF8F5]/40">
+                  {/* 核心优势 */}
+                  <div class="space-y-1.5">
+                    <span class="text-[11px] font-mono font-bold text-emerald-800 uppercase tracking-wide block">
+                      [ 核心优势 · PROS ]
+                    </span>
+                    <ul class="space-y-1 text-[#2A2620] pl-1">
+                      {method.pros.map((pro) => (
+                        <li class="flex items-start gap-1.5 leading-relaxed">
+                          <span class="text-emerald-600 font-bold shrink-0 mt-0.5">+</span>
+                          <span>{pro}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* 常见局限 */}
+                  <div class="space-y-1.5">
+                    <span class="text-[11px] font-mono font-bold text-amber-800 uppercase tracking-wide block">
+                      [ 常见局限与适应期 · CONS ]
+                    </span>
+                    <ul class="space-y-1 text-[#2A2620] pl-1">
+                      {method.cons.map((con) => (
+                        <li class="flex items-start gap-1.5 leading-relaxed">
+                          <span class="text-amber-600 font-bold shrink-0 mt-0.5">-</span>
+                          <span>{con}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* WHO MEC 禁忌症 */}
+                  <div class="space-y-1.5">
+                    <span class="text-[11px] font-mono font-bold text-rose-800 uppercase tracking-wide block">
+                      [ 绝对/相对禁忌 (WHO MEC 标准) ]
+                    </span>
+                    <ul class="space-y-1 text-[#2A2620] pl-1">
+                      {method.contraindications.map((contra) => (
+                        <li class="flex items-start gap-1.5 leading-relaxed text-rose-950">
+                          <span class="text-rose-600 font-bold shrink-0 mt-0.5">!</span>
+                          <span>{contra}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            {/* 卡片底部操作与深度科普链接 */}
+            <div class="pt-4 mt-4 border-t border-[#15140F]/10 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <a
+                  href={`${base}articles/${method.related_article}/`}
+                  class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-800 hover:underline"
+                >
+                  <span>阅读《{articleTitleMap[method.related_article] || '避孕'}》指南</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </a>
+              </div>
+
+              <button
+                type="button"
+                class="matrix-compare-toggle-btn w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-[#15140F] bg-white text-xs font-bold text-[#15140F] shadow-[1.5px_1.5px_0_#15140F] hover:bg-[#FAF8F5] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+                data-method-id={method.id}
+                data-method-name={method.name}
+                aria-pressed="false"
+              >
+                <span class="compare-checkbox-indicator w-3.5 h-3.5 rounded border border-[#15140F] flex items-center justify-center bg-white transition-colors">
+                  <svg class="check-icon w-2.5 h-2.5 text-white hidden" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                </span>
+                <span class="compare-btn-label">加入横向对比 (最多选 2 项)</span>
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  </section>
+
+  {/* 底部悬浮对比提示条 (Floating Bar) */}
+  <div
+    id="matrix-floating-bar"
+    class="matrix-floating-bar fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-xl w-[calc(100%-2rem)] rounded-2xl border-2 border-[#15140F] bg-white p-3.5 shadow-[4px_4px_0_#15140F] transition-all duration-300 hidden"
+  >
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#15140F] text-white text-xs font-mono font-bold">
+          PK
+        </span>
+        <div class="min-w-0">
+          <div id="matrix-floating-status" class="text-xs font-bold text-[#15140F] truncate">
+            已选择 0 项
+          </div>
+          <div id="matrix-floating-chips" class="flex items-center gap-1.5 mt-0.5 truncate text-[11px] text-[#5A5448]">
+            {/* 动态加入所选标签 */}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+        <button
+          type="button"
+          id="matrix-floating-clear-btn"
+          class="rounded-xl border border-[#15140F]/20 px-3 py-1.5 text-xs font-semibold text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+        >
+          清空
+        </button>
+        <button
+          type="button"
+          id="matrix-open-compare-btn"
+          class="rounded-xl bg-[#15140F] text-white px-4 py-1.5 text-xs font-bold shadow-btn hover:bg-[#2A2620] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled
+        >
+          查看横向 PK 对比
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {/* 双向横向对比抽屉/弹窗 (Compare Drawer / Modal) */}
+  <div
+    id="matrix-compare-drawer"
+    class="matrix-compare-drawer fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs transition-opacity duration-200 hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="matrix-modal-title"
+  >
+    <div
+      id="matrix-compare-dialog"
+      class="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl border-2 border-[#15140F] bg-[#FAF8F5] shadow-[6px_6px_0_#15140F] overflow-hidden"
+    >
+      {/* 弹窗头部 */}
+      <div class="flex items-center justify-between border-b border-[#15140F]/15 bg-white p-4 sm:p-5">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="rounded-sm bg-[#15140F] px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+              HEAD-TO-HEAD
+            </span>
+            <h3 id="matrix-modal-title" class="text-base sm:text-lg font-extrabold text-[#15140F] tracking-tight">
+              [ 现代避孕方式双向 PK 对比台账 ]
+            </h3>
+          </div>
+          <p class="text-xs text-[#5A5448] mt-1">
+            对比指标严格基于 WHO MEC 避孕选用资格标准与 Pearl Index 金标准。
+          </p>
+        </div>
+        <button
+          type="button"
+          id="matrix-close-modal-btn"
+          class="rounded-xl border border-[#15140F]/15 bg-[#FAF8F5] p-2 text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          aria-label="关闭对比窗口"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* 弹窗表格主体 */}
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6" id="matrix-table-container">
+        {/* 动态安全渲染对比表格 */}
+      </div>
+
+      {/* 弹窗底部操作 */}
+      <div class="border-t border-[#15140F]/15 bg-white p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <span class="text-[#8B8676]">
+          * 提示：个体禁忌各异，高血压、血栓史或长期吸烟者选用前需经专业妇产医师/药师综合评估。
+        </span>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="matrix-modal-clear-btn"
+            class="rounded-xl border border-[#15140F]/20 px-3 py-1.5 font-bold text-[#5A5448] hover:border-[#15140F] hover:text-[#15140F] cursor-pointer"
+          >
+            清空选择
+          </button>
+          <button
+            type="button"
+            id="matrix-modal-done-btn"
+            class="rounded-xl bg-[#15140F] text-white px-4 py-1.5 font-bold shadow-btn hover:bg-[#2A2620] cursor-pointer"
+          >
+            完成对比
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* 浮动提示 Toast */}
+  <div
+    id="matrix-toast"
+    class="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#15140F] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-[3px_3px_0_rgba(244,63,94,1)] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-2"
+    role="alert"
+  >
+    最多同时对比 2 种避孕方式，请先取消已选项
+  </div>
+</div>
+
+{/* 嵌入只读静态数据供客户端原生脚本使用 */}
+<script type="application/json" id="contraception-methods-data" set:html={methodsJson}></script>
+<script type="application/json" id="contraception-article-map" set:html={articleMapJson}></script>
+
+<script is:inline>
+  (function () {
+    const methodsDataElem = document.getElementById('contraception-methods-data');
+    const articleMapElem = document.getElementById('contraception-article-map');
+    if (!methodsDataElem) return;
+
+    let methods = [];
+    try {
+      methods = JSON.parse(methodsDataElem.textContent || '[]');
+    } catch (e) {
+      console.error('Failed to parse contraception methods data', e);
+      return;
+    }
+
+    let articleTitleMap = {};
+    if (articleMapElem) {
+      try {
+        articleTitleMap = JSON.parse(articleMapElem.textContent || '{}');
+      } catch (e) {}
+    }
+
+    const categoryBadgeMap = {
+      barrier: '物理屏障',
+      hormonal_short: '短效激素',
+      hormonal_long: '长效可逆 (LARC)',
+      non_hormonal_long: '长效非激素 (LARC)',
+      emergency: '事后紧急补救',
+      permanent: '永久不可逆绝育',
+    };
+
+    const hormoneTypeMap = {
+      none: '不含外源激素',
+      combined: '雌孕复方激素',
+      progestin_only: '单纯孕激素',
+    };
+
+    // 状态机
+    let currentFilter = 'all';
+    let selectedMethodIds = [];
+
+    // DOM 元素引用
+    const filterButtons = document.querySelectorAll('.matrix-filter-btn');
+    const methodCards = document.querySelectorAll('.matrix-card');
+    const filterCountElem = document.getElementById('matrix-filter-count');
+    const resetFilterBtn = document.getElementById('matrix-reset-filter-btn');
+
+    const floatingBar = document.getElementById('matrix-floating-bar');
+    const floatingStatus = document.getElementById('matrix-floating-status');
+    const floatingChips = document.getElementById('matrix-floating-chips');
+    const floatingClearBtn = document.getElementById('matrix-floating-clear-btn');
+    const openCompareBtn = document.getElementById('matrix-open-compare-btn');
+
+    const compareDrawer = document.getElementById('matrix-compare-drawer');
+    const closeModalBtn = document.getElementById('matrix-close-modal-btn');
+    const modalClearBtn = document.getElementById('matrix-modal-clear-btn');
+    const modalDoneBtn = document.getElementById('matrix-modal-done-btn');
+    const tableContainer = document.getElementById('matrix-table-container');
+    const toastElem = document.getElementById('matrix-toast');
+    const compareToggleBtns = document.querySelectorAll('.matrix-compare-toggle-btn');
+
+    // Toast 提示
+    let toastTimeout = null;
+    function showToast(message) {
+      if (!toastElem) return;
+      toastElem.textContent = message;
+      toastElem.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-2');
+      toastElem.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toastElem.classList.remove('opacity-100', 'translate-y-0');
+        toastElem.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+      }, 2500);
+    }
+
+    // 筛选逻辑
+    function setFilter(filterTag) {
+      currentFilter = filterTag;
+      let visibleCount = 0;
+
+      filterButtons.forEach((btn) => {
+        const btnFilter = btn.getAttribute('data-filter');
+        const dot = btn.querySelector('.filter-dot');
+        if (btnFilter === currentFilter) {
+          btn.className = 'matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F] bg-[#15140F] text-white px-3.5 py-1.5 text-xs font-bold shadow-[2px_2px_0_rgba(21,20,15,1)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5';
+          if (dot) {
+            dot.className = 'filter-dot w-1.5 h-1.5 rounded-full bg-rose-400';
+          }
+        } else {
+          btn.className = 'matrix-filter-btn inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white text-[#5A5448] px-3.5 py-1.5 text-xs font-semibold hover:border-[#15140F]/40 hover:text-[#15140F] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5';
+          if (dot) {
+            dot.className = 'filter-dot w-1.5 h-1.5 rounded-full bg-[#15140F]/20';
+          }
+        }
+      });
+
+      methodCards.forEach((card) => {
+        const tags = (card.getAttribute('data-filter-tags') || '').split(' ');
+        if (currentFilter === 'all' || tags.includes(currentFilter)) {
+          card.classList.remove('hidden');
+          visibleCount++;
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+
+      if (filterCountElem) {
+        filterCountElem.textContent = '当前显示 ' + visibleCount + ' / ' + methods.length + ' 种避孕方式';
+      }
+
+      if (resetFilterBtn) {
+        if (currentFilter === 'all') {
+          resetFilterBtn.classList.add('hidden');
+        } else {
+          resetFilterBtn.classList.remove('hidden');
+        }
+      }
+    }
+
+    filterButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const f = btn.getAttribute('data-filter') || 'all';
+        setFilter(f);
+      });
+    });
+
+    if (resetFilterBtn) {
+      resetFilterBtn.addEventListener('click', () => {
+        setFilter('all');
+      });
+    }
+
+    // 更新选择对比状态
+    function updateComparisonState() {
+      // 1. 更新卡片按钮样式
+      compareToggleBtns.forEach((btn) => {
+        const methodId = btn.getAttribute('data-method-id');
+        const indicator = btn.querySelector('.compare-checkbox-indicator');
+        const checkIcon = btn.querySelector('.check-icon');
+        const label = btn.querySelector('.compare-btn-label');
+
+        if (selectedMethodIds.includes(methodId)) {
+          btn.setAttribute('aria-pressed', 'true');
+          btn.classList.remove('bg-white', 'text-[#15140F]');
+          btn.classList.add('bg-[#15140F]', 'text-white');
+          if (indicator) {
+            indicator.classList.remove('bg-white');
+            indicator.classList.add('bg-rose-500', 'border-rose-500');
+          }
+          if (checkIcon) {
+            checkIcon.classList.remove('hidden');
+          }
+          if (label) {
+            label.textContent = '已加入对比 (点击取消)';
+          }
+        } else {
+          btn.setAttribute('aria-pressed', 'false');
+          btn.classList.remove('bg-[#15140F]', 'text-white');
+          btn.classList.add('bg-white', 'text-[#15140F]');
+          if (indicator) {
+            indicator.classList.remove('bg-rose-500', 'border-rose-500');
+            indicator.classList.add('bg-white');
+          }
+          if (checkIcon) {
+            checkIcon.classList.add('hidden');
+          }
+          if (label) {
+            label.textContent = '加入横向对比 (最多选 2 项)';
+          }
+        }
+      });
+
+      // 2. 更新悬浮栏
+      if (!floatingBar) return;
+
+      if (selectedMethodIds.length === 0) {
+        floatingBar.classList.add('hidden');
+      } else {
+        floatingBar.classList.remove('hidden');
+
+        // 渲染 Chips
+        if (floatingChips) {
+          floatingChips.replaceChildren();
+          selectedMethodIds.forEach((id) => {
+            const m = methods.find((item) => item.id === id);
+            if (!m) return;
+            const chip = document.createElement('span');
+            chip.className = 'inline-flex items-center gap-1 rounded bg-[#15140F]/10 px-1.5 py-0.5 font-bold text-[#15140F]';
+            chip.textContent = m.name;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'text-[#8B8676] hover:text-rose-600 font-bold ml-0.5 cursor-pointer';
+            removeBtn.textContent = 'x';
+            removeBtn.setAttribute('aria-label', '移除 ' + m.name);
+            removeBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              toggleSelectMethod(id);
+            });
+            chip.appendChild(removeBtn);
+            floatingChips.appendChild(chip);
+          });
+        }
+
+        if (selectedMethodIds.length === 1) {
+          const m1 = methods.find((item) => item.id === selectedMethodIds[0]);
+          const name1 = m1 ? m1.name : '';
+          if (floatingStatus) {
+            floatingStatus.textContent = '已选 1 项：【' + name1 + '】，请再选 1 项开启对比';
+          }
+          if (openCompareBtn) {
+            openCompareBtn.disabled = true;
+            openCompareBtn.classList.add('opacity-40', 'cursor-not-allowed');
+            openCompareBtn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+            openCompareBtn.textContent = '对比 (需选 2 项)';
+          }
+        } else if (selectedMethodIds.length === 2) {
+          if (floatingStatus) {
+            floatingStatus.textContent = '已选择 2 项避孕方式，点击查看横向 PK 对比';
+          }
+          if (openCompareBtn) {
+            openCompareBtn.disabled = false;
+            openCompareBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+            openCompareBtn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+            openCompareBtn.textContent = '立即开启 PK 横向对比';
+          }
+        }
+      }
+    }
+
+    function toggleSelectMethod(methodId) {
+      if (selectedMethodIds.includes(methodId)) {
+        selectedMethodIds = selectedMethodIds.filter((id) => id !== methodId);
+        updateComparisonState();
+        if (!compareDrawer.classList.contains('hidden')) {
+          if (selectedMethodIds.length < 2) {
+            closeModal();
+          } else {
+            renderCompareTable();
+          }
+        }
+      } else {
+        if (selectedMethodIds.length >= 2) {
+          showToast('最多同时对比 2 种避孕方式，请先取消已选项或清空');
+          return;
+        }
+        selectedMethodIds.push(methodId);
+        updateComparisonState();
+      }
+    }
+
+    compareToggleBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-method-id');
+        if (id) toggleSelectMethod(id);
+      });
+    });
+
+    if (floatingClearBtn) {
+      floatingClearBtn.addEventListener('click', () => {
+        selectedMethodIds = [];
+        updateComparisonState();
+      });
+    }
+
+    if (modalClearBtn) {
+      modalClearBtn.addEventListener('click', () => {
+        selectedMethodIds = [];
+        updateComparisonState();
+        closeModal();
+      });
+    }
+
+    // 对比弹窗控制
+    function openModal() {
+      if (selectedMethodIds.length !== 2) {
+        showToast('请勾选 2 项避孕方式后再开启对比');
+        return;
+      }
+      renderCompareTable();
+      if (compareDrawer) {
+        compareDrawer.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+
+    function closeModal() {
+      if (compareDrawer) {
+        compareDrawer.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+    }
+
+    if (openCompareBtn) {
+      openCompareBtn.addEventListener('click', openModal);
+    }
+
+    if (closeModalBtn) {
+      closeModalBtn.addEventListener('click', closeModal);
+    }
+
+    if (modalDoneBtn) {
+      modalDoneBtn.addEventListener('click', closeModal);
+    }
+
+    if (compareDrawer) {
+      compareDrawer.addEventListener('click', (e) => {
+        if (e.target === compareDrawer) {
+          closeModal();
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && compareDrawer && !compareDrawer.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    // 安全渲染对比表格 (Zero innerHTML)
+    function renderCompareTable() {
+      if (!tableContainer) return;
+      tableContainer.replaceChildren();
+
+      const mA = methods.find((item) => item.id === selectedMethodIds[0]);
+      const mB = methods.find((item) => item.id === selectedMethodIds[1]);
+      if (!mA || !mB) return;
+
+      const baseHref = document.querySelector('nav a[href]')?.getAttribute('href') || '/';
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'overflow-x-auto';
+
+      const table = document.createElement('table');
+      table.className = 'w-full text-left border-collapse border border-[#15140F]/15 text-xs';
+
+      // thead
+      const thead = document.createElement('thead');
+      const trHead = document.createElement('tr');
+      trHead.className = 'bg-[#15140F] text-white font-mono text-xs';
+
+      const thDim = document.createElement('th');
+      thDim.className = 'p-3.5 border border-white/20 w-1/4 min-w-[120px] font-bold text-left';
+      thDim.textContent = '对比维度 / 考量指标';
+      trHead.appendChild(thDim);
+
+      [mA, mB].forEach((m) => {
+        const th = document.createElement('th');
+        th.className = 'p-3.5 border border-white/20 w-3/8 min-w-[200px] font-bold text-left align-top';
+
+        const headerBox = document.createElement('div');
+        headerBox.className = 'space-y-1';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'flex items-center justify-between gap-2';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'text-sm font-extrabold text-white';
+        nameSpan.textContent = m.name;
+        titleRow.appendChild(nameSpan);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'text-[10px] text-white/70 hover:text-white underline cursor-pointer';
+        removeBtn.textContent = '更换';
+        removeBtn.onclick = () => {
+          toggleSelectMethod(m.id);
+        };
+        titleRow.appendChild(removeBtn);
+        headerBox.appendChild(titleRow);
+
+        const enSpan = document.createElement('div');
+        enSpan.className = 'text-[10px] font-mono text-white/60';
+        enSpan.textContent = m.en_name;
+        headerBox.appendChild(enSpan);
+
+        th.appendChild(headerBox);
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+      table.appendChild(thead);
+
+      // tbody
+      const tbody = document.createElement('tbody');
+      tbody.className = 'divide-y divide-[#15140F]/10 bg-white';
+
+      function addRow(label, valA, valB, isList = false, highlight = false) {
+        const tr = document.createElement('tr');
+        if (highlight) {
+          tr.className = 'bg-[#FAF8F5]';
+        }
+
+        const tdLabel = document.createElement('td');
+        tdLabel.className = 'p-3.5 font-bold text-[#15140F] bg-[#FAF8F5]/80 border-r border-[#15140F]/10 align-top whitespace-nowrap';
+        tdLabel.textContent = label;
+        tr.appendChild(tdLabel);
+
+        [valA, valB].forEach((val) => {
+          const td = document.createElement('td');
+          td.className = 'p-3.5 text-[#2A2620] border-r border-[#15140F]/10 last:border-r-0 align-top leading-relaxed';
+
+          if (isList && Array.isArray(val)) {
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-1 list-disc pl-4 text-xs';
+            val.forEach((itemText) => {
+              const li = document.createElement('li');
+              li.textContent = itemText;
+              ul.appendChild(li);
+            });
+            td.appendChild(ul);
+          } else if (val instanceof HTMLElement) {
+            td.appendChild(val);
+          } else {
+            td.textContent = String(val);
+          }
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      }
+
+      // 1. 类别属性
+      addRow(
+        '类别归属',
+        categoryBadgeMap[mA.category] || mA.category,
+        categoryBadgeMap[mB.category] || mB.category
+      );
+
+      // 2. 典型年失败率 (Pearl Index)
+      function createFailureRateCell(m) {
+        const div = document.createElement('div');
+        div.className = 'space-y-1.5';
+
+        const row1 = document.createElement('div');
+        row1.className = 'flex items-center justify-between gap-2';
+        const lbl1 = document.createElement('span');
+        lbl1.className = 'text-[#5A5448]';
+        lbl1.textContent = '典型年失败率：';
+        const val1 = document.createElement('span');
+        val1.className = 'font-mono font-bold text-base text-[#15140F]';
+        val1.textContent = m.failure_rate_typical;
+        row1.appendChild(lbl1);
+        row1.appendChild(val1);
+        div.appendChild(row1);
+
+        const row2 = document.createElement('div');
+        row2.className = 'flex items-center justify-between gap-2 text-[11px] text-[#8B8676]';
+        const lbl2 = document.createElement('span');
+        lbl2.textContent = '完美使用年失败率：';
+        const val2 = document.createElement('span');
+        val2.className = 'font-mono font-bold text-[#5A5448]';
+        val2.textContent = m.failure_rate_perfect;
+        row2.appendChild(lbl2);
+        row2.appendChild(val2);
+        div.appendChild(row2);
+
+        return div;
+      }
+      addRow('典型年失败率 (Pearl Index)', createFailureRateCell(mA), createFailureRateCell(mB), false, true);
+
+      // 3. 完美使用年失败率
+      addRow('完美使用年失败率', mA.failure_rate_perfect, mB.failure_rate_perfect);
+
+      // 4. STI 防护力
+      function createStiBadge(protects) {
+        const span = document.createElement('span');
+        if (protects) {
+          span.className = 'inline-block px-2.5 py-0.5 rounded-full font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300';
+          span.textContent = '有效阻断 STI / HIV';
+        } else {
+          span.className = 'inline-block px-2.5 py-0.5 rounded-full font-bold text-xs bg-stone-100 text-stone-600 border border-stone-200';
+          span.textContent = '不防 STI（需与避孕套同用）';
+        }
+        return span;
+      }
+      addRow('STI 防护力', createStiBadge(mA.protects_sti), createStiBadge(mB.protects_sti));
+
+      // 5. 激素成分
+      addRow('激素成分', hormoneTypeMap[mA.hormone_type], hormoneTypeMap[mB.hormone_type]);
+
+      // 6. 月经影响
+      addRow('月经影响', mA.menses_effect, mB.menses_effect, false, true);
+
+      // 7. 生育力恢复速度
+      addRow('生育力恢复速度', mA.fertility_return, mB.fertility_return);
+
+      // 8. 有效时长 / 频次
+      addRow('有效时长 / 频次', mA.duration, mB.duration);
+
+      // 9. 绝对/相对禁忌 (WHO MEC)
+      addRow('绝对/相对禁忌 (WHO MEC)', mA.contraindications, mB.contraindications, true);
+
+      // 10. 核心临床优势
+      addRow('核心临床优势', mA.pros, mB.pros, true);
+
+      // 11. 常见局限与适应期
+      addRow('常见局限与适应期', mA.cons, mB.cons, true);
+
+      // 12. 深度科普指南
+      function createArticleCell(m) {
+        const link = document.createElement('a');
+        link.href = baseHref.replace(/\/$/, '') + '/articles/' + m.related_article + '/';
+        link.className = 'inline-flex items-center gap-1 font-bold text-rose-600 hover:text-rose-800 hover:underline';
+        link.textContent = '阅读《' + (articleTitleMap[m.related_article] || '科普') + '》指南 →';
+        return link;
+      }
+      addRow('深度科普指南', createArticleCell(mA), createArticleCell(mB));
+
+      table.appendChild(tbody);
+      wrapper.appendChild(table);
+      tableContainer.appendChild(wrapper);
+    }
+  })();
+</script>
