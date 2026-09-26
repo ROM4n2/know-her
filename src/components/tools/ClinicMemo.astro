@@ -526,6 +526,18 @@ const articleTitleMap: Record<string, string> = {
             <span>[ 打印便签 ]</span>
           </button>
 
+          {/* 保存纸墨风格便签长图（移动端友好，微信内可直接长按保存） */}
+          <button
+            type="button"
+            id="clinic-memo-export-image-btn"
+            class="memo-export-image-btn inline-flex items-center gap-1.5 rounded-xl border border-[#15140F]/30 bg-white px-3.5 py-2.5 text-xs font-bold text-[#15140F] hover:bg-[#FAF8F5] active:translate-x-0.5 active:translate-y-0.5 shadow-2xs transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-[#5A5448]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span id="clinic-memo-export-image-text">[ 保存便签长图 ]</span>
+          </button>
+
           {/* 重置按钮 */}
           <button
             type="button"
@@ -1081,4 +1093,76 @@ const articleTitleMap: Record<string, string> = {
     updatePainDisplay();
     updateMemo();
   })();
+</script>
+
+<script>
+  import { exportMemoAsImage } from '../../lib/ui/memoImageExporter';
+
+  function readTextById(id: string): string {
+    return (document.getElementById(id)?.textContent ?? '').trim();
+  }
+
+  const exportBtn = document.querySelector<HTMLButtonElement>(
+    '#clinic-memo-root .memo-export-image-btn'
+  );
+  exportBtn?.addEventListener('click', async () => {
+    const btnText = document.getElementById('clinic-memo-export-image-text');
+    const originalText = btnText?.textContent ?? '[ 保存便签长图 ]';
+    if (btnText) btnText.textContent = '[ 正在生成长图… ]';
+    exportBtn?.setAttribute('disabled', 'disabled');
+
+    const complaintText = readTextById('memo-chief-complaint');
+    const historyLines = [
+      `末次月经 (LMP)：${readTextById('memo-lmp-text') || '未填写 / 不详'}`,
+      `月经周期：${readTextById('memo-cycle-text') || '未填写'}`,
+      `避孕与性生活史：${readTextById('memo-contraception-text') || '未填写'}`,
+      `早孕自测情况：${readTextById('memo-pregnancy-text') || '未填写'}`,
+    ];
+
+    const extraText = readTextById('memo-extra-text');
+    if (extraText && extraText !== '--') {
+      historyLines.push(`伴随评估与补充：${extraText}`);
+    }
+
+    const sections: Array<{ heading: string; lines: string[] }> = [];
+    if (complaintText) {
+      sections.push({ heading: '门诊主诉标准陈述 (SOAP 格式)', lines: [complaintText] });
+    }
+    sections.push({ heading: '关键病史与体征速览', lines: historyLines });
+
+    const redFlagNotice = document.getElementById('memo-redflag-notice');
+    if (redFlagNotice && !redFlagNotice.classList.contains('hidden')) {
+      sections.push({
+        heading: '急腹症高危体征警告',
+        lines: [readTextById('memo-redflag-text')],
+      });
+    }
+
+    const questionLines = Array.from(
+      document.querySelectorAll<HTMLElement>('#memo-questions-list li span:last-child')
+    )
+      .map((el) => (el.textContent ?? '').trim())
+      .filter(Boolean);
+    if (questionLines.length > 0) {
+      sections.push({ heading: '建议向医生确认的重点问题', lines: questionLines });
+    }
+
+    try {
+      await exportMemoAsImage({
+        title: '妇科门诊就医沟通备忘录便签',
+        subtitle: `SOAP 结构化候诊准备 · ${readTextById('memo-date-display') || '本地离线生成'}`,
+        sections,
+        fileName: `know-her-门诊就医便签-${new Date().toISOString().slice(0, 10)}`,
+      });
+      if (btnText) btnText.textContent = '[ 长图已生成，请查看下载 ]';
+    } catch (err) {
+      if (btnText) btnText.textContent = '[ 长图生成失败，请改用打印 ]';
+      console.error('[ClinicMemo] 便签长图导出失败', err);
+    } finally {
+      exportBtn?.removeAttribute('disabled');
+      window.setTimeout(() => {
+        if (btnText) btnText.textContent = originalText;
+      }, 2600);
+    }
+  });
 </script>
