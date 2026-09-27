@@ -1,20 +1,110 @@
 {
-  "version": 1,
-  "last_updated": "2026-09-26T15:09:06.966947+00:00",
+  "version": 2,
+  "last_updated": "2026-09-27T15:03:44.350624+00:00",
   "processed_urls": [
-    "https://www.msdmanuals.cn/home/women-s-health-issues/menstrual-disorders-and-abnormal-uterine-bleeding/abnormal-uterine-bleeding-aub",
-    "https://www.who.int/zh/news-room/fact-sheets/detail/cervical-cancer",
-    "https://www.who.int/zh/news-room/fact-sheets/detail/family-planning-contraception",
-    "https://www.who.int/zh/news-room/fact-sheets/detail/emergency-contraception",
-    "https://www.msdmanuals.cn/home/women-s-health-issues/family-planning/hormonal-methods-of-contraception",
-    "https://www.msdmanuals.cn/home/women-s-health-issues/biology-of-the-female-reproductive-system/female-external-genital-organs",
-    "https://www.unesco.org/zh/articles/zhongwenbanguojixingjiaoyujishuzhidaogangyaoxiudingbanfabu",
-    "https://www.msdmanuals.cn/home/women-s-health-issues/biology-of-the-female-reproductive-system/menstrual-cycle",
-    "https://www.msdmanuals.cn/home/special-subjects/sexuality/sexuality",
-    "https://www.msdmanuals.cn/home/women-s-health-issues/sexual-function-and-dysfunction-in-women/genito-pelvic-pain-penetration-disorder",
-    "https://example.com/authoritative-article",
-    "https://www.who.int/zh/news-room/fact-sheets/detail/condoms",
-    "https://www.who.int/zh/news-room/fact-sheets/detail/female-genital-mutilation"
-  ],
-  "rejected_urls": []
+    {
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues/menstrual-disorders-and-abnormal-uterine-bleeding/abnormal-uterine-bleeding-aub",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.who.int/zh/news-room/fact-sheets/detail/cervical-cancer",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.who.int/zh/news-room/fact-sheets/detail/family-planning-contraception",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.who.int/zh/news-room/fact-sheets/detail/emergency-contraception",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues/family-planning/hormonal-methods-of-contraception",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues/biology-of-the-female-reproductive-system/female-external-genital-organs",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.unesco.org/zh/articles/zhongwenbanguojixingjiaoyujishuzhidaogangyaoxiudingbanfabu",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues/biology-of-the-female-reproductive-system/menstrual-cycle",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.msdmanuals.cn/home/special-subjects/sexuality/sexuality",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues/sexual-function-and-dysfunction-in-women/genito-pelvic-pain-penetration-disorder",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://example.com/authoritative-article",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.who.int/zh/news-room/fact-sheets/detail/condoms",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    },
+    {
+      "url": "https://www.who.int/zh/news-room/fact-sheets/detail/female-genital-mutilation",
+      "status": "published",
+      "source_id": "",
+      "first_seen": "",
+      "last_probed": "",
+      "http_status": null
+    }
+  ]
 }

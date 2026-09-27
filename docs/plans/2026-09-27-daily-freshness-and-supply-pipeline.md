@@ -370,10 +370,14 @@
 - Modify: `package.json`（新增 `"curate:pool": "python -X utf8 scripts/curate_harvester.py --pool"`）
 
 **Interfaces:**
-- Consumes: `discover_candidates`、`sources.json`、`iter_pending`
+- Consumes: `discover_candidates`、`sources.json`、`load_ledger`（**只读**）
 - Produces:
   - `def rank_candidates(candidates: list[dict], category_counts: dict[str, int]) -> list[dict]`（四分类升序优先，同分类按首次发现升序）
   - `--pool` CLI：表格输出「标题 / 来源 / 推定分类 / 首次发现」，**不写盘**
+
+> **Task-7 验收后钉死的两处语义（避免实现走偏）**：
+> 1. **`--pool` 的数据源 = 「实时发现结果 − 台账已收录 URL」**，即以 `discover_candidates` 的本次发现为输入做差集后排序，**不是**「只读台账里 `status == "pending"` 的条目」。原因：当前**没有任何代码写入 `pending` 状态**（`iter_pending` 目前亦无生产调用方），若按后者实现，`--pool` 将永远输出空表。
+> 2. **零副作用红线与 v1 陷阱**：`load_ledger()` 具备「读到 v1 时自动迁移并写回」的条件写盘行为，而 `save_ledger()` 每次都会刷新 `last_updated` ⇒ **`--pool` 路径必须只读**（不得调用 `save_ledger`），且 G4 的「台账 sha256 前后不变」断言**不得用 v1 夹具驱动**（否则会被迁移写回误判为副作用）。测试应用**已是 v2 的夹具或真实台账**驱动。`pending` 状态的写入者明确为 Task-9 的 `curate:draft`（生成骨架时把该候选登记为 `pending`），`iter_pending` 的消费者亦为 Task-9。
 
 **Injected Instincts (Compile-Time Rule Injection):**
 - [ ] `[Instinct: Dry-Run-Purity]`：`--pool` 必须为零副作用（不写台账、不写文章文件、不建分支），断言方式为「运行前后台账文件 sha256 不变」。

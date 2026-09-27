@@ -21,11 +21,15 @@ test_source_discovery.py — 信源三模式增量发现与准入 fail-closed �
     T11 反向用例（MUST）：admitted+空 license / probing / 缺 admission ⇒
         discover_candidates 返回 [] 且**未发起任何抓取**
     T12 anchor 模式离线发现与 seen_urls 去重
+    T13 sitemap 字节体积超限 ⇒ 降级到 anchor（不解析超大文档，文案不冒充 max_pages）
+    T14 anchor 信源 keywords 为空 ⇒ 打印显式告警（不静默产出 0 候选）
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；测试零真实网络请求。
 """
 
+import contextlib
+import io
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -131,19 +135,26 @@ def test_parse_sitemap_index_recursion_bounded() -> None:
     )
     pages = {"https://x/sitemap-a.xml": index_a, "https://x/sitemap-a1.xml": urlset_a1}
 
-    original = getattr(ch, "_SITEMAP_FETCH", None)
     calls: list[str] = []
 
     def fake_fetch(url, *args, **kwargs):
         calls.append(url)
         return pages.get(url, "")
 
-    ch._SITEMAP_FETCH = fake_fetch
+    # [Y3] 双 seam 零网络：① 经 fetcher= 形参注入递归实现（C4 已消除模块级 seam）；
+    # ② 同时把 ch.fetch_url 置为抛异常，使「测试零网络」不再依赖单一 seam——
+    #    生产路径一旦回退到真实 fetch_url 会立即抛错暴露。
+    original_fetch = ch.fetch_url
+
+    def forbidden_fetch(*args, **kwargs):
+        raise AssertionError("[T5] 测试零网络：不得调用 ch.fetch_url")
+
+    ch.fetch_url = forbidden_fetch
     try:
-        deep = ch._parse_sitemap(root, "/learn/", 3)
-        shallow = ch._parse_sitemap(root, "/learn/", 2)
+        deep = ch._parse_sitemap(root, "/learn/", 3, fetcher=fake_fetch)
+        shallow = ch._parse_sitemap(root, "/learn/", 2, fetcher=fake_fetch)
     finally:
-        ch._SITEMAP_FETCH = original
+        ch.fetch_url = original_fetch
 
     expect(
         len(deep) == 2,
@@ -362,6 +373,115 @@ def test_anchor_mode_discovery_offline() -> None:
     )
 
 
+# --- T13：C2 sitemap 字节体积超限 ⇒ 降级 anchor（不解析超大文档） -------------
+
+
+def test_sitemap_byte_limit_degrades_to_anchor() -> None:
+    if not hasattr(ch, "_discover_via_sitemap"):
+        return
+    sitemap_url = "https://example.org/sitemap.xml"
+    entry_url = "https://example.org/entry"
+    entry_html = '<html><body><a href="/learn/foo">避孕方法</a></body></html>'
+    src = {
+        "id": "sitemap-big",
+        "name": "超大 sitemap 信源",
+        "entry_url": entry_url,
+        "base_url": "https://example.org",
+        "link_pattern": "/learn/([a-zA-Z]+)",
+        "keywords": ["避孕"],
+        "discovery": {
+            "mode": "sitemap",
+            "url": sitemap_url,
+            "link_pattern": "/learn/",
+            "max_pages": 3,
+        },
+        "admission": {"status": "admitted", "license": "link-only"},
+    }
+
+    def stub_fetch(url, *args, **kwargs):
+        if url == sitemap_url:
+            return 200, "x" * 200  # 超出被临时调低的字节上限
+        if url == entry_url:
+            return 200, entry_html
+        return 0, ""
+
+    parse_calls: list = []
+    original_fetch = ch.fetch_url
+    original_parse = ch._parse_sitemap
+    original_bytes = ch.MAX_SITEMAP_BYTES
+    buffer = io.StringIO()
+    ch.fetch_url = stub_fetch
+    ch._parse_sitemap = lambda *a, **k: parse_calls.append(a) or []
+    ch.MAX_SITEMAP_BYTES = 50
+    try:
+        with contextlib.redirect_stdout(buffer):
+            got = ch._discover_via_sitemap(src, sitemap_url, "/learn/", 3, set())
+    finally:
+        ch.fetch_url = original_fetch
+        ch._parse_sitemap = original_parse
+        ch.MAX_SITEMAP_BYTES = original_bytes
+
+    printed = buffer.getvalue()
+    urls = [u for u, _ in got]
+    expect(
+        not parse_calls,
+        f"[T13] 字节超限必须降级到 anchor（不解析超大文档），但 _parse_sitemap 被调用 {parse_calls}",
+    )
+    expect(
+        "https://example.org/learn/foo" in urls,
+        f"[T13] 字节超限降级后应经 anchor 产出候选，实际 {got}",
+    )
+    expect(
+        "降级到 anchor" in printed,
+        f"[T13] 字节超限应打印降级告警，实际 stdout={printed!r}",
+    )
+    expect(
+        "max_pages" not in printed,
+        f"[T13] 字节超限告警不得冒充 max_pages 截断（文案漂移），实际 stdout={printed!r}",
+    )
+
+
+# --- T14：C3 anchor 信源 keywords 为空 ⇒ 显式告警（不静默 0 候选） -------------
+
+
+def test_anchor_empty_keywords_warns() -> None:
+    if not hasattr(ch, "_discover_via_anchor"):
+        return
+    entry_url = "https://example.org/entry"
+    html = (
+        "<html><body>"
+        '<a href="/learn/foo">避孕方法</a>'
+        '<a href="/learn/bar">月经周期</a>'
+        "</body></html>"
+    )
+    src = {
+        "id": "no-keywords",
+        "name": "无 keywords 信源",
+        "entry_url": entry_url,
+        "base_url": "https://example.org",
+        "link_pattern": "/learn/([a-zA-Z]+)",
+        "keywords": [],
+    }
+    original_fetch = ch.fetch_url
+    ch.fetch_url = lambda *a, **k: (200, html)
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            got = ch._discover_via_anchor(src, entry_url, "/learn/([a-zA-Z]+)", set())
+    finally:
+        ch.fetch_url = original_fetch
+
+    printed = buffer.getvalue()
+    expect(
+        got == [],
+        f"[T14] keywords 为空时 anchor 应仍产出 0 候选（不改变筛选语义），实际 {got}",
+    )
+    expect(
+        "keywords 为空" in printed,
+        f"[T14] keywords 为空必须打印显式告警（禁止静默 0 候选），实际 stdout={printed!r}",
+    )
+
+
 def main() -> int:
     if not (SITEMAP_FIXTURE.exists() and FEED_RSS_FIXTURE.exists() and FEED_ATOM_FIXTURE.exists()):
         errors.append(f"❌ 缺少 fixture：请确认 {FIXTURES_DIR} 下三个样本文件存在")
@@ -382,6 +502,8 @@ def main() -> int:
     test_is_source_admitted_truth_table()
     test_discover_candidates_fail_closed_no_fetch()
     test_anchor_mode_discovery_offline()
+    test_sitemap_byte_limit_degrades_to_anchor()
+    test_anchor_empty_keywords_warns()
 
     if errors:
         print("❌ [gate] 信源三模式发现与准入 fail-closed 门禁未通过：")
@@ -390,7 +512,7 @@ def main() -> int:
         print(f"   共 {len(errors)} 条失败")
         return 1
 
-    print("✅ [gate] 信源三模式发现与准入 fail-closed 门禁全部通过（12 组断言）")
+    print("✅ [gate] 信源三模式发现与准入 fail-closed 门禁全部通过（14 组断言，含 C2 字节降级 / C3 空 keywords 告警）")
     return 0
 
 

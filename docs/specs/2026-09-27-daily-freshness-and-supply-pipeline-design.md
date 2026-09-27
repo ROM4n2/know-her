@@ -202,8 +202,8 @@
 |---|---|
 | 网络超时 / 5xx | 沿用既有口径：单次超时 10s，重试 3 次，退避 2s |
 | 403 反爬 | 沿用 `curate.py` 既有五态判定：二次确认 403 记 `BOT_BLOCKED` 并**不计入死链**，不阻断准入流程 |
-| sitemap 体积过大 | `> 5MB` 或条目 `> 5000` 时按 `max_pages` 截断并打印告警，不中断其余信源 |
-| sitemap 为 gzip（`.xml.gz`） | 本里程碑**不支持**：跳过该信源并在报告中显式标注「需解码 gzip，降级到 anchor 模式」，禁止静默跳过 |
+| sitemap 体积保护（**措辞已于 2026-09-27 Task-6 验收后修正，与实现对齐**） | 三档语义彼此独立、不得互相冒充：① **条目数** `> 5000`（`MAX_SITEMAP_ENTRIES`）⇒ 截断到前 5000 条并打印告警；② **字节数** `> 5MB`（`MAX_SITEMAP_BYTES`）⇒ **降级到 anchor 模式**（不解析超大文档）并打印告警；③ `max_pages` 是 **sitemap index 递归深度上限**，**不承担**截断职责。任一告警都不得中断其余信源 |
+| sitemap 为 gzip（`.xml.gz`） | 本里程碑**不支持**：**显式打印**「需解码 gzip，本里程碑不支持，降级到 anchor 模式」后降级，禁止静默跳过（保留该信源覆盖，仅切换发现模式） |
 | sitemap index 嵌套 | 递归深度上限 `max_pages`（默认 3），超限即停，防无限递归 |
 | feed 格式差异（RSS 2.0 / Atom） | 两条 XPath 分支：`item/link`（RSS）与 `entry/link[@href]`（Atom）；两者皆无法解析时报错并跳过该信源 |
 | XML 解析异常 | 捕获 `ET.ParseError`，该信源降级为 `anchor` 模式并记录原因，不使整批失败 |

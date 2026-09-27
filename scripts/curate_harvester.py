@@ -26,17 +26,147 @@ LEDGER_FILE = os.path.join(SCRIPT_DIR, ".curate-ledger.json")
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
 
+# ---------------------------------------------------------------------------
+# M2：候选池台账 v2（带状态机）与幂等 v1 -> v2 迁移
+# ---------------------------------------------------------------------------
+
+# v2 条目字段顺序固定：保证迁移产物与 json.dumps 逐字节稳定（幂等等式依赖键序一致）。
+LEDGER_ENTRY_FIELDS = ("url", "status", "source_id", "first_seen", "last_probed", "http_status")
+# 状态机合法取值：pending（已发现未处理）-> published / rejected（单向流转）。
+LEDGER_STATUSES = ("pending", "published", "rejected")
+
+
+def _normalize_ledger_entry(entry: dict) -> dict:
+    """把单个台账条目规范化为 v2 六字段（键序固定），非法取值按缺省回填。"""
+    status = entry.get("status")
+    if status not in LEDGER_STATUSES:
+        status = "published"
+    http_status = entry.get("http_status")
+    if http_status is not None and not isinstance(http_status, int):
+        http_status = None
+    return {
+        "url": str(entry.get("url") or ""),
+        "status": status,
+        "source_id": str(entry.get("source_id") or ""),
+        "first_seen": str(entry.get("first_seen") or ""),
+        "last_probed": str(entry.get("last_probed") or ""),
+        "http_status": http_status,
+    }
+
+
+def migrate_ledger_v1_to_v2(data: dict) -> dict:
+    """幂等纯函数：把 v1（字符串数组）或 v2（对象数组）台账迁移为规范 v2 结构。
+
+    - 幂等：``migrate(v1) == migrate(migrate(v1))``（键序固定 ⇒ 对象结构逐字节一致）；
+    - v1 的 ``processed_urls`` -> ``status="published"``，``rejected_urls`` -> ``status="rejected"``；
+    - 缺失日期填空串、``http_status`` 填 ``None``；
+    - 无静默数据丢失：重复（或空）URL 按**首次出现**去重，并打印被丢弃条数。
+    """
+    if not isinstance(data, dict):
+        data = {}
+
+    entries: list = []
+    seen: set = set()
+    dropped = 0
+
+    def _append(url, status: str) -> None:
+        nonlocal dropped
+        cleaned = str(url or "").strip()
+        if not cleaned or cleaned in seen:
+            dropped += 1
+            return
+        seen.add(cleaned)
+        entries.append(
+            {
+                "url": cleaned,
+                "status": status,
+                "source_id": "",
+                "first_seen": "",
+                "last_probed": "",
+                "http_status": None,
+            }
+        )
+
+    if data.get("version") == 1:
+        for url in data.get("processed_urls") or []:
+            _append(url, "published")
+        for url in data.get("rejected_urls") or []:
+            _append(url, "rejected")
+    else:
+        for item in data.get("processed_urls") or []:
+            if isinstance(item, dict):
+                normalized = _normalize_ledger_entry(item)
+                if not normalized["url"] or normalized["url"] in seen:
+                    dropped += 1
+                    continue
+                seen.add(normalized["url"])
+                entries.append(normalized)
+            elif isinstance(item, str):
+                _append(item, "published")
+            else:
+                dropped += 1
+
+    if dropped:
+        print(f"  ⚠️ 台账迁移：按首次出现去重，丢弃重复/空 URL {dropped} 条")
+
+    return {
+        "version": 2,
+        "last_updated": str(data.get("last_updated") or ""),
+        "processed_urls": entries,
+    }
+
+
+def iter_pending(ledger: dict, source_id: str | None = None) -> list[dict]:
+    """返回台账中 ``status == "pending"`` 的条目；传入 ``source_id`` 时按来源过滤。"""
+    pending: list = []
+    for entry in (ledger or {}).get("processed_urls") or []:
+        if not isinstance(entry, dict) or entry.get("status") != "pending":
+            continue
+        if source_id is not None and entry.get("source_id") != source_id:
+            continue
+        pending.append(entry)
+    return pending
+
+
+def ledger_seen_urls(ledger: dict) -> set:
+    """收集台账中所有已见 URL（published / rejected / pending）供去重使用。
+
+    [C1 阻断项] 兼容对象数组（v2）与字符串数组（历史遗留）：禁止直接 ``set(entries)``，
+    否则对象条目因 dict 不可哈希抛 ``TypeError``。
+    """
+    urls: set = set()
+    for entry in (ledger or {}).get("processed_urls") or []:
+        if isinstance(entry, dict):
+            url = entry.get("url")
+            if url:
+                urls.add(url)
+        elif isinstance(entry, str):
+            urls.add(entry)
+    return urls
+
+
 def load_ledger() -> dict:
+    """读取台账（**唯一读入口**）：v1 自动迁移为 v2 并写回，打印迁移条数。"""
+    data = None
     if os.path.exists(LEDGER_FILE):
         try:
             with open(LEDGER_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
-            pass
-    return {"version": 1, "last_updated": "", "processed_urls": [], "rejected_urls": []}
+            data = None
+    if not isinstance(data, dict):
+        data = {"version": 2, "last_updated": "", "processed_urls": []}
+
+    migrated = migrate_ledger_v1_to_v2(data)
+    if migrated != data:
+        entry_count = len(migrated.get("processed_urls", []))
+        print(f"  ✓ 台账已从 v1 迁移到 v2：共 {entry_count} 条")
+        save_ledger(migrated)
+    return migrated
 
 
 def save_ledger(ledger: dict):
+    """写入台账（**唯一写入口**）。"""
     ledger["last_updated"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     with open(LEDGER_FILE, "w", encoding="utf-8") as f:
         json.dump(ledger, f, indent=2, ensure_ascii=False)
@@ -208,7 +338,10 @@ is_full_text: false
 # M2：信源准入（fail-closed）与 anchor / sitemap / feed 三模式增量发现
 # ---------------------------------------------------------------------------
 
-# sitemap 体积保护阈值（超限即截断并告警，不中断其余信源）
+# sitemap 体积保护阈值（三档语义彼此独立、不得互相冒充，任一告警均不中断其余信源）：
+#   ① 条目数 MAX_SITEMAP_ENTRIES：超限截断到前 5000 条并告警；
+#   ② 字节数 MAX_SITEMAP_BYTES：超限降级到 anchor 模式（不解析超大文档）并告警；
+#   ③ max_pages 仅为 sitemap index 递归深度上限，不承担截断职责。
 MAX_SITEMAP_ENTRIES = 5000
 MAX_SITEMAP_BYTES = 5 * 1024 * 1024
 
@@ -248,16 +381,13 @@ def _title_from_url(url: str) -> str:
 def _default_sitemap_fetch(url: str) -> str:
     """默认 sitemap 文本获取器（真实网络）。
 
-    测试可替换模块级 ``_SITEMAP_FETCH`` 以实现「零网络」的 sitemap index 递归验证。
+    递归解析子 sitemap 时使用；测试可向 ``_parse_sitemap`` / ``_collect_sitemap`` 传入
+    ``fetcher=`` 形参注入零网络实现（C4：已消除模块级可变 seam ``_SITEMAP_FETCH``）。
     """
     status, text = fetch_url(url, timeout=10)
     if status != 200 or not text:
         return ""
     return text
-
-
-# 可注入的 sitemap 获取器（模块级 seam）：递归解析子 sitemap 时使用。
-_SITEMAP_FETCH = _default_sitemap_fetch
 
 
 def _first_child_text(element, child_tag: str) -> str:
@@ -279,8 +409,21 @@ def _first_child_attr(element, child_tag: str, attr: str) -> str:
     return ""
 
 
-def _collect_sitemap(xml_text: str, link_pattern: str, max_pages: int, depth: int, out: list) -> None:
-    """递归收集 sitemap 页面链接；sitemap index 递归深度受 ``max_pages`` 约束。"""
+def _collect_sitemap(
+    xml_text: str,
+    link_pattern: str,
+    max_pages: int,
+    depth: int,
+    out: list,
+    fetcher=None,
+) -> None:
+    """递归收集 sitemap 页面链接；sitemap index 递归深度受 ``max_pages`` 约束。
+
+    ``fetcher`` 为可选注入形参（默认 ``_default_sitemap_fetch``），递归时逐层透传，
+    使「零网络」测试无需依赖模块级可变全局状态（C4）。
+    """
+    if fetcher is None:
+        fetcher = _default_sitemap_fetch
     root = ET.fromstring(xml_text)
     if _localname(root.tag) == "sitemapindex":
         if depth >= max_pages:
@@ -291,9 +434,9 @@ def _collect_sitemap(xml_text: str, link_pattern: str, max_pages: int, depth: in
             child_url = _first_child_text(sitemap_el, "loc")
             if not child_url:
                 continue
-            child_text = _SITEMAP_FETCH(child_url)
+            child_text = fetcher(child_url)
             if child_text:
-                _collect_sitemap(child_text, link_pattern, max_pages, depth + 1, out)
+                _collect_sitemap(child_text, link_pattern, max_pages, depth + 1, out, fetcher)
         return
 
     for url_el in root:
@@ -307,15 +450,16 @@ def _collect_sitemap(xml_text: str, link_pattern: str, max_pages: int, depth: in
         out.append(loc)
 
 
-def _parse_sitemap(xml_text: str, link_pattern: str, max_pages: int) -> list[str]:
+def _parse_sitemap(xml_text: str, link_pattern: str, max_pages: int, fetcher=None) -> list[str]:
     """解析 sitemap XML 文本，返回匹配 ``link_pattern`` 的页面 URL 列表。
 
     - ``urlset``：提取 ``<url><loc>``；空 sitemap 返回 ``[]``；
-    - ``sitemapindex``：经 ``_SITEMAP_FETCH`` 递归抓取子 sitemap，深度受 ``max_pages`` 约束；
+    - ``sitemapindex``：经 ``fetcher``（默认 ``_default_sitemap_fetch``）递归抓取子 sitemap，
+      深度受 ``max_pages`` 约束（``max_pages`` 仅作递归深度上限，**不承担**截断职责）；
     - 非法 XML 抛 ``xml.etree.ElementTree.ParseError``（由上层捕获并降级为 anchor 模式）。
     """
     results: list[str] = []
-    _collect_sitemap(xml_text, link_pattern, max_pages, 1, results)
+    _collect_sitemap(xml_text, link_pattern, max_pages, 1, results, fetcher)
     return results
 
 
@@ -369,6 +513,9 @@ def _discover_via_anchor(src: dict, entry_url: str, link_pattern: str, seen_urls
 
     base_url = src.get("base_url", "")
     keywords = src.get("keywords", [])
+    # [C3] 空 keywords 守卫：显式告警而非静默产出 0 候选（不改变筛选语义）。
+    if not keywords:
+        print("  ⚠️ 信源 keywords 为空，anchor 模式不会命中任何候选（请为该信源补充 keywords）")
     filtered_items: list[tuple[str, str]] = []
     seen_in_batch: set[str] = set()
 
@@ -418,8 +565,13 @@ def _discover_via_sitemap(src: dict, url: str, link_pattern: str, max_pages: int
         print(f"  ⚠️ sitemap 请求失败 (HTTP {status})，降级到 anchor 模式")
         return _fallback_to_anchor(src, link_pattern, seen_urls)
 
-    if len(text) > MAX_SITEMAP_BYTES:
-        print(f"  ⚠️ sitemap 文本超过 {MAX_SITEMAP_BYTES} 字节，触发体积保护（按 max_pages 截断处理）")
+    # [C2] 字节体积超限：降级到 anchor 模式（不解析超大文档），文案如实描述，不冒充 max_pages 截断。
+    if len(text.encode("utf-8")) > MAX_SITEMAP_BYTES:
+        print(
+            f"  ⚠️ sitemap 文本超过 {MAX_SITEMAP_BYTES} 字节体积上限，"
+            f"降级到 anchor 模式（不解析超大文档）"
+        )
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
 
     try:
         locs = _parse_sitemap(text, link_pattern, max_pages)
@@ -427,6 +579,7 @@ def _discover_via_sitemap(src: dict, url: str, link_pattern: str, max_pages: int
         print(f"  ⚠️ sitemap XML 解析失败（{exc}），降级到 anchor 模式")
         return _fallback_to_anchor(src, link_pattern, seen_urls)
 
+    # [C2] 条目数超限：截断到前 MAX_SITEMAP_ENTRIES 条并告警（与字节档互相独立）。
     if len(locs) > MAX_SITEMAP_ENTRIES:
         print(f"  ⚠️ sitemap 条目数 {len(locs)} 超过上限 {MAX_SITEMAP_ENTRIES}，按上限截断")
         locs = locs[:MAX_SITEMAP_ENTRIES]
@@ -503,10 +656,10 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
         sources = json.load(f)
 
     ledger = load_ledger()
-    processed_urls = set(ledger.get("processed_urls", []))
-    rejected_urls = set(ledger.get("rejected_urls", []))
+    # [C1] v2 台账为对象数组，必须以对象口径取 URL（禁止 set(对象数组) 触发 dict 不可哈希）
+    seen_ledger_urls = ledger_seen_urls(ledger)
     existing_urls = get_existing_article_urls()
-    all_seen_urls = processed_urls | rejected_urls | existing_urls
+    all_seen_urls = seen_ledger_urls | existing_urls
 
     candidates = []
 
@@ -597,10 +750,20 @@ def create_draft_pr(candidate: dict) -> bool:
             f.write(mdx_content)
         print(f"  ✓ 已生成草稿文件: {target_file}")
 
-        # 更新台账
+        # 更新台账（v2 对象口径；单写者纪律：仅经 load_ledger / save_ledger）
         ledger = load_ledger()
-        if candidate["source_url"] not in ledger.get("processed_urls", []):
-            ledger.setdefault("processed_urls", []).append(candidate["source_url"])
+        if candidate["source_url"] not in ledger_seen_urls(ledger):
+            today = datetime.date.today().isoformat()
+            ledger.setdefault("processed_urls", []).append(
+                {
+                    "url": candidate["source_url"],
+                    "status": "published",
+                    "source_id": candidate.get("source_id", ""),
+                    "first_seen": today,
+                    "last_probed": today,
+                    "http_status": 200,
+                }
+            )
         save_ledger(ledger)
         print(f"  ✓ 已更新台账: {LEDGER_FILE}")
 

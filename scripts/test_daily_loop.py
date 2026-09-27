@@ -9,22 +9,26 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 / G2 / G3 / G6 / G8 断言：
+本文件当前实现 G1 / G2 / G3 / G5 / G6 / G8 断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
     G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
+    G5（候选池台账 v2：v1->v2 迁移结构 / 幂等等式 / 重复 URL 去重 + 丢弃条数打印 /
+        真实台账字段完备 / v2 台账下 harvest_candidates 不抛 TypeError（C1 回归））
     G6（今日上新窗口：rotation.pickFreshArticle 源码契约 + 定日边界用例 +
         断言「今日上新」仅作附加展示、不污染轮换索引）
     G8（node 原生载入 rotation.ts 的真实行为断言：指纹/索引/lcm 防空壳假绿，含
         G8a 双时区（TZ=UTC / Asia/Shanghai）一致性 + G8b pickFreshArticle 真行为）
-G4（信源准入合法）、G5（台账 schema）、G7（速测题占位注入）由后续 Task 逐步追加。
+G4（信源准入合法）、G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
       站点内容（.mdx/.astro）零 Emoji；脚本输出沿用仓库既有 ❌/✅/[PASS]/[FAIL] 门禁范式。
 """
 
+import contextlib
 import datetime
+import io
 import json
 import re
 import shutil
@@ -34,8 +38,14 @@ import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import curate_harvester as ch
+
 ROOT_DIR = SCRIPT_DIR.parent
 
+LEDGER_FILE = SCRIPT_DIR / ".curate-ledger.json"
 ARTICLES_DIR = ROOT_DIR / "src" / "content" / "articles"
 GLOSSARY_DIR = ROOT_DIR / "src" / "content" / "glossary"
 QUIZ_FILE = ROOT_DIR / "src" / "data" / "dailyQuiz.ts"
@@ -1245,9 +1255,214 @@ def validate_pool_count_alignment_fixture(errors: list) -> None:
     print("[口径] content_entry_ids 夹具自检通过（递归 + .md/.mdx + 排除 '_'，loader 口径含内部文件）")
 
 
+# ---------------------------------------------------------------------------
+# G5：候选池台账 v2 与幂等迁移（Task-7）
+# ---------------------------------------------------------------------------
+
+LEDGER_ENTRY_FIELDS = ("url", "status", "source_id", "first_seen", "last_probed", "http_status")
+LEDGER_STATUSES = {"pending", "published", "rejected"}
+
+
+def _ledger_entry_field_problems(entry) -> list:
+    """返回条目字段完备性问题列表（空 = 完备）。"""
+    if not isinstance(entry, dict):
+        return [f"条目非对象：{entry!r}"]
+    problems: list = []
+    for field in LEDGER_ENTRY_FIELDS:
+        if field not in entry:
+            problems.append(f"缺少字段 '{field}'")
+    if entry.get("status") not in LEDGER_STATUSES:
+        problems.append(f"status 非法：{entry.get('status')!r}")
+    if not entry.get("url"):
+        problems.append("url 为空")
+    return problems
+
+
+def validate_g5_migration_structure(errors: list) -> None:
+    """G5 断言①：v1（字符串数组）-> v2（对象数组）结构正确、字段完备。"""
+    if not hasattr(ch, "migrate_ledger_v1_to_v2"):
+        errors.append("[G5] curate_harvester 缺少 migrate_ledger_v1_to_v2()（迁移函数未实现）")
+        return
+
+    v1 = {
+        "version": 1,
+        "last_updated": "2026-09-26T00:00:00+00:00",
+        "processed_urls": ["https://a.example/1", "https://a.example/2"],
+        "rejected_urls": ["https://a.example/rejected"],
+    }
+    v2 = ch.migrate_ledger_v1_to_v2(v1)
+
+    if v2.get("version") != 2:
+        errors.append(f"[G5] 迁移后 version 应为 2，实际 {v2.get('version')!r}")
+    entries = v2.get("processed_urls")
+    if not isinstance(entries, list) or len(entries) != 3:
+        errors.append(f"[G5] 迁移后应含 3 条（2 published + 1 rejected），实际 {entries!r}")
+        return
+    for entry in entries:
+        problems = _ledger_entry_field_problems(entry)
+        if problems:
+            errors.append(f"[G5] 迁移条目字段不完备：{problems}；条目={entry!r}")
+    status_by_url = {e.get("url"): e.get("status") for e in entries}
+    if status_by_url.get("https://a.example/1") != "published":
+        errors.append(f"[G5] processed_urls 迁移后 status 应为 published：{status_by_url}")
+    if status_by_url.get("https://a.example/rejected") != "rejected":
+        errors.append(f"[G5] rejected_urls 迁移后 status 应为 rejected：{status_by_url}")
+    print(f"[G5] v1->v2 结构断言通过：3 条条目均含 {list(LEDGER_ENTRY_FIELDS)} 六字段")
+
+
+def validate_g5_idempotent(errors: list) -> None:
+    """G5 断言②：幂等等式 migrate(v1) == migrate(migrate(v1))（键序固定、逐字节一致）。"""
+    if not hasattr(ch, "migrate_ledger_v1_to_v2"):
+        errors.append("[G5] curate_harvester 缺少 migrate_ledger_v1_to_v2()")
+        return
+    v1 = {
+        "version": 1,
+        "last_updated": "2026-09-26T00:00:00+00:00",
+        "processed_urls": ["https://a.example/1", "https://a.example/2", "https://a.example/1"],
+        "rejected_urls": [],
+    }
+    once = ch.migrate_ledger_v1_to_v2(v1)
+    twice = ch.migrate_ledger_v1_to_v2(once)
+    dump_once = json.dumps(once, ensure_ascii=False)
+    dump_twice = json.dumps(twice, ensure_ascii=False)
+    if dump_once != dump_twice:
+        errors.append(
+            f"[G5] 迁移幂等性被破坏：migrate(v1) != migrate(migrate(v1))；"
+            f"once={dump_once}，twice={dump_twice}"
+        )
+        return
+    print("[G5] 幂等等式通过：migrate(v1) 与 migrate(migrate(v1)) 逐字节一致")
+
+
+def validate_g5_dedup_prints(errors: list) -> None:
+    """G5 断言③：重复 URL 按首次出现去重，且**打印被丢弃条数**（无静默数据丢失）。"""
+    if not hasattr(ch, "migrate_ledger_v1_to_v2"):
+        errors.append("[G5] curate_harvester 缺少 migrate_ledger_v1_to_v2()")
+        return
+    v1 = {
+        "version": 1,
+        "last_updated": "",
+        "processed_urls": ["https://a.example/1", "https://a.example/1", "https://a.example/2"],
+        "rejected_urls": [],
+    }
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        v2 = ch.migrate_ledger_v1_to_v2(v1)
+    printed = buffer.getvalue()
+    urls = [e.get("url") for e in v2.get("processed_urls", [])]
+    if urls != ["https://a.example/1", "https://a.example/2"]:
+        errors.append(f"[G5] 重复 URL 去重失败（应按首次出现保留 2 条）：{urls}")
+    if "丢弃" not in printed:
+        errors.append(f"[G5] 重复 URL 去重未打印被丢弃条数：stdout={printed!r}")
+    print(f"[G5] 去重断言通过：3 条输入 -> {len(urls)} 条唯一，丢弃并打印：{printed.strip()!r}")
+
+
+def validate_g5_real_ledger(errors: list) -> None:
+    """G5 断言④：现有 scripts/.curate-ledger.json 已是 v2 且字段完备、url 全局唯一。"""
+    if not LEDGER_FILE.is_file():
+        errors.append(f"[G5] 台账文件缺失：{LEDGER_FILE}")
+        return
+    if not hasattr(ch, "load_ledger"):
+        errors.append("[G5] curate_harvester 缺少 load_ledger()")
+        return
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        ledger = ch.load_ledger()
+    if ledger.get("version") != 2:
+        errors.append(
+            f"[G5] 真实台账 version 应为 2，实际 {ledger.get('version')!r}（未执行迁移落盘）"
+        )
+    entries = ledger.get("processed_urls")
+    if not isinstance(entries, list) or not entries:
+        errors.append(f"[G5] 真实台账 processed_urls 应非空对象数组，实际 {entries!r}")
+        return
+    non_dict = [e for e in entries if not isinstance(e, dict)]
+    if non_dict:
+        errors.append(
+            f"[G5] 真实台账 processed_urls 仍含非对象条目（v1 未迁移为 v2）：{non_dict!r}"
+        )
+        return
+    for entry in entries:
+        problems = _ledger_entry_field_problems(entry)
+        if problems:
+            errors.append(f"[G5] 真实台账条目字段不完备：{problems}；条目={entry!r}")
+    urls = [e.get("url") for e in entries]
+    if len(urls) != len(set(urls)):
+        errors.append(f"[G5] 真实台账 url 非全局唯一：{urls}")
+    print(f"[G5] 真实台账断言通过：version=2，共 {len(entries)} 条，字段完备且 url 全局唯一")
+
+
+def validate_g5_harvest_no_typeerror(errors: list) -> None:
+    """G5 断言⑤ [C1 回归]：v2 台账（对象数组）下 harvest_candidates() 不得抛 TypeError。
+
+    直接以 v2 fixture 台账驱动生产路径 harvest_candidates()，并把 fetch_url 打桩为
+    零网络返回（(0, "")），断言：① 不抛 TypeError（旧实现 set(对象数组) 会因 dict
+    不可哈希崩溃）；② 返回 list；③ 全程零真实网络请求。
+    """
+    if not hasattr(ch, "harvest_candidates"):
+        errors.append("[G5] curate_harvester 缺少 harvest_candidates()")
+        return
+
+    fixture_ledger = {
+        "version": 2,
+        "last_updated": "",
+        "processed_urls": [
+            {
+                "url": "https://fixture.example/seen-1",
+                "status": "published",
+                "source_id": "fixture",
+                "first_seen": "2026-09-01",
+                "last_probed": "2026-09-02",
+                "http_status": 200,
+            },
+            {
+                "url": "https://fixture.example/seen-2",
+                "status": "rejected",
+                "source_id": "fixture",
+                "first_seen": "2026-09-01",
+                "last_probed": "2026-09-02",
+                "http_status": 404,
+            },
+        ],
+    }
+
+    original_load = ch.load_ledger
+    original_fetch = ch.fetch_url
+    stub_calls: list = []
+
+    def zero_network_fetch(*args, **kwargs):
+        stub_calls.append(args)
+        return 0, ""
+
+    ch.load_ledger = lambda: fixture_ledger
+    ch.fetch_url = zero_network_fetch
+    try:
+        result = ch.harvest_candidates(limit=1)
+    except TypeError as exc:
+        errors.append(
+            f"[G5][C1] v2 台账（对象数组）下 harvest_candidates 抛 TypeError：{exc}"
+            f"（台账读写未改为对象口径，set(entries) 因 dict 不可哈希而崩溃）"
+        )
+        return
+    except Exception as exc:  # noqa: BLE001 — 断言容错
+        errors.append(f"[G5][C1] harvest_candidates 意外异常 {type(exc).__name__}: {exc}")
+        return
+    finally:
+        ch.load_ledger = original_load
+        ch.fetch_url = original_fetch
+
+    if not isinstance(result, list):
+        errors.append(f"[G5][C1] harvest_candidates 应返回 list，实际 {type(result).__name__}")
+        return
+    print(
+        f"[G5][C1] v2 台账下 harvest_candidates 正常返回（{len(result)} 条候选，"
+        f"{len(stub_calls)} 次打桩抓取，零真实网络）"
+    )
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G4/G5/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G4/G7 由后续 Task 追加。")
 
     errors: list = []
 
@@ -1273,6 +1488,13 @@ def run_gate() -> None:
     validate_pool_count_alignment(errors)
     validate_pool_count_alignment_fixture(errors)
 
+    # [G5] 候选池台账 v2：迁移结构 / 幂等 / 去重打印 / 真实台账 / C1 零 TypeError
+    validate_g5_migration_structure(errors)
+    validate_g5_idempotent(errors)
+    validate_g5_dedup_prints(errors)
+    validate_g5_real_ledger(errors)
+    validate_g5_harvest_no_typeerror(errors)
+
     # [G8/G8a/G8b] node 原生载入 rotation.ts 的真实行为断言（探针失败即记明确错误，不静默跳过）
     probe = _run_rotation_probe(errors)
     validate_g8_rotation_behavior(errors, probe)
@@ -1285,7 +1507,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2、G3、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3、G5、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":
