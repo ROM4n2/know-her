@@ -78,3 +78,53 @@ export function computeFingerprint(date: Date, poolSizes: number[]): string {
   if (poolSizes.length === 0) return '';
   return poolSizes.map((size) => getTodayIndex(size, date)).join('-');
 }
+
+/**
+ * 计算基于北京时间（UTC+8）的整日序号（自 Unix 纪元起的天数）。
+ * 与 getDayOfYear 同源：两者都要求「结果与构建机时区无关」。
+ *
+ * 实现契约：**不得**引入 getTimezoneOffset() 项 —— 传入的 date 已是绝对时间戳
+ * （getTime() 返回自 Unix 纪元的毫秒数，不含本地时区语义），直接加 8 小时再取整
+ * 即为北京日序号；若引入 date.getTimezoneOffset() * 60000 本地偏移项，该项在
+ * Math.floor 前不会抵消，会使结果随构建机时区漂移（同一时刻在 TZ=UTC 机与 UTC+8 机
+ * 可相差 1 天），进而令「今日上新」7 天窗口整体错位、第 7/8 天边界判定失准。
+ * 该 TZ 无关约束由 scripts/test_daily_loop.py 的 G6 契约强制守护。
+ * 用于 pickFreshArticle 的「日差」比较，禁止直接用毫秒相减（跨时区会漏判）。
+ */
+export function beijingDayNumber(date: Date): number {
+  return Math.floor((date.getTime() + 8 * 3600000) / 86400000);
+}
+
+/**
+ * 挑选「今日上新」文章：发布日距 today 的北京日差落在 [0, windowDays) 内的最新一篇。
+ *
+ * 纯函数，零依赖。仅用于 DailyCard 的附加「今日上新」条带，
+ * **不参与轮换索引计算**（getTodayIndex(articles.length) 零扰动）。
+ * - 空数组守卫：直接返回 null。
+ * - 未来日期守卫：daysDiff < 0 时跳过（不命中）。
+ * - 窗口上界开区间：daysDiff < windowDays（windowDays=7 ⇒ 第 1~7 天命中，第 8 天不命中）。
+ * - 多篇命中：返回 getDate 最新的一篇。
+ */
+export function pickFreshArticle<T>(
+  items: T[],
+  getDate: (item: T) => Date,
+  today: Date = new Date(),
+  windowDays = 7,
+): T | null {
+  if (items.length === 0) return null;
+
+  const todayNo = beijingDayNumber(today);
+  let fresh: T | null = null;
+  let freshNo = Number.NEGATIVE_INFINITY;
+
+  for (const item of items) {
+    const itemNo = beijingDayNumber(getDate(item));
+    const daysDiff = todayNo - itemNo;
+    if (daysDiff < 0) continue;
+    if (daysDiff < windowDays && itemNo > freshNo) {
+      fresh = item;
+      freshNo = itemNo;
+    }
+  }
+  return fresh;
+}

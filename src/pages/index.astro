@@ -7,18 +7,23 @@ import DailyTerm from '../components/DailyTerm.astro';
 import AmbientHero from '../components/AmbientHero.astro';
 import { CATEGORIES, SITE_TITLE, SITE_DESCRIPTION, type CategoryKey } from '../consts';
 import { DAILY_QUIZZES, getTodayIndex } from '../data/dailyQuiz';
+import { pickFreshArticle } from '../data/rotation';
 
 const entries: CollectionEntry<'articles'>[] = await getCollection('articles');
+// 排序语义：(1) pubDate 降序；(2) 并列 pubDate 时按 id 降序。
+// 文章池存在大量并列 pubDate（平局分支必然被触发），故采用 locale 无关比较器
+// （非 localeCompare），消除 ICU/locale 差异导致的顺序漂移 -> 「今日精选」随环境漂移。
 const articles = entries
   .filter((entry) => !entry.id.startsWith('_'))
   .sort(
     (a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) =>
-      b.data.pubDate.getTime() - a.data.pubDate.getTime() || b.id.localeCompare(a.id),
+      b.data.pubDate.getTime() - a.data.pubDate.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
   );
 
 // 词条池：按 id 升序排序保证轮换索引在不同构建间确定性（否则每日一词会漂移）
+// 采用 locale 无关比较器（非 localeCompare），消除 ICU/locale 差异导致的轮换索引漂移风险。
 const allTerms: CollectionEntry<'glossary'>[] = await getCollection('glossary');
-const sortedTerms = [...allTerms].sort((a, b) => a.id.localeCompare(b.id));
+const sortedTerms = [...allTerms].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -29,6 +34,9 @@ const todayIdx = getTodayIndex(articles.length);
 const featuredArticle = articles[todayIdx] ?? articles[0];
 const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefined;
 
+// 今日上新（附加展示）：7 天窗口内最新一篇，仅作 DailyCard 附加条带，不参与上面的轮换索引计算
+const freshArticle = pickFreshArticle(articles, (entry) => entry.data.pubDate);
+
 // 第二个独立轮换源：每日一词（与文章池共同构成 lcm(26, 28) = 364 天不重复组合）
 const todayTerm = sortedTerms[getTodayIndex(sortedTerms.length)] ?? sortedTerms[0];
 ---
@@ -38,7 +46,9 @@ const todayTerm = sortedTerms[getTodayIndex(sortedTerms.length)] ?? sortedTerms[
   <AmbientHero className="mb-8" />
 
   {/* 今日精选科普与每日速测打卡 */}
-  {featuredArticle && <DailyCard article={featuredArticle} quiz={todayQuiz} />}
+  {featuredArticle && (
+    <DailyCard article={featuredArticle} quiz={todayQuiz} freshArticle={freshArticle} />
+  )}
 
   {/* 每日一词：第二个独立轮换源（空池降级：不渲染、不留占位） */}
   {sortedTerms.length > 0 && todayTerm && <DailyTerm term={todayTerm} />}

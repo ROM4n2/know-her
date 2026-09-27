@@ -9,9 +9,10 @@ import { CATEGORIES, type CategoryKey } from '../consts';
 interface Props {
   article: CollectionEntry<'articles'>;
   quiz?: QuizItem;
+  freshArticle?: CollectionEntry<'articles'> | null;
 }
 
-const { article, quiz } = Astro.props;
+const { article, quiz, freshArticle } = Astro.props;
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -62,6 +63,22 @@ const todayStr = new Intl.DateTimeFormat('zh-CN', {
       <span class="text-xs text-[#5A5448]">天连续探索</span>
     </div>
   </div>
+
+  {/* 今日上新条带：7 天内新文「附加展示」（不替换今日精选，零扰动轮换索引） */}
+  {freshArticle && freshArticle.id !== article.id && (
+    <div class="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-rose-200 bg-rose-50/40 px-4 py-2.5 text-xs">
+      <span class="rounded-md bg-[#15140F] px-2 py-0.5 font-mono font-bold tracking-[0.15em] text-rose-200">
+        [ 今日上新 ]
+      </span>
+      <a
+        href={`${base}articles/${freshArticle.id}/`}
+        class="font-semibold text-[#15140F] hover:text-rose-600 transition-colors"
+      >
+        {freshArticle.data.title}
+      </a>
+      <span class="ml-auto font-mono text-[11px] text-[#8B8676]">7 天内发布</span>
+    </div>
+  )}
 
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     {/* 左侧：今日精选导读 */}

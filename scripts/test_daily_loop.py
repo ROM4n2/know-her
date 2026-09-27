@@ -9,17 +9,19 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 / G2 / G3 三组断言：
+本文件当前实现 G1 / G2 / G3 / G6 四组断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
     G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
-G4（信源准入合法）、G5（台账 schema）、G6（今日上新窗口）、
-G7（速测题占位注入）由后续 Task 逐步追加。
+    G6（今日上新窗口：rotation.pickFreshArticle 源码契约 + 定日边界用例 +
+        断言「今日上新」仅作附加展示、不污染轮换索引）
+G4（信源准入合法）、G5（台账 schema）、G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；零 Emoji。
 """
 
+import datetime
 import re
 import sys
 import tempfile
@@ -32,6 +34,8 @@ ARTICLES_DIR = ROOT_DIR / "src" / "content" / "articles"
 GLOSSARY_DIR = ROOT_DIR / "src" / "content" / "glossary"
 QUIZ_FILE = ROOT_DIR / "src" / "data" / "dailyQuiz.ts"
 ROTATION_FILE = ROOT_DIR / "src" / "data" / "rotation.ts"
+INDEX_FILE = ROOT_DIR / "src" / "pages" / "index.astro"
+DAILY_CARD_FILE = ROOT_DIR / "src" / "components" / "DailyCard.astro"
 
 # 首页当日组合周期下限（一季）。与 src/data/rotation.ts 的 MIN_UNIQUE_CYCLE_DAYS 对齐。
 MIN_UNIQUE_CYCLE_DAYS = 90
@@ -43,9 +47,39 @@ def _read_text(path: Path) -> str:
 
 
 def _strip_ts_comments(source: str) -> str:
-    """剥离 TypeScript 注释（块注释 + 行注释），避免把注释里的键误计入池规模。"""
-    without_block = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    """剥离 TypeScript 注释（块注释 + 行注释）与 HTML 注释。
+
+    本函数同时被用于扫描 .astro 文件，故必须一并剥离 HTML 注释
+    （``<!-- getTodayIndex(articles.length) -->`` 之类会造成假绿）；
+    TS 块注释/行注释的剥离则避免把注释里的键误计入池规模。
+    """
+    without_html = re.sub(r"<!--.*?-->", "", source, flags=re.DOTALL)
+    without_block = re.sub(r"/\*.*?\*/", "", without_html, flags=re.DOTALL)
     return re.sub(r"//[^\n]*", "", without_block)
+
+
+def _extract_function_body(source: str, func_name: str) -> str:
+    """从 TS 源码中抽取指定函数（function <name>(...)）的函数体文本。
+
+    以签名后首个 '{' 为起点做花括号配平，返回其内层文本（不含最外层花括号）。
+    找不到函数签名或花括号不配平时返回空字符串（调用方据此判定「函数缺失」）。
+    """
+    match = re.search(r"function\s+" + re.escape(func_name) + r"\s*\(", source)
+    if not match:
+        return ""
+    start_brace = source.find("{", match.end())
+    if start_brace == -1:
+        return ""
+    depth = 0
+    for index in range(start_brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start_brace + 1 : index]
+    return ""
 
 
 def count_article_pool() -> int:
@@ -422,9 +456,236 @@ def validate_quiz_coverage_reverse_test(errors: list) -> None:
     print(f"[G1] 反向用例通过：夹具（1 篇文章 + 0 道题）下检出 {len(fixture_errors)} 条错误并点名缺失 slug")
 
 
+def validate_g6_fresh_window_contract(errors: list) -> None:
+    """G6 主断言①：rotation.ts 中 pickFreshArticle 的源码契约。
+
+    本项目无 JS 运行时，本组沿用 Task-1/2/3 的源码契约风格（token/正则扫描）；
+    Task-5 会补 node --input-type=module 行为断言。此处断言 pickFreshArticle 存在、
+    默认窗口 7 天、使用 beijingDayNumber 做 UTC+8 日归一化（禁止毫秒相减），
+    且窗口判定同时含下界守卫（daysDiff < 0，排除未来日期）与上界开区间（daysDiff < windowDays）。
+
+    注意（反向验证发现的假绿漏洞）：契约扫描必须先 _strip_ts_comments 剥离注释，
+    否则 JSDoc 里出现同名 token（如「daysDiff < windowDays」）会误判通过——
+    实测把命中条件放宽为 `<=` 后，若扫原文则正则仍被注释满足而不报错。
+    """
+    if not ROTATION_FILE.is_file():
+        errors.append(f"[G6] 轮换数学真值源缺失：{ROTATION_FILE}")
+        return
+
+    source = _strip_ts_comments(_read_text(ROTATION_FILE))
+    if "export function pickFreshArticle" not in source:
+        errors.append("[G6] rotation.ts 缺少必须导出：export function pickFreshArticle")
+    if not re.search(r"windowDays\s*=\s*7", source):
+        errors.append("[G6] pickFreshArticle 缺少默认窗口参数 windowDays = 7")
+    if "beijingDayNumber" not in source:
+        errors.append(
+            "[G6] pickFreshArticle 未使用 beijingDayNumber 做 UTC+8 日归一化（禁止毫秒相减）"
+        )
+    if not re.search(r"daysDiff\s*<\s*windowDays", source):
+        errors.append("[G6] pickFreshArticle 缺少窗口上界开区间判定 daysDiff < windowDays")
+    if not re.search(r"daysDiff\s*<\s*0", source):
+        errors.append("[G6] pickFreshArticle 缺少下界守卫 daysDiff < 0（排除未来日期）")
+
+    print(
+        "[G6] rotation.pickFreshArticle 源码契约通过"
+        "（存在性 / 默认窗口7 / UTC+8归一化 / 上下界判定）"
+    )
+
+
+def validate_g6_beijing_tz_independent(errors: list) -> None:
+    """G6 主断言⑤：beijingDayNumber 必须与构建机时区无关（捕获本轮 RED）。
+
+    RED 事实（编排者真机实测确认，非推测）：旧实现
+        const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+        return Math.floor((utc + 8 * 3600000) / 86400000);
+    中 getTimezoneOffset() 项在 floor 前不会抵消，导致北京日序号随构建机时区漂移
+    （同一时刻 2026-10-03T20:00:00Z：TZ=UTC 机得 20730，系统 UTC+8 机得 20729，差 1 天），
+    进而使「今日上新」7 天窗口整体漂移 8 小时、第 7/8 天边界错位，
+    且骗过此前仅查函数存在性的契约正则。
+
+    必要条件：beijingDayNumber 函数体内不得出现 getTimezoneOffset()——传入的 date 已是绝对
+    时间戳，直接加 8 小时再取整即为北京日序号；引入本地偏移项会使结果随构建机时区漂移。
+    这与 getDayOfYear 的 TZ 无关性同源。扫描前先 _strip_ts_comments 剥离注释，
+    防止把 JSDoc 中出现的同名 token 误当作真实代码。
+    """
+    if not ROTATION_FILE.is_file():
+        errors.append(f"[G6] 轮换数学真值源缺失：{ROTATION_FILE}")
+        return
+
+    source = _strip_ts_comments(_read_text(ROTATION_FILE))
+    body = _extract_function_body(source, "beijingDayNumber")
+    if not body:
+        errors.append(
+            "[G6] rotation.ts 缺少必须导出：export function beijingDayNumber"
+        )
+        return
+    if "getTimezoneOffset" in body:
+        errors.append(
+            "[G6] beijingDayNumber 不得引入 getTimezoneOffset()"
+            "（会导致窗口随构建机时区漂移）"
+        )
+        return
+
+    print(
+        "[G6] beijingDayNumber 构建机时区无关契约通过"
+        "（函数体零 getTimezoneOffset 项）"
+    )
+
+
+def mirror_pick_fresh(pub_dates: list, today, window_days: int = 7):
+    """语义镜像：与 rotation.pickFreshArticle 同构，仅用于执行「定日边界」用例。
+
+    返回被选中项索引；无命中返回 None。TS 侧逻辑由
+    validate_g6_fresh_window_contract 的正则契约钉死，本镜像仅补齐可执行的边界覆盖
+    （无 JS 运行时下无法直接执行 TS，故镜像 + 契约双保险）。
+    """
+    if not pub_dates:
+        return None
+
+    today_no = today.toordinal()
+    best_index = None
+    best_no = None
+    for index, pub in enumerate(pub_dates):
+        pub_no = pub.toordinal()
+        days_diff = today_no - pub_no
+        if days_diff < 0:
+            continue
+        if days_diff < window_days and (best_no is None or pub_no > best_no):
+            best_index = index
+            best_no = pub_no
+    return best_index
+
+
+def validate_g6_window_boundaries(errors: list) -> None:
+    """G6 主断言②：定日边界用例（含发布第 7 / 8 天边界）。"""
+    today = datetime.date(2026, 9, 27)
+    cases = [
+        ("发布第 7 天(daysDiff=6)命中", [today - datetime.timedelta(days=6)], 0),
+        ("发布第 8 天(daysDiff=7)不命中", [today - datetime.timedelta(days=7)], None),
+        ("发布当天(daysDiff=0)命中", [today], 0),
+        ("未来日期(daysDiff=-1)不命中", [today + datetime.timedelta(days=1)], None),
+    ]
+    for label, dates, expected in cases:
+        actual = mirror_pick_fresh(dates, today)
+        if actual != expected:
+            errors.append(f"[G6] 边界用例失败：{label} 期望 {expected}，实际 {actual}")
+
+    multi = [today - datetime.timedelta(days=2), today - datetime.timedelta(days=6), today]
+    multi_actual = mirror_pick_fresh(multi, today)
+    if multi_actual != 2:
+        errors.append(
+            f"[G6] 边界用例失败：多篇命中应返回 getDate 最新一篇（索引 2），实际 {multi_actual}"
+        )
+
+    if mirror_pick_fresh([], today) is not None:
+        errors.append("[G6] 边界用例失败：空数组应返回 None")
+
+    print(
+        "[G6] 窗口边界用例（Python 镜像，行为断言由 Task-5 G8 补足）通过："
+        "第7天命中 / 第8天不命中 / 发布当天命中 / 未来不命中 / 多篇取最新 / 空数组返回 None"
+    )
+
+
+def validate_g6_no_rotation_drift(errors: list) -> None:
+    """G6 主断言③：freshArticle 仅作附加展示，绝不污染轮换索引。
+
+    断言 index.astro 中「今日精选」仍由 getTodayIndex(articles.length) 决定，
+    freshArticle 只作为额外 prop 传入 <DailyCard />，且从不用作 articles 的索引。
+    """
+    if not INDEX_FILE.is_file():
+        errors.append(f"[G6] 首页文件缺失：{INDEX_FILE}")
+        return
+
+    source = _strip_ts_comments(_read_text(INDEX_FILE))
+    if not re.search(r"getTodayIndex\(articles\.length\)", source):
+        errors.append(
+            "[G6] 轮换索引契约被破坏：index.astro 未使用 getTodayIndex(articles.length) 计算今日精选"
+        )
+    if "pickFreshArticle" not in source:
+        errors.append("[G6] index.astro 未引入/调用 pickFreshArticle 计算今日上新")
+    if not re.search(r"pickFreshArticle\(\s*articles", source):
+        errors.append("[G6] index.astro 未以文章池计算 freshArticle：pickFreshArticle(articles, ...)")
+    if not re.search(r"freshArticle=\{freshArticle", source):
+        errors.append("[G6] index.astro 未把 freshArticle 作为附加 prop 传入 <DailyCard />")
+    if re.search(r"articles\s*\[[^\]]*freshArticle", source):
+        errors.append(
+            "[G6] 轮换索引被污染：freshArticle 被用作 articles 的索引（应仅附加展示，不参与轮换）"
+        )
+
+    print(
+        "[G6] 轮换索引零扰动源码契约通过：featuredArticle 仍由 getTodayIndex(articles.length) 决定，"
+        "freshArticle 仅附加传入"
+    )
+
+
+def validate_g6_article_sort_descending(errors: list) -> None:
+    """G6 主断言⑥：index.astro 文章排序主键必须为 pubDate 降序（防符号翻转）。
+
+    RED 事实（编排者 git 复核定性，非推测）：上一轮修订把比较器主键从
+        b.data.pubDate.getTime() - a.data.pubDate.getTime()   // 降序（正确，最新文在索引 0）
+    翻转为
+        a.data.pubDate.getTime() - b.data.pubDate.getTime()   // 升序（错误，最旧文在索引 0）
+    致使 articles[0] 由「最新文」变为「最旧文」，featuredArticle（今日精选）语义被改变，
+    且骗过 astro check / build（均不校验排序方向）。
+
+    降序形态 `b...getTime() - a...getTime()` 与升序形态 `a...getTime() - b...getTime()`
+    互不为子串，可独立判别：必须命中降序形态，且不得命中升序形态。
+    扫描前先 _strip_ts_comments 剥离注释，防止注释中的示例片段造成假绿/假红。
+    """
+    if not INDEX_FILE.is_file():
+        errors.append(f"[G6] 首页文件缺失：{INDEX_FILE}")
+        return
+
+    source = _strip_ts_comments(_read_text(INDEX_FILE))
+    descending = r"b\.data\.pubDate\.getTime\(\)\s*-\s*a\.data\.pubDate\.getTime\(\)"
+    ascending = r"a\.data\.pubDate\.getTime\(\)\s*-\s*b\.data\.pubDate\.getTime\(\)"
+
+    if re.search(ascending, source):
+        errors.append(
+            "[G6] index.astro 文章排序主键必须为 pubDate 降序（b - a）；"
+            "当前为升序（a - b），会使「今日精选」指向最旧文章"
+        )
+        return
+    if not re.search(descending, source):
+        errors.append(
+            "[G6] index.astro 文章排序主键缺失 pubDate 降序形态"
+            "（b.data.pubDate.getTime() - a.data.pubDate.getTime()），"
+            "排序方向不确定会使「今日精选」随实现漂移"
+        )
+        return
+
+    print(
+        "[G6] index.astro 文章排序主键降序契约通过"
+        "（命中 b - a 降序；无 a - b 升序形态）"
+    )
+
+
+def validate_g6_card_strip(errors: list) -> None:
+    """G6 主断言④：DailyCard 今日上新条带契约（条件渲染 / 去重守卫 / 零 innerHTML）。"""
+    if not DAILY_CARD_FILE.is_file():
+        errors.append(f"[G6] 组件文件缺失：{DAILY_CARD_FILE}")
+        return
+
+    source = _strip_ts_comments(_read_text(DAILY_CARD_FILE))
+    if not re.search(r"freshArticle\?:\s*CollectionEntry<'articles'>", source):
+        errors.append("[G6] DailyCard.astro 缺少可选 Prop freshArticle?: CollectionEntry<'articles'>")
+    if not re.search(r"freshArticle\s*&&\s*freshArticle\.id\s*!==\s*article\.id", source):
+        errors.append(
+            "[G6] DailyCard.astro 缺少去重守卫：freshArticle && freshArticle.id !== article.id"
+        )
+    if "今日上新" not in source:
+        errors.append("[G6] DailyCard.astro 缺少「今日上新」条带文案")
+    if not re.search(r"articles/\$\{freshArticle\.id\}/", source):
+        errors.append("[G6] DailyCard.astro 缺少新文直达链接 ${base}articles/${freshArticle.id}/")
+    if "innerHTML" in source:
+        errors.append("[G6] DailyCard.astro 出现 innerHTML（站点硬约束禁止）")
+
+    print("[G6] DailyCard 今日上新条带契约通过（可选 Prop / 去重守卫 / 直链 / 零 innerHTML）")
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）与 G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）；G4/G5/G6/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）与 G6（今日上新窗口 + 附加展示零扰动轮换索引）；G4/G5/G7 由后续 Task 追加。")
 
     errors: list = []
 
@@ -436,6 +697,12 @@ def run_gate() -> None:
     validate_self_checks(errors)
     validate_rotation_contract(errors)
     validate_daily_quiz_reexport(errors)
+    validate_g6_fresh_window_contract(errors)
+    validate_g6_beijing_tz_independent(errors)
+    validate_g6_window_boundaries(errors)
+    validate_g6_no_rotation_drift(errors)
+    validate_g6_article_sort_descending(errors)
+    validate_g6_card_strip(errors)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")
@@ -443,7 +710,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2 与 G3 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化，反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3 与 G6 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":
