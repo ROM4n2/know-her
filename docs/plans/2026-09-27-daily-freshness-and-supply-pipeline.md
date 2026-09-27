@@ -256,6 +256,12 @@
 - [ ] **Step 6: Physical Evidence Gate**：附两条反向验证的 exit code 证据。
 - [ ] **Step 7: Git atomic commit**：`git commit -m "ci: 接入每日循环门禁并补TS行为断言防空壳假绿"`。
 
+> **M1 验收后遗留项（Checker 于 Task-5 验收时提出，非阻断；由 M2 任务顺带收口）**：
+> - **L1（建议优先）**：`analyze_article_sort_primary` 仍有假降序盲区——`const d = b - a; return -d;`（中间变量再取反，语义为升序）会命中 `has_desc` 分支被放行 ⇒ 需补「对含降序子串的变量取反必须判红」的断言，或改以 node 行为级断言排序方向。**落点：Task 6 或任意触碰该文件的 M2 任务**。
+> - **L2**：`content_entry_ids` 的「内部文件」判定用 `path.name`（basename），而站点页面按完整 `entry.id` 过滤 ⇒ 出现嵌套目录时会分歧（当前无嵌套，潜在）。**落点：同上**。
+> - **L3（可延后）**：`_strip_ts_comments` 未解析模板串 `${...}` 插值；且 `/` 紧跟 `+`/`*`/`%` 运算符时可能被误判为正则起始。**落点：扫描目标扩展到模板插值时**。
+> - **纪律项**：M2 引入 G4/G5/G7 新门禁后，必须同步更新 `scripts/test_daily_loop.py` 顶部 docstring 与 `[gate]` 横幅中「G4/G5/G7 由后续 Task 追加」的表述，避免文档漂移。
+
 ---
 
 ### Task 6: 信源清单 v2 与三模式增量发现 `discover_candidates()` [Mode: AFK] [Role: TDD Builder]

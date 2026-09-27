@@ -9,20 +9,26 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 / G2 / G3 / G6 四组断言：
+本文件当前实现 G1 / G2 / G3 / G6 / G8 断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
     G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
     G6（今日上新窗口：rotation.pickFreshArticle 源码契约 + 定日边界用例 +
         断言「今日上新」仅作附加展示、不污染轮换索引）
+    G8（node 原生载入 rotation.ts 的真实行为断言：指纹/索引/lcm 防空壳假绿，含
+        G8a 双时区（TZ=UTC / Asia/Shanghai）一致性 + G8b pickFreshArticle 真行为）
 G4（信源准入合法）、G5（台账 schema）、G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
-约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；零 Emoji。
+约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
+      站点内容（.mdx/.astro）零 Emoji；脚本输出沿用仓库既有 ❌/✅/[PASS]/[FAIL] 门禁范式。
 """
 
 import datetime
+import json
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -36,6 +42,8 @@ QUIZ_FILE = ROOT_DIR / "src" / "data" / "dailyQuiz.ts"
 ROTATION_FILE = ROOT_DIR / "src" / "data" / "rotation.ts"
 INDEX_FILE = ROOT_DIR / "src" / "pages" / "index.astro"
 DAILY_CARD_FILE = ROOT_DIR / "src" / "components" / "DailyCard.astro"
+CONTENT_CONFIG_FILE = ROOT_DIR / "src" / "content.config.ts"
+ARTICLE_PAGE_FILE = ROOT_DIR / "src" / "pages" / "articles" / "[id].astro"
 
 # 首页当日组合周期下限（一季）。与 src/data/rotation.ts 的 MIN_UNIQUE_CYCLE_DAYS 对齐。
 MIN_UNIQUE_CYCLE_DAYS = 90
@@ -46,16 +54,130 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+# 正则字面量起始判定：'/' 之前最近的非空白有效字符属于这些集合时，'/' 更可能是正则而非除法。
+_REGEX_PREFIX_CHARS = set("(,=:[!&|?{};+-*%<>~^")
+# 关键字之后的 '/' 亦可能是正则（如 return /re/），一并纳入判定。
+_REGEX_PREFIX_WORDS = (
+    "return", "typeof", "case", "in", "of", "delete",
+    "void", "instanceof", "new", "do", "else", "yield", "await",
+)
+
+
+def _skip_string_literal(source: str, start: int) -> int:
+    """从 source[start]（引号字符）起跳过整个字符串字面量，返回闭合引号后的下标。
+
+    支持单引号 / 双引号 / 反引号（模板串）；``\\`` 转义后的字符不参与状态判定。
+    未闭合时返回源码长度（视为直到文件末尾）。
+    """
+    quote = source[start]
+    index = start + 1
+    length = len(source)
+    while index < length:
+        char = source[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            return index + 1
+        index += 1
+    return length
+
+
+def _skip_regex_literal(source: str, start: int) -> int:
+    """从 source[start]（'/'）起跳过正则字面量，返回闭合 '/' 后的下标。
+
+    字符类 ``[...]`` 内的 '/' 不作闭合判定；``\\`` 转义（如 ``\\/``）跳过两个字符。
+    遇到换行说明并非正则字面量，退回 ``start + 1`` 按普通字符处理。
+    """
+    index = start + 1
+    length = len(source)
+    in_class = False
+    while index < length:
+        char = source[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == "[":
+            in_class = True
+        elif char == "]":
+            in_class = False
+        elif char == "/" and not in_class:
+            return index + 1
+        elif char == "\n":
+            return start + 1
+        index += 1
+    return length
+
+
+def _regex_allowed(prev_char: str, prev_word: str) -> bool:
+    """判定当前 '/' 是否可能是正则字面量起始（而非除法运算符）。"""
+    if prev_char == "" or prev_char in _REGEX_PREFIX_CHARS:
+        return True
+    return prev_word in _REGEX_PREFIX_WORDS
+
+
 def _strip_ts_comments(source: str) -> str:
-    """剥离 TypeScript 注释（块注释 + 行注释）与 HTML 注释。
+    """剥离 TypeScript / .astro 注释（块注释 + 行注释 + HTML 注释）。
 
     本函数同时被用于扫描 .astro 文件，故必须一并剥离 HTML 注释
     （``<!-- getTodayIndex(articles.length) -->`` 之类会造成假绿）；
     TS 块注释/行注释的剥离则避免把注释里的键误计入池规模。
+
+    [G8c 加固] 逐字符状态机剥离：先识别字符串（单/双/反引号）与正则字面量并**原样保留**，
+    再识别注释并剔除。否则 ``href="https://…"`` 或正则 ``/https?:\\/\\//`` 里的 ``//``
+    会被误判为行注释而截断整行后续代码，造成假红，或**掩盖同一行内的真实违规**；
+    字符串内容必须保留，因为 G1 键扫描与 G6 契约扫描依赖字面量内的文本。
     """
-    without_html = re.sub(r"<!--.*?-->", "", source, flags=re.DOTALL)
-    without_block = re.sub(r"/\*.*?\*/", "", without_html, flags=re.DOTALL)
-    return re.sub(r"//[^\n]*", "", without_block)
+    result: list = []
+    index = 0
+    length = len(source)
+    prev_char = ""
+    prev_word = ""
+    word = ""
+    while index < length:
+        # HTML 注释
+        if source.startswith("<!--", index):
+            end = source.find("-->", index + 4)
+            index = length if end == -1 else end + 3
+            continue
+        # 块注释
+        if source.startswith("/*", index):
+            end = source.find("*/", index + 2)
+            index = length if end == -1 else end + 2
+            continue
+        # 行注释
+        if source.startswith("//", index):
+            end = source.find("\n", index + 2)
+            index = length if end == -1 else end
+            continue
+
+        char = source[index]
+        # 字符串字面量：原样保留
+        if char in ("'", '"', "`"):
+            end = _skip_string_literal(source, index)
+            result.append(source[index:end])
+            prev_char, prev_word, word = char, "", ""
+            index = end
+            continue
+        # 正则字面量：原样保留（仅当上下文允许）
+        if char == "/" and _regex_allowed(prev_char, prev_word):
+            end = _skip_regex_literal(source, index)
+            result.append(source[index:end])
+            prev_char, prev_word, word = "/", "", ""
+            index = end
+            continue
+
+        result.append(char)
+        if char.isalnum() or char == "_":
+            word += char
+        else:
+            if word:
+                prev_word = word
+            word = ""
+        if not char.isspace():
+            prev_char = char
+        index += 1
+    return "".join(result)
 
 
 def _extract_function_body(source: str, func_name: str) -> str:
@@ -82,11 +204,31 @@ def _extract_function_body(source: str, func_name: str) -> str:
     return ""
 
 
+def content_entry_ids(directory: Path, exclude_internal: bool = True) -> list:
+    """返回内容集合 loader 口径下的 entry id 列表（相对路径、posix、去扩展名）。
+
+    [YELLOW-4 口径对齐] 严格对齐 astro ``glob({ pattern: '**/*.{md,mdx}' })``：
+      - 递归子目录（rglob，等价 '**/*'）；
+      - 仅 .md / .mdx 两种扩展名；
+      - exclude_internal=True 时排除 basename 以 '_' 开头的内部文件
+        （对齐 ``articles/[id].astro`` 的 ``!entry.id.startsWith('_')`` 页面级过滤）。
+    调用方据此保证「门禁统计的池规模 == 站点实际可渲染的池规模」。
+    """
+    if not directory.is_dir():
+        return []
+    entries: list = []
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file() or path.suffix not in (".md", ".mdx"):
+            continue
+        if exclude_internal and path.name.startswith("_"):
+            continue
+        entries.append(path.relative_to(directory).with_suffix("").as_posix())
+    return entries
+
+
 def count_article_pool() -> int:
-    """文章池规模：src/content/articles/*.mdx，排除以 '_' 开头的模板/草稿。"""
-    if not ARTICLES_DIR.is_dir():
-        return 0
-    return sum(1 for path in ARTICLES_DIR.glob("*.mdx") if not path.name.startswith("_"))
+    """文章池规模：对齐内容集合 loader 口径（递归 .md/.mdx，排除 '_' 前缀内部文件）。"""
+    return len(content_entry_ids(ARTICLES_DIR))
 
 
 def count_quiz_pool() -> int:
@@ -103,17 +245,21 @@ def count_quiz_pool() -> int:
 
 
 def count_glossary_pool() -> int:
-    """词条池规模：src/content/glossary/*.md。"""
-    if not GLOSSARY_DIR.is_dir():
-        return 0
-    return sum(1 for _ in GLOSSARY_DIR.glob("*.md"))
+    """词条池规模：与文章池口径对齐（递归 .md/.mdx，排除 '_' 前缀内部文件）。
+
+    旧实现 ``GLOSSARY_DIR.glob('*.md')`` 仅顶层、不含 .mdx、不排除 '_'，
+    与内容 loader 的 ``**/*.{md,mdx}`` 递归口径可能静默脱钩（YELLOW-4）。
+    """
+    return len(content_entry_ids(GLOSSARY_DIR))
 
 
 def article_slugs(directory: Path = ARTICLES_DIR) -> set:
-    """文章 slug 集合：*.mdx 文件名（不含扩展名），排除以 '_' 开头的模板/草稿。"""
-    if not directory.is_dir():
-        return set()
-    return {path.stem for path in directory.glob("*.mdx") if not path.name.startswith("_")}
+    """文章 slug 集合：内容集合 entry id（递归 .md/.mdx，排除 '_' 前缀内部文件）。
+
+    与 count_article_pool 共用 content_entry_ids，保证 G1 的文章集合与池规模计数
+    口径完全一致（顶层文件 id 即文件名去扩展名）。
+    """
+    return set(content_entry_ids(directory))
 
 
 def quiz_keys(quiz_file: Path = QUIZ_FILE) -> set:
@@ -268,8 +414,10 @@ def validate_g2_pool_nonempty(errors: list) -> None:
 def validate_g2_reverse_test(errors: list) -> None:
     """G2 反向用例 [Instinct: Reverse-Test]：词条池与文章池同相位时 G2 必须失败。
 
-    直接以 (26, 26)（lcm 坍缩回文章池自身）驱动 check_glossary_participation，
-    断言其返回非空「假接入」错误；并以互不整除的 (26, 28) 作正向对照断言通过。
+    ① 硬编码 (26, 26)（lcm 坍缩回文章池自身）驱动 check_glossary_participation，
+       断言返回非空且点名「假接入」；② 互不整除的 (26, 28) 作正向对照断言通过。
+    ③ [YELLOW-5 加固] 以**真实文章池规模**驱动同一纯函数（gpool == apool 必为同相位），
+       断言防线对真实数据同样生效，而非仅靠一次性手工数值。
     """
     collapsed = check_glossary_participation(26, 26)
     if not collapsed:
@@ -293,25 +441,71 @@ def validate_g2_reverse_test(errors: list) -> None:
         )
         return
 
+    # ③ 真实池反向断言：同相位（词条池 == 文章池）必须被真实规模检出。
+    real_articles = count_article_pool()
+    real_collapsed = check_glossary_participation(real_articles, real_articles)
+    if "假接入" not in "\n".join(real_collapsed):
+        errors.append(
+            f"真实池反向用例失效：check_glossary_participation({real_articles}, {real_articles}) "
+            f"应报「假接入」非空错误（同相位坍缩），实际 {real_collapsed}"
+        )
+        return
+
     print(
         f"[G2] 反向用例通过：(26,26) 检出 {len(collapsed)} 条「假接入」错误；"
+        f"真实池 ({real_articles},{real_articles}) 亦检出 {len(real_collapsed)} 条；"
         f"正向对照 (26,28) lcm=364 通过"
     )
 
 
 def validate_self_checks(errors: list) -> None:
-    """反向用例 + 空池/单元素边界自检（直接调用门禁纯函数，证明门禁本身有效）。"""
-    # 反向用例①（同相位周期坍缩）：(26, 26) ⇒ lcm=26 < 90 且互相整除，必须返回非空错误。
+    """反向用例 + 空池/单元素边界自检（直接调用门禁纯函数，证明门禁本身有效）。
+
+    [YELLOW-0 加固] 反向用例①不再只断言「非空」，而是钉死**条数与消息文本**：
+    ``check_cycle_threshold([26, 26], 90)`` 必须恰好返回 2 条错误，且分别点名
+    「周期坍缩」（lcm=26 < 90）与「同相位坍缩」（26 整除 26）。若删掉函数内的整除判定循环，
+    条数降为 1 ⇒ 本断言立即失败（证明护栏真实可红）。
+    另补「只触发相位分支」的判别用例 ``[100, 50]``（lcm=100 >= 90 过阈值，但 50 整除 100），
+    必须恰好 1 条「同相位坍缩」且不误报「周期坍缩」。
+    """
+    # 反向用例①（周期坍缩 + 同相位坍缩双命中）：条数与文本双钉死。
     collapsed = check_cycle_threshold([26, 26], MIN_UNIQUE_CYCLE_DAYS)
-    if not collapsed:
+    collapsed_joined = "\n".join(collapsed)
+    if len(collapsed) != 2:
         errors.append(
-            "反向用例失效：check_cycle_threshold([26,26], 90) 应返回非空错误列表"
-            "（周期坍缩 + 同相位坍缩），实际为空"
+            f"反向用例失效：check_cycle_threshold([26,26], 90) 应返回 2 条错误"
+            f"（周期坍缩 + 同相位坍缩），实际 {len(collapsed)} 条：{collapsed}"
+        )
+    if "周期坍缩" not in collapsed_joined:
+        errors.append(
+            f"反向用例失效：check_cycle_threshold([26,26], 90) 错误未包含「周期坍缩」：{collapsed}"
+        )
+    if "同相位坍缩" not in collapsed_joined:
+        errors.append(
+            "反向用例失效：check_cycle_threshold([26,26], 90) 错误未包含「同相位坍缩」"
+            f"（整除判定分支未覆盖，删掉该循环即可骗过门禁）：{collapsed}"
         )
     print(
-        f"[G3] 反向用例①通过：[26,26] 检出 {len(collapsed)} 条错误"
-        f"（周期坍缩 + 同相位坍缩）"
+        f"[G3] 反向用例①通过：[26,26] 恰好 {len(collapsed)} 条错误"
+        f"（周期坍缩 + 同相位坍缩），文本双命中"
     )
+
+    # 反向用例②（只触发相位分支）：[100,50] lcm=100 >= 90 过阈值，但 50 | 100 必须仅报 1 条相位错误。
+    # 注意：相位错误文案内嵌「当日组合周期坍缩为…」，故不能用「周期坍缩」子串判别阈值分支，
+    # 须以阈值分支独有前缀「当日组合周期仅」判别（否则会自我误伤）。
+    phase_only = check_cycle_threshold([100, 50], MIN_UNIQUE_CYCLE_DAYS)
+    phase_joined = "\n".join(phase_only)
+    if len(phase_only) != 1 or "同相位坍缩" not in phase_joined:
+        errors.append(
+            f"反向用例失效：check_cycle_threshold([100,50], 90) 应恰好 1 条「同相位坍缩」"
+            f"（lcm=100 过阈值），实际 {len(phase_only)} 条：{phase_only}"
+        )
+    if "当日组合周期仅" in phase_joined:
+        errors.append(
+            f"反向用例失效：check_cycle_threshold([100,50], 90) 不应报「周期坍缩」"
+            f"（lcm=100 >= 90）：{phase_only}"
+        )
+    print("[G3] 反向用例②通过：[100,50] 恰好 1 条「同相位坍缩」且不误报周期坍缩")
 
     # 正向对照：互不整除的 (26, 28) ⇒ lcm=364 >= 90，必须通过（空错误列表）。
     healthy = check_cycle_threshold([26, 28], MIN_UNIQUE_CYCLE_DAYS)
@@ -618,6 +812,83 @@ def validate_g6_no_rotation_drift(errors: list) -> None:
     )
 
 
+def analyze_article_sort_primary(source: str) -> list:
+    """纯函数：判定文章排序主键表达式的**语义方向**，返回错误消息列表（空 = 合法降序）。
+
+    [G8/G6 加固] 仅查降序子串存在性会被「取反包裹」的假降序骗过：
+        -(b - a) 与 (b - a) * -1  语义均为**升序**，却包含降序子串。
+    同时须避免误红：-(a - b) 语义等价于降序，必须接受。
+
+    语义降序（合法）：
+        (D)  b.data.pubDate.getTime() - a.data.pubDate.getTime()
+        (N)  -(a.data.pubDate.getTime() - b.data.pubDate.getTime())
+    语义升序（非法）：
+        (A)  a.data.pubDate.getTime() - b.data.pubDate.getTime()
+        (Nd) -(b.data.pubDate.getTime() - a.data.pubDate.getTime())
+        (Nm) (b.data.pubDate.getTime() - a.data.pubDate.getTime()) * -1
+    """
+    group_a = r"a\.data\.pubDate\.getTime\(\)"
+    group_b = r"b\.data\.pubDate\.getTime\(\)"
+    desc = group_b + r"\s*-\s*" + group_a
+    asc = group_a + r"\s*-\s*" + group_b
+    neg_desc = r"-\s*\(\s*" + desc + r"\s*\)"
+    desc_times_neg = r"\(\s*" + desc + r"\s*\)\s*\*\s*-\s*1"
+    neg_asc = r"-\s*\(\s*" + asc + r"\s*\)"
+
+    has_desc = re.search(desc, source) is not None
+    has_asc = re.search(asc, source) is not None
+    has_neg_desc = re.search(neg_desc, source) is not None
+    has_desc_times_neg = re.search(desc_times_neg, source) is not None
+    has_neg_asc = re.search(neg_asc, source) is not None
+
+    errors: list = []
+    if has_neg_desc or has_desc_times_neg:
+        errors.append(
+            "[G6] index.astro 排序主键被取反包裹（-(b - a) 或 (b - a) * -1），语义实为升序；"
+            "会使「今日精选」指向最旧文章"
+        )
+        return errors
+    if has_asc and not has_neg_asc:
+        errors.append(
+            "[G6] index.astro 文章排序主键为升序（a - b），会使「今日精选」指向最旧文章"
+        )
+        return errors
+    if not (has_desc or has_neg_asc):
+        errors.append(
+            "[G6] index.astro 文章排序主键缺失 pubDate 降序形态（b - a 或语义等价的 -(a - b)），"
+            "排序方向不确定会使「今日精选」随实现漂移"
+        )
+    return errors
+
+
+def validate_g6_sort_primary_forms(errors: list) -> None:
+    """G6 排序断言「窄漏绿向量」自检：坏形态必须报错、等价降序形态必须放行。
+
+    [G8/G6 加固] 直接以纯函数分析各形态（含取反包裹），证明拒绝面与接受面正确：
+        拒绝：-(b - a)、(b - a) * -1、a - b、缺失降序
+        接受：b - a、-(a - b)
+    """
+    prefix = "const cmp = (a, b) => "
+    rejected = {
+        "-(b - a)": prefix + "-(b.data.pubDate.getTime() - a.data.pubDate.getTime())",
+        "(b - a) * -1": prefix + "(b.data.pubDate.getTime() - a.data.pubDate.getTime()) * -1",
+        "a - b": prefix + "a.data.pubDate.getTime() - b.data.pubDate.getTime()",
+        "缺失降序": prefix + "a.id.localeCompare(b.id)",
+    }
+    accepted = {
+        "b - a": prefix + "b.data.pubDate.getTime() - a.data.pubDate.getTime()",
+        "-(a - b)": prefix + "-(a.data.pubDate.getTime() - b.data.pubDate.getTime())",
+    }
+    for label, snippet in rejected.items():
+        if not analyze_article_sort_primary(snippet):
+            errors.append(f"[G6] 排序自检失效：坏形态「{label}」应报错，实际放行")
+    for label, snippet in accepted.items():
+        found = analyze_article_sort_primary(snippet)
+        if found:
+            errors.append(f"[G6] 排序自检误红：合法降序形态「{label}」应放行，实际 {found}")
+    print("[G6] 排序主键方向自检通过（拒绝 -(b-a)/(b-a)*-1/a-b/缺失；接受 b-a 与 -(a-b)）")
+
+
 def validate_g6_article_sort_descending(errors: list) -> None:
     """G6 主断言⑥：index.astro 文章排序主键必须为 pubDate 降序（防符号翻转）。
 
@@ -628,36 +899,19 @@ def validate_g6_article_sort_descending(errors: list) -> None:
     致使 articles[0] 由「最新文」变为「最旧文」，featuredArticle（今日精选）语义被改变，
     且骗过 astro check / build（均不校验排序方向）。
 
-    降序形态 `b...getTime() - a...getTime()` 与升序形态 `a...getTime() - b...getTime()`
-    互不为子串，可独立判别：必须命中降序形态，且不得命中升序形态。
-    扫描前先 _strip_ts_comments 剥离注释，防止注释中的示例片段造成假绿/假红。
+    语义方向判定下沉到纯函数 analyze_article_sort_primary（拒绝取反包裹的假降序，
+    接受语义等价的 -(a - b)）。扫描前先 _strip_ts_comments 剥离注释，防注释示例造成假绿/假红。
     """
     if not INDEX_FILE.is_file():
         errors.append(f"[G6] 首页文件缺失：{INDEX_FILE}")
         return
 
-    source = _strip_ts_comments(_read_text(INDEX_FILE))
-    descending = r"b\.data\.pubDate\.getTime\(\)\s*-\s*a\.data\.pubDate\.getTime\(\)"
-    ascending = r"a\.data\.pubDate\.getTime\(\)\s*-\s*b\.data\.pubDate\.getTime\(\)"
-
-    if re.search(ascending, source):
-        errors.append(
-            "[G6] index.astro 文章排序主键必须为 pubDate 降序（b - a）；"
-            "当前为升序（a - b），会使「今日精选」指向最旧文章"
-        )
-        return
-    if not re.search(descending, source):
-        errors.append(
-            "[G6] index.astro 文章排序主键缺失 pubDate 降序形态"
-            "（b.data.pubDate.getTime() - a.data.pubDate.getTime()），"
-            "排序方向不确定会使「今日精选」随实现漂移"
-        )
+    found = analyze_article_sort_primary(_strip_ts_comments(_read_text(INDEX_FILE)))
+    if found:
+        errors.extend(found)
         return
 
-    print(
-        "[G6] index.astro 文章排序主键降序契约通过"
-        "（命中 b - a 降序；无 a - b 升序形态）"
-    )
+    print("[G6] index.astro 文章排序主键降序契约通过（命中 b - a 降序且无取反/升序形态）")
 
 
 def validate_g6_card_strip(errors: list) -> None:
@@ -683,9 +937,317 @@ def validate_g6_card_strip(errors: list) -> None:
     print("[G6] DailyCard 今日上新条带契约通过（可选 Prop / 去重守卫 / 直链 / 零 innerHTML）")
 
 
+# ---------------------------------------------------------------------------
+# G8：node 原生载入 rotation.ts 的真实行为断言（击穿「空壳假绿」）
+# ---------------------------------------------------------------------------
+
+# 探针脚本：以 argv 传入 rotation.ts 路径与 TZ。
+# Windows 原生 node.exe 在 Git Bash 下收不到含斜杠的 `TZ=` 内联前缀（收到 undefined），
+# 故必须走「argv 传参 + 脚本内 process.env.TZ 赋值」，并以 getTimezoneOffset() 自证时区已切换。
+_ROTATION_PROBE = r"""
+import { pathToFileURL } from 'node:url';
+
+const rotationPath = process.argv[2];
+const tz = process.argv[3];
+if (tz) process.env.TZ = tz;
+
+const mod = await import(pathToFileURL(rotationPath).href);
+
+const dayIso = [
+  '2026-10-03T16:00:00Z',
+  '2026-10-03T15:59:59Z',
+  '2026-12-31T23:59:59Z',
+  '2026-01-01T00:00:00Z',
+];
+
+const today = new Date('2026-09-27T12:00:00+08:00');
+const mk = (iso, id) => ({ id, d: new Date(iso) });
+const getDate = (x) => x.d;
+const pick = (items) => {
+  const hit = mod.pickFreshArticle(items, getDate, today, 7);
+  return hit ? hit.id : null;
+};
+
+const result = {
+  tz: process.env.TZ ?? null,
+  offset: new Date().getTimezoneOffset(),
+  fingerprintJan: mod.computeFingerprint(new Date('2026-01-01T00:00:00+08:00'), [26, 28]),
+  fingerprintMar: mod.computeFingerprint(new Date('2026-03-15T12:00:00+08:00'), [26, 28]),
+  todayIndexZero: mod.getTodayIndex(0),
+  lcm26_28: mod.lcm([26, 28]),
+  lcmEmpty: mod.lcm([]),
+  dayNumbers: Object.fromEntries(dayIso.map((s) => [s, mod.beijingDayNumber(new Date(s))])),
+  fresh: {
+    day7: pick([mk('2026-09-21T12:00:00+08:00', 'day7')]),
+    day8: pick([mk('2026-09-20T12:00:00+08:00', 'day8')]),
+    today: pick([mk('2026-09-27T12:00:00+08:00', 'today')]),
+    future: pick([mk('2026-09-28T12:00:00+08:00', 'future')]),
+    multi: pick([
+      mk('2026-09-25T12:00:00+08:00', 'two'),
+      mk('2026-09-21T12:00:00+08:00', 'six'),
+      mk('2026-09-27T12:00:00+08:00', 'zero'),
+    ]),
+    empty: pick([]),
+  },
+};
+
+process.stdout.write(JSON.stringify(result));
+"""
+
+
+def _run_rotation_probe(errors: list):
+    """在 TZ=UTC 与 TZ=Asia/Shanghai 下各以 node 载入 rotation.ts，返回两次事实字典。
+
+    返回 {"utc": {...}, "shanghai": {...}}。若 node 不可用 / 载入失败 / 输出非 JSON，
+    记录**明确可执行**的错误并返回 None —— 禁止「node 失败就跳过断言」的静默假绿。
+    """
+    node = shutil.which("node")
+    if not node:
+        errors.append(
+            "[G8] 无法执行行为断言：PATH 中未找到 node 可执行文件"
+            "（需 Node 24+ 以原生类型剥离载入 rotation.ts）→ 请安装 Node 或修正 PATH"
+        )
+        return None
+    if not ROTATION_FILE.is_file():
+        errors.append(f"[G8] 轮换数学真值源缺失：{ROTATION_FILE} —— 请创建 src/data/rotation.ts")
+        return None
+
+    runs: dict = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = Path(tmp) / "rotation_probe.mjs"
+        harness.write_text(_ROTATION_PROBE, encoding="utf-8")
+        for label, tz in (("utc", "UTC"), ("shanghai", "Asia/Shanghai")):
+            try:
+                proc = subprocess.run(
+                    [node, str(harness), str(ROTATION_FILE), tz],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=60,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(f"[G8] node 载入 rotation.ts 失败（TZ={tz}）：{exc}")
+                return None
+            if proc.returncode != 0:
+                errors.append(
+                    f"[G8] node 载入 rotation.ts 失败（TZ={tz}），exit={proc.returncode}，"
+                    f"stderr 尾部：{proc.stderr.strip()[-500:]}"
+                )
+                return None
+            try:
+                runs[label] = json.loads(proc.stdout)
+            except json.JSONDecodeError as exc:
+                errors.append(
+                    f"[G8] node 探针输出非合法 JSON（TZ={tz}）：{exc}；"
+                    f"stdout 尾部：{proc.stdout.strip()[-300:]}"
+                )
+                return None
+    return runs
+
+
+def validate_g8_rotation_behavior(errors: list, probe) -> None:
+    """G8 主断言：以真实模块行为钉死 rotation.ts（击穿空壳实现）。
+
+    手算推导（输入时刻转为北京时间后取「积日」，取模得索引）：
+      - computeFingerprint(new Date('2026-01-01T00:00:00+08:00'), [26, 28])
+        → 北京 2026-01-01，积日 = 1 → (1-1)%26 = 0，(1-1)%28 = 0 → "0-0"
+      - computeFingerprint(new Date('2026-03-15T12:00:00+08:00'), [26, 28])
+        → 北京 2026-03-15，积日 = 31+28+15 = 74 → (74-1)%26 = 21，(74-1)%28 = 17 → "21-17"
+      - getTodayIndex(0) → 空池守卫 → 0
+      - lcm([26, 28]) → 364；lcm([]) → 0
+    第二组指纹含非零索引，用于击穿「恒返回 0 / 恒返回空串」的空壳实现。
+    """
+    if probe is None:
+        return
+    facts = probe["utc"]
+    checks = [
+        ("computeFingerprint(2026-01-01T00:00:00+08:00, [26,28])", facts.get("fingerprintJan"), "0-0"),
+        ("computeFingerprint(2026-03-15T12:00:00+08:00, [26,28])", facts.get("fingerprintMar"), "21-17"),
+        ("getTodayIndex(0)", facts.get("todayIndexZero"), 0),
+        ("lcm([26,28])", facts.get("lcm26_28"), 364),
+        ("lcm([])", facts.get("lcmEmpty"), 0),
+    ]
+    for label, actual, expected in checks:
+        if actual != expected:
+            errors.append(
+                f"[G8] 行为断言失败：{label} 期望 {expected!r}，实际 {actual!r}"
+                f"（空壳实现或真值源被篡改，源码 token 扫描无法发现）"
+            )
+    print(
+        f"[G8] rotation.ts 真实行为断言通过（node 原生载入）："
+        f"指纹 {facts.get('fingerprintJan')} / {facts.get('fingerprintMar')}，"
+        f"lcm(26,28)={facts.get('lcm26_28')}，lcm([])={facts.get('lcmEmpty')}，"
+        f"getTodayIndex(0)={facts.get('todayIndexZero')}"
+    )
+
+
+def validate_g8a_tz_consistency(errors: list, probe) -> None:
+    """G8a：beijingDayNumber 必须与构建机时区无关（TZ=UTC vs Asia/Shanghai 结果完全相同）。
+
+    仅断言「函数体不含 getTimezoneOffset」是必要非充分条件（可用 Intl / 本地 getter 绕过）；
+    此处以两套 TZ 实跑 + 时区自证（offset 0 vs -480）钉死，防止「两跑其实同环境」的假绿。
+    """
+    if probe is None:
+        return
+    utc, shanghai = probe["utc"], probe["shanghai"]
+    utc_offset, sh_offset = utc.get("offset"), shanghai.get("offset")
+    if utc_offset == sh_offset:
+        errors.append(
+            f"[G8a] 时区未真正切换（两跑 getTimezoneOffset 均为 {utc_offset}）→ 验证静默失真，"
+            f"无法证明 beijingDayNumber 时区无关"
+        )
+        return
+    if (utc_offset, sh_offset) != (0, -480):
+        errors.append(
+            f"[G8a] 时区自证异常：期望 UTC offset=0、Asia/Shanghai offset=-480，"
+            f"实际 {utc_offset} / {sh_offset}"
+        )
+        return
+    if utc.get("dayNumbers") != shanghai.get("dayNumbers"):
+        utc_days = utc.get("dayNumbers", {})
+        sh_days = shanghai.get("dayNumbers", {})
+        diff = {
+            iso: (utc_days.get(iso), sh_days.get(iso))
+            for iso in utc_days
+            if utc_days.get(iso) != sh_days.get(iso)
+        }
+        errors.append(
+            f"[G8a] beijingDayNumber 随构建机时区漂移（UTC vs Asia/Shanghai 不一致）：{diff}"
+        )
+        return
+    print(
+        f"[G8a] beijingDayNumber 时区无关性通过：TZ=UTC(offset=0) 与 TZ=Asia/Shanghai(offset=-480) "
+        f"对 {len(utc.get('dayNumbers', {}))} 个边界时刻结果完全一致 {utc.get('dayNumbers')}"
+    )
+
+
+def validate_g8b_pick_fresh_behavior(errors: list, probe) -> None:
+    """G8b：以 node 载入 rotation.ts 直接断言 pickFreshArticle 真行为（非 Python 镜像）。"""
+    if probe is None:
+        return
+    actual = probe["utc"].get("fresh", {})
+    expected = {
+        "day7": "day7",
+        "day8": None,
+        "today": "today",
+        "future": None,
+        "multi": "zero",
+        "empty": None,
+    }
+    for label, exp in expected.items():
+        got = actual.get(label, "<缺失>")
+        if got != exp:
+            errors.append(f"[G8b] pickFreshArticle 行为断言失败：{label} 期望 {exp!r}，实际 {got!r}")
+    print(
+        f"[G8b] pickFreshArticle 真行为断言通过（node）：第7天={actual.get('day7')}，"
+        f"第8天={actual.get('day8')}，当天={actual.get('today')}，未来={actual.get('future')}，"
+        f"多篇取最新={actual.get('multi')}，空数组={actual.get('empty')}"
+    )
+
+
+def validate_strip_ts_comments_literals(errors: list) -> None:
+    """[G8c] _strip_ts_comments 字面量盲区自检。
+
+    字符串 / 正则字面量内的 '//'、'/*' 不得触发注释剔除，以免截断整行造成假红，
+    或掩盖同一行内的真实违规；真注释仍须被剥离；字符串内容必须保留（G1/G6 依赖）。
+    """
+    cases_keep = [
+        ("双引号字符串内 // 不得截断整行", 'const a = "https://example.com//x"; const b = 1;', "const b = 1"),
+        ("单引号字符串内 /* 不得吞后续代码", "const a = '/* not a comment */'; const b = 2;", "const b = 2"),
+        ("正则字面量内转义斜杠不得误判行注释", r"const re = /https?:\/\//; const b = 3;", "const b = 3"),
+        ("字符串后同行真实违规须保留", 'const u = "https://x/y"; const bad = getTimezoneOffset();', "getTimezoneOffset"),
+        ("字符串内容须原样保留", 'const s = "今日上新"; const t = 1;', '"今日上新"'),
+    ]
+    for label, src, needle in cases_keep:
+        stripped = _strip_ts_comments(src)
+        if needle not in stripped:
+            errors.append(f"[G8c] 剥离自检失败：{label} → 结果未见 {needle!r}：{stripped!r}")
+
+    stripped_line = _strip_ts_comments("const a = 1; // real comment\nconst b = 2;")
+    if "real comment" in stripped_line:
+        errors.append(f"[G8c] 剥离自检失败：真行注释未被剔除：{stripped_line!r}")
+    if "const b = 2" not in stripped_line:
+        errors.append(f"[G8c] 剥离自检失败：剔除行注释后误删后续代码：{stripped_line!r}")
+
+    stripped_block = _strip_ts_comments("const a = 1; /* block */ const b = 2;")
+    if "block" in stripped_block or "const b = 2" not in stripped_block:
+        errors.append(f"[G8c] 剥离自检失败：块注释剔除异常：{stripped_block!r}")
+
+    print("[G8c] _strip_ts_comments 字面量加固自检通过（字符串/正则内 //、/* 不误剔，真注释仍剔除）")
+
+
+def validate_pool_count_alignment(errors: list) -> None:
+    """[YELLOW-4] 保证门禁统计的池规模 == 站点实际可渲染的池规模（口径一致）。
+
+    文章池与词条池统一使用 content_entry_ids（递归 .md/.mdx + 排除 '_' 前缀），与内容集合
+    loader ``glob({ pattern: '**/*.{md,mdx}' })`` 口径对齐；再以「页面级过滤契约」证明计数
+    等于站点渲染：
+      - articles/[id].astro 以 ``!entry.id.startsWith('_')`` 过滤内部文件 ⇒ 文章计数排除 '_' 一致；
+      - glossary/index.astro 无 '_' 过滤 ⇒ 词条目录不得存在 '_' 前缀词条（否则门禁少计，Fail-Closed）。
+    """
+    if CONTENT_CONFIG_FILE.is_file():
+        config = _read_text(CONTENT_CONFIG_FILE)
+        pattern_hits = len(re.findall(r"pattern:\s*'\*\*/\*\.\{md,mdx\}'", config))
+        if pattern_hits < 2:
+            errors.append(
+                f"[口径] content.config.ts 的 articles/glossary 集合未同时声明递归口径 "
+                f"'**/*.{{md,mdx}}'（命中 {pattern_hits} 处），门禁计数口径可能与站点脱钩"
+            )
+    else:
+        errors.append(f"[口径] 内容集合配置文件缺失：{CONTENT_CONFIG_FILE}")
+
+    if not ARTICLE_PAGE_FILE.is_file():
+        errors.append(f"[口径] 文章详情页缺失：{ARTICLE_PAGE_FILE}")
+    elif not re.search(r"!\s*entry\.id\.startsWith\(\s*['\"]_['\"]\s*\)", _read_text(ARTICLE_PAGE_FILE)):
+        errors.append(
+            "[口径] articles/[id].astro 未过滤 '_' 前缀内部文件，门禁计数与站点渲染集合可能脱钩"
+        )
+
+    visible = content_entry_ids(GLOSSARY_DIR)
+    loaded = content_entry_ids(GLOSSARY_DIR, exclude_internal=False)
+    if len(visible) != len(loaded):
+        hidden = sorted(set(loaded) - set(visible))
+        errors.append(
+            f"[口径] glossary 目录存在 '_' 前缀词条 {hidden}：索引页不过滤 '_' 会渲染它们，"
+            f"而门禁不计 ⇒ 口径漂移（请重命名或由页面显式过滤后再纳入统计）"
+        )
+
+    print(
+        f"[口径] 池规模口径对齐通过：articles={count_article_pool()}（递归 .md/.mdx + 排除 '_'，"
+        f"与详情页 '!'+startsWith('_') 过滤一致）、glossary={count_glossary_pool()}（与索引页无过滤口径一致）"
+    )
+
+
+def validate_pool_count_alignment_fixture(errors: list) -> None:
+    """[YELLOW-4] 计数口径夹具反向自检：证明 content_entry_ids 递归 + 双扩展 + 排除 '_' 真生效。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "a.md").write_text("x", encoding="utf-8")
+        (root / "b.mdx").write_text("x", encoding="utf-8")
+        (root / "_internal.md").write_text("x", encoding="utf-8")
+        (root / "ignore.txt").write_text("x", encoding="utf-8")
+        nested = root / "nested"
+        nested.mkdir()
+        (nested / "deep.md").write_text("x", encoding="utf-8")
+        visible = set(content_entry_ids(root))
+        loaded = set(content_entry_ids(root, exclude_internal=False))
+
+    if visible != {"a", "b", "nested/deep"}:
+        errors.append(
+            f"[口径] 计数夹具失败：visible 期望 {{'a','b','nested/deep'}}，实际 {visible}"
+            f"（须递归 + 含 .mdx + 排除 '_' 前缀）"
+        )
+    if loaded != {"a", "b", "_internal", "nested/deep"}:
+        errors.append(
+            f"[口径] 计数夹具失败：loader 口径（含内部文件）期望 "
+            f"{{'a','b','_internal','nested/deep'}}，实际 {loaded}"
+        )
+    print("[口径] content_entry_ids 夹具自检通过（递归 + .md/.mdx + 排除 '_'，loader 口径含内部文件）")
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）与 G6（今日上新窗口 + 附加展示零扰动轮换索引）；G4/G5/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G4/G5/G7 由后续 Task 追加。")
 
     errors: list = []
 
@@ -701,8 +1263,21 @@ def run_gate() -> None:
     validate_g6_beijing_tz_independent(errors)
     validate_g6_window_boundaries(errors)
     validate_g6_no_rotation_drift(errors)
+    validate_g6_sort_primary_forms(errors)
     validate_g6_article_sort_descending(errors)
     validate_g6_card_strip(errors)
+
+    # [G8c] 注释剥离字面量加固自检
+    validate_strip_ts_comments_literals(errors)
+    # [YELLOW-4] 门禁计数口径与运行时口径对齐
+    validate_pool_count_alignment(errors)
+    validate_pool_count_alignment_fixture(errors)
+
+    # [G8/G8a/G8b] node 原生载入 rotation.ts 的真实行为断言（探针失败即记明确错误，不静默跳过）
+    probe = _run_rotation_probe(errors)
+    validate_g8_rotation_behavior(errors, probe)
+    validate_g8a_tz_consistency(errors, probe)
+    validate_g8b_pick_fresh_behavior(errors, probe)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")
@@ -710,7 +1285,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2、G3 与 G6 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":
