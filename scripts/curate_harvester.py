@@ -192,15 +192,95 @@ def get_existing_article_urls() -> set:
     return urls
 
 
-def fetch_url(url: str, timeout: int = 15) -> tuple[int, str]:
+def _http_get(url: str, timeout: int = 15) -> tuple[int, str, str]:
+    """低层 HTTP GET：返回 ``(status, body, final_url)``。
+
+    [F1 修复] ``final_url`` 取自 ``resp.geturl()``。urllib **默认跟随重定向**，若不回传
+    落地 URL，调用方只会看到落地页的状态码（通常 200），无从得知请求的页面其实被重定向。
+    ``HTTPError`` ⇒ ``(e.code, "", url)``；其它异常 ⇒ ``(0, "", url)``。
+    """
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, resp.read().decode("utf-8", errors="ignore")
+            body = resp.read().decode("utf-8", errors="ignore")
+            return resp.status, body, resp.geturl()
     except urllib.error.HTTPError as e:
-        return e.code, ""
+        return e.code, "", url
     except Exception:
-        return 0, ""
+        return 0, "", url
+
+
+def fetch_url(url: str, timeout: int = 15) -> tuple[int, str]:
+    """``_http_get`` 的薄包装：**契约冻结**，仍返回 ``(status, body)`` 二元组。
+
+    [契约] anchor/sitemap/feed 三模式发现链路有 5+ 处按二元组解包；**不得**改为三元组，
+    否则会静默破坏发现链路。
+    """
+    status, body, _final_url = _http_get(url, timeout=timeout)
+    return status, body
+
+
+def _url_key(url: str) -> str:
+    """归一化比较键：小写 scheme+host、去 fragment、去尾部 ``/``；保留 query。
+
+    例：``https://a.com/x/`` == ``https://a.com/x``；``https://a.com/`` == ``https://a.com``；
+    ``https://a.com/x#f`` == ``https://a.com/x``。
+    """
+    try:
+        parts = urllib.parse.urlsplit(url or "")
+    except ValueError:
+        return (url or "").strip()
+    path = parts.path
+    if path.endswith("/"):
+        path = path.rstrip("/")
+    return urllib.parse.urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
+
+
+def probe_page(url: str, site_root: str, root_length: int = 0, timeout: int = 10) -> dict:
+    """探测单页并对「重定向到首页」假阳性作出判定（F1 核心）。
+
+    ``verdict`` 取值：
+      - ``unreachable``：``status != 200``；
+      - ``redirect_home``：``status == 200`` 且（落回站点根，或内容长度与首页指纹一致）；
+      - ``real``：其它；若发生重定向则 ``note`` 记录落地 URL（证据可审计）。
+    """
+    status, body, final_url = _http_get(url, timeout=timeout)
+    content_length = len(body)
+    result = {
+        "requested_url": url,
+        "status": status,
+        "final_url": final_url,
+        "content_length": content_length,
+        "verdict": "real",
+        "note": "",
+    }
+
+    # 守卫子句化：不可达优先判定（异常/HTTP 错误一律视为不可达）
+    if status != 200:
+        result["verdict"] = "unreachable"
+        return result
+
+    # 主判据：请求的不是首页，却落回站点根
+    requested_is_root = _url_key(url) == _url_key(site_root)
+    landed_on_root = _url_key(final_url) == _url_key(site_root)
+    if landed_on_root and not requested_is_root:
+        result["verdict"] = "redirect_home"
+        result["note"] = "落回站点根"
+        return result
+
+    # 二次指纹信号：发生了重定向，且内容长度与首页一模一样
+    # [F1b-H2 口径一致] 用 _url_key 归一化比较，避免「仅尾斜杠不同」被误判为发生过重定向
+    # （与同函数上方主判据 _url_key 比较口径保持一致；否则 note 会写出误导性「重定向后落地 …」）。
+    redirected = _url_key(final_url) != _url_key(url)
+    if redirected and root_length > 0 and content_length == root_length:
+        result["verdict"] = "redirect_home"
+        result["note"] = "与首页指纹一致"
+        return result
+
+    # 判为 real：若曾重定向，note 记录落地 URL 供人工审计
+    if redirected:
+        result["note"] = f"重定向后落地 {final_url}"
+    return result
 
 
 def clean_title(raw_title: str) -> str:
@@ -1180,6 +1260,27 @@ def _license_url_candidates(src: dict) -> list:
     return candidates
 
 
+def _print_license_probe(candidate_url: str, info: dict) -> None:
+    """按 verdict 三态渲染单条许可页候选探测结果。
+
+    [F1 修复] 严禁把 ``redirect_home`` 显示为「✅ 可达」——那会误导人工照着假页面核许可条款。
+    """
+    verdict = info.get("verdict")
+    if verdict == "real":
+        final = info.get("final_url")
+        suffix = f", final={final}" if final and final != candidate_url else ""
+        print(f"   - {candidate_url} → ✅ 可达（真实页面, len={info.get('content_length', 0)}{suffix}）")
+        return
+    if verdict == "redirect_home":
+        print(
+            f"   - {candidate_url} → ⚠️ 疑似重定向到首页（非真实许可页）："
+            f"请求 {candidate_url} → 落地 {info.get('final_url')}，"
+            f"len={info.get('content_length', 0)}（{info.get('note', '')}）"
+        )
+        return
+    print(f"   - {candidate_url} → ⚠️ 不可达 (HTTP {info.get('status')})")
+
+
 def run_admit_source(source_id: str) -> int:
     """``--admit-source <id>`` 分支：打印准入证据草案（**只读，绝不写回 sources.json**）。
 
@@ -1207,26 +1308,49 @@ def run_admit_source(source_id: str) -> int:
     print("   ⚠️ 本命令只读：不会修改 sources.json，也不会自动置 admitted / 自动填 license。")
 
     print("\n① 可达性探测（本机出口，仅供参考，不可作准入证据）：")
+    # [F1b-H1 接线] 复用**已有**的 base_url 探测响应作为「首页内容长度指纹」，供 ② 许可页候选的
+    # 二次指纹判据使用——**不新增任何网络请求**（base_url 探测本就发生在此处，仅捕获其 content_length）。
+    # 这使 probe_page 的二次指纹判据（status==200 且发生重定向 且 content_length==首页长度）在生产态
+    # 真正可触发，而非仅在测试显式传 root_length 时才激活（消除「测试专用激活」的假绿）。
+    # [有意降级] base_url 探测失败（status != 200）或 content_length == 0 ⇒ root_length 保持 0，
+    # 二次指纹判据自然休眠（宁可漏报、不可误报；主判据「落回站点根即 redirect_home」仍始终生效）。
+    root_length = 0
     for label, probe_url in (("entry_url", entry_url), ("base_url", base_url)):
         if not probe_url:
             continue
-        status, _ = fetch_url(probe_url, timeout=10)
-        print(f"   - {label}: {probe_url} → HTTP {status}")
+        info = probe_page(probe_url, base_url, timeout=10)
+        print(
+            f"   - {label}: {probe_url} → HTTP {info['status']} 落地 {info['final_url']} "
+            f"[{info['verdict']}]"
+        )
+        if label == "base_url" and info["status"] == 200 and info["content_length"] > 0:
+            root_length = info["content_length"]
 
     print("\n② 许可页抓取证据收集（license_url 候选）：")
     candidates = _license_url_candidates(src)
     if not candidates:
         print("   - （无 base_url，无法派生许可页候选；请人工补充）")
-    for candidate_url in candidates:
-        status, _ = fetch_url(candidate_url, timeout=10)
-        mark = "✅ 可达" if status == 200 else f"⚠️ 不可达 (HTTP {status})"
-        print(f"   - {candidate_url} → {mark}")
+    probes = [
+        (candidate_url, probe_page(candidate_url, base_url, root_length=root_length, timeout=10))
+        for candidate_url in candidates
+    ]
+    for candidate_url, info in probes:
+        _print_license_probe(candidate_url, info)
+    if candidates:
+        real_count = sum(1 for _, info in probes if info["verdict"] == "real")
+        print(f"   - 真实可用候选：{real_count} / 总候选 {len(candidates)}")
 
     print("\n③ admission 草案（请人工补全后**自行**粘贴到 scripts/sources.json）：")
+    real_license_url = next(
+        (candidate_url for candidate_url, info in probes if info["verdict"] == "real"),
+        "",
+    )
+    if not real_license_url:
+        print("   ⚠️ 未找到真实可用的许可页候选，请人工补充 license_url")
     draft = {
         "status": "probing",
         "license": "",
-        "license_url": candidates[0] if candidates else "",
+        "license_url": real_license_url,
         "verified_at": "",
         "verified_by_run": "",
     }

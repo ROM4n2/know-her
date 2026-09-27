@@ -463,6 +463,39 @@
 > - **E2（断言强度）**：G7 的「花括号配平」为**全文计数**弱断言（非字符串感知、非 TS 解析），门禁内未运行 `pnpm check` ⇒ 无法独立保证注入后 TS 语法合法。**落点：G7 加固（可断言注入点必位于 `DAILY_QUIZZES` 对象体内，或对 temp 副本做结构解析）**。
 > - **E3（风格一致性）**：`run_draft_url` 新增路径仍用 `os.path.join`，而同批次新增的 `inject_quiz_placeholder` 已用 `pathlib.Path` ⇒ 与 `[Instinct: Python-Standards]` 不一致。**落点：随 E1 一并收口**。
 
+### Task-10 第 1 步取证实录（2026-09-27，本机出口，**不可作准入证据**）
+
+已执行 `pnpm curate:admit plannedparenthood` 与 `pnpm curate:admit guokr`（命令只读，`sources.json` 零改动，`No-Auto-Approve` 守住）：
+
+| 信源 | `entry_url` | 许可页候选 | 判定 |
+|---|---|---|---|
+| `plannedparenthood` | HTTP **200**（真实页面，标题 `Sexual Health Topics`） | 5 条候选**全部 404/0**（`/copyright` 明确 404） | **未找到许可页**，需另寻真实路径 |
+| `guokr` | HTTP **200** | 5 条候选**全部「✅ 可达」** | **全部为假阳性**（见 F1） |
+
+> - **F1（真实缺陷，建议在正式准入前修复）**：`--admit-source` 的可达性探测**只判 HTTP 状态码**，不追踪重定向后的落地页。果壳对任意路径均 302/重定向回首页，实测 `https://www.guokr.com/this-path-absolutely-does-not-exist-9f3a2b/`、`/copyright`、`/about/policies/publishing/copyright` **三者均返回 200 且最终 URL 全为 `https://www.guokr.com/`、页面长度同为 100153**（即同一首页），但工具输出「✅ 可达」。**风险**：会诱导人工照着「可达」去核，实际看到的是首页而非许可条款 ⇒ **削弱 HITL 闸门有效性**。修复方向：追踪 `response.geturl()`，若最终 URL 等于站点根路径（或页面长度与首页一致）则改判「⚠️ 疑似重定向到首页（非真实许可页）」，不得判为「可达」。
+> - **F2（通道缺失）**：仓库 8 个工作流**无一调用 `--admit-source`**，而 `workflow_dispatch` 要求工作流**已存在于默认分支**才能派发 ⇒ 当前**不存在获取 CI 出口证据的通道**。要取得 `verified_by_run` 的 CI run URL，需先新增一个取证工作流（如 `admit-evidence.yml`：`workflow_dispatch` + `source_id` 输入，运行 `curate:admit` 并把输出写入 `$GITHUB_STEP_SUMMARY`）**并推送至 master**。`gh` 已就绪（v2.97.0 / `ROM4n2` / `repo` scope），派发能力具备，仅缺一次推送。
+
+#### F1 修复结果（2026-09-28，已通过独立评审 PASS）
+
+- **根因**：`fetch_url()` 在 `with urllib.request.urlopen(...) as resp:` 内只返回 `resp.status, resp.read()`，**丢弃 `resp.geturl()`**；urllib 默认跟随重定向 ⇒ 状态码恒为落地页的 200，重定向目标被静默吞掉。
+- **修法**：新增 `_http_get(url)->(status, body, final_url)` / `_url_key(url)` / `probe_page(url, site_root, root_length)->dict`；`fetch_url` 退化为**保持二元组契约**的薄包装（6 处既有解包点零漂移）；`run_admit_source` 改三态渲染（`real` / `redirect_home` / `unreachable`）；草案 `license_url` **只取首个 `real` 候选**，无 real 则置空并提示人工补充（**堵住「假 URL 进产出物」的第二处泄漏**）。
+- **收口（F1b）**：评审指出「二次指纹」判据在生产态**恒不触发**（`run_admit_source` 从不传 `root_length`，仅测试激活 = 假绿）⇒ 已接线为**复用 ① 循环中 `base_url` 探测响应的 `content_length`**（**零新增网络请求**）；`redirected` 由原始字符串比较改为 `_url_key` 归一化比较；并新增**经 `run_admit_source` 端到端**的断言专防此类假绿。
+- **实测**：`pnpm curate:admit guokr` ⇒ 5 候选全部「⚠️ 疑似重定向到首页（非真实许可页）」+ `落地 https://www.guokr.com/` + `len=100153`，草案 `license_url` 为空；`plannedparenthood` ⇒ 5 候选全部 `HTTP 404`，草案为空；`sources.json` 零改动。
+- **已知局限（未修，非阻断）**：① **软 404 漏检**——站点把不存在路径重定向到「非站点根的统一友好页」时会误判为 `real`；② `_url_key` 未归一化默认端口（`:443`/`:80`）与 userinfo；③ **发现链路（anchor/sitemap/feed）仍全走 `fetch_url`，未接入重定向检测** ⇒ 配置的 `discovery.url` 若被重定向到首页，只会在 feed 解析失败时以「XML 解析失败」的**误导性告警**暴露（真实根因被掩盖）；④ `LICENSE_PATH_CANDIDATES` 为美国站点口径，对 PP/guokr 真实条款页覆盖不足。
+
+#### F1 修复后对两个新信源的重新判定（**直接改变 Task-10 决策依据**）
+
+用修复后的判定重新核查 `discovery.url`：
+
+| 信源 | `discovery.url` | 实测 | 判定 |
+|---|---|---|---|
+| `guokr` | `https://www.guokr.com/feed/` | **HTTP 200 但落地 `https://www.guokr.com/`（len=100153）** | **该 feed 实际不存在**——设计阶段「`/feed/` = 200 ⇒ 适用 feed 模式」的记录**本身就是 F1 假阳性的产物**。当前配置在该模式下会抓回首页 HTML ⇒ `_parse_feed` 抛 `ParseError` ⇒ 打印「feed XML 解析失败，降级到 anchor 模式」（**有显式告警，不构成静默空结果**，但告警归因错误、掩盖真实根因）。 |
+| `plannedparenthood` | `https://www.plannedparenthood.org/sitemap.xml` | **HTTP 200，`final` 即 sitemap 本身，body 以 `<?xml version="1.0"?><urlset xmlns=...` 开头** | **真实 sitemap，配置有效**（sitemap 发现模式可用）。 |
+
+**据此对 Task-10 的建议（待用户裁决，agent 不代办）**：
+- **`guokr`：不支持按现配置准入**。应置为 `rejected`，或先由人工重新定位其真实 feed/sitemap 路径后再评估；其「可达」证据来自已修的假阳性。
+- **`plannedparenthood`：sitemap 有效但尚不具备准入条件**——许可页 5 个候选全 404（可能因 `LICENSE_PATH_CANDIDATES` 未覆盖其真实 Terms 路径），需人工以 CI 出口定位并阅读真实条款页后自行填 `license`/`license_url`/`status`。
+
 ---
 
 ### Task 10: 新信源准入与 M2 验收 [Mode: HITL] [Role: Integration Builder]

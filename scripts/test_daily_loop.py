@@ -1913,7 +1913,7 @@ def validate_g7_reverse_bad_impl(errors: list) -> None:
 def validate_g7_admit_source_readonly(errors: list) -> None:
     """G7 主断言④ [No-Auto-Approve]：--admit-source 只打印草案，绝不写回 sources.json。
 
-    以打桩 fetch_url 驱动 run_admit_source，断言运行前后 scripts/sources.json 的
+    以打桩 _http_get 驱动 run_admit_source，断言运行前后 scripts/sources.json 的
     sha256 **完全不变**（证明未自动置 admitted / 未自动填 license / 未写盘）。
     """
     if not hasattr(ch, "run_admit_source"):
@@ -1923,15 +1923,20 @@ def validate_g7_admit_source_readonly(errors: list) -> None:
         errors.append(f"[G7] 信源清单缺失：{SOURCES_FILE}")
         return
 
-    original_fetch = ch.fetch_url
-    ch.fetch_url = lambda *args, **kwargs: (200, "<html><title>许可页</title></html>")
+    # [F1 修复] run_admit_source 现经 probe_page -> _http_get 探测；打桩低层函数保持零网络。
+    original_get = ch._http_get
+    ch._http_get = lambda *args, **kwargs: (
+        200,
+        "<html><title>许可页</title></html>",
+        "https://stub.example/license",
+    )
     before = _sha256(SOURCES_FILE)
     buffer = io.StringIO()
     try:
         with contextlib.redirect_stdout(buffer):
             code = ch.run_admit_source("plannedparenthood")
     finally:
-        ch.fetch_url = original_fetch
+        ch._http_get = original_get
     after = _sha256(SOURCES_FILE)
     printed = buffer.getvalue()
 
@@ -1951,6 +1956,273 @@ def validate_g7_admit_source_readonly(errors: list) -> None:
     print(
         f"[G7] --admit-source 只读性通过：sources.json sha256 前后一致 {before[:12]}…，"
         f"打印 admission 草案（{len(printed)} 字节）"
+    )
+
+
+# --- F1 缺陷修复（准入探测假阳性）新增断言 -------------------------------------
+# 根因：fetch_url 丢弃 resp.geturl()，urllib 默认跟随重定向 ⇒ 状态码恒为落地页 200，
+# 「请求 /copyright 却落回首页」被误报为「✅ 可达」，误导人工照着假页面核许可条款。
+# 本组断言以打桩 _http_get 驱动 probe_page / run_admit_source，全程零真实网络。
+
+_G7_PROBE_SOURCE = {
+    "id": "g7-probe-fixture",
+    "name": "G7 探测夹具",
+    "base_url": "https://example.test",
+    "entry_url": "https://example.test/",
+    "admission": {"license_url": ""},
+}
+_G7_SITE_ROOT = "https://example.test"
+_G7_ROOT_LANDING = "https://example.test/"
+
+
+def _g7_extract_draft(printed: str) -> dict:
+    """从 run_admit_source 输出中解析 ③ admission 草案 JSON（零网络）。"""
+    match = re.search(r'\{\s*"status".*?\n\}', printed, re.DOTALL)
+    if not match:
+        return {}
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _g7_run_admit_stubbed(responder, source: dict) -> tuple:
+    """打桩 _http_get + 夹具信源驱动 run_admit_source（零网络），返回 (exit_code, stdout)。"""
+    original_http = ch._http_get
+    original_load = ch._load_sources
+    ch._http_get = lambda url, timeout=15: responder(url)
+    ch._load_sources = lambda: [source]
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            code = ch.run_admit_source(source["id"])
+    finally:
+        ch._http_get = original_http
+        ch._load_sources = original_load
+    return code, buffer.getvalue()
+
+
+def _g7_probe_with_stub(url, responder, site_root=_G7_SITE_ROOT, root_length=0):
+    """打桩 _http_get 驱动 probe_page（零网络）。"""
+    original = ch._http_get
+    ch._http_get = lambda u, timeout=15: responder(u)
+    try:
+        return ch.probe_page(url, site_root, root_length=root_length, timeout=10)
+    finally:
+        ch._http_get = original
+
+
+def validate_g7_probe_page_verdicts(errors: list) -> None:
+    """G7 新增（F1 缺陷修复）：probe_page 判定 + 草案 license_url 只取真实候选。
+
+    覆盖：redirect_home 主判据 / real 正例 / unreachable / 容错 (0,"",url) / 二次指纹 /
+    反向用例（只看状态码的坏实现必被误判为 real，须判红）。
+    """
+    missing = [n for n in ("_http_get", "probe_page", "_url_key") if not hasattr(ch, n)]
+    if missing:
+        errors.append(f"[G7] curate_harvester 缺少 F1 探测函数：{missing}")
+        return
+
+    # ① redirect_home 主判据：请求非首页却落回站点根 ⇒ 必须判 redirect_home
+    def responder_to_root(url):
+        return (200, "R" * 120, _G7_ROOT_LANDING)
+
+    info = _g7_probe_with_stub("https://example.test/copyright", responder_to_root)
+    if info.get("verdict") != "redirect_home":
+        errors.append(
+            f"[G7] F1 主判据失败：请求 /copyright 落回首页应判 redirect_home，实际 {info.get('verdict')!r}"
+        )
+    if info.get("final_url") != _G7_ROOT_LANDING:
+        errors.append(
+            f"[G7] F1 未回传最终 URL：期望 {_G7_ROOT_LANDING!r}，实际 {info.get('final_url')!r}"
+        )
+
+    # ①-草案：redirect_home 候选严禁写入草案 license_url（钉死第二处泄漏点）
+    code, printed = _g7_run_admit_stubbed(responder_to_root, _G7_PROBE_SOURCE)
+    draft = _g7_extract_draft(printed)
+    if code != 0:
+        errors.append(f"[G7] F1 草案运行应返回 0，实际 exit={code}")
+    if draft.get("license_url") != "":
+        errors.append(
+            f"[G7] F1 第二处泄漏：redirect_home 候选被写入草案 license_url={draft.get('license_url')!r}"
+            "（应置空并提示人工补充）"
+        )
+    if "疑似重定向到首页" not in printed:
+        errors.append("[G7] F1 输出未提示「疑似重定向到首页（非真实许可页）」")
+    if "未找到真实可用的许可页候选" not in printed:
+        errors.append("[G7] F1 无真实候选时未提示「未找到真实可用的许可页候选，请人工补充 license_url」")
+    if "真实可用候选：" not in printed:
+        errors.append("[G7] F1 输出缺少「真实可用候选：N / 总候选 M」汇总行")
+
+    # ⑦ 反向用例（MUST）：只看状态码的坏实现必然返回 real —— 钉死 verdict != real 防 F1 回归
+    if info.get("verdict") == "real":
+        errors.append(
+            "[G7] F1 回归守卫：请求 /copyright 落回首页被误判为 real（只看 HTTP 200 的坏实现未被判红）"
+            "—— 此断言专防「重定向到首页」假阳性回归"
+        )
+
+    # ② real 正例：final_url == requested 且 200 ⇒ real，首个真实候选进草案
+    def responder_terms_real(url):
+        if url.endswith("/terms"):
+            return (200, "terms-body", url)
+        return (404, "", url)
+
+    info_real = _g7_probe_with_stub("https://example.test/terms", responder_terms_real)
+    if info_real.get("verdict") != "real":
+        errors.append(f"[G7] F1 real 正例失败：期望 real，实际 {info_real.get('verdict')!r}")
+    _code2, printed2 = _g7_run_admit_stubbed(responder_terms_real, _G7_PROBE_SOURCE)
+    draft2 = _g7_extract_draft(printed2)
+    if draft2.get("license_url") != "https://example.test/terms":
+        errors.append(
+            f"[G7] F1 real 草案应取首个真实候选 /terms，实际 {draft2.get('license_url')!r}"
+        )
+
+    # ③ unreachable：404 ⇒ unreachable 且草案为空
+    def responder_404(url):
+        return (404, "", url)
+
+    info_404 = _g7_probe_with_stub("https://example.test/copyright", responder_404)
+    if info_404.get("verdict") != "unreachable":
+        errors.append(f"[G7] F1 unreachable 判定失败：期望 unreachable，实际 {info_404.get('verdict')!r}")
+    _code3, printed3 = _g7_run_admit_stubbed(responder_404, _G7_PROBE_SOURCE)
+    if _g7_extract_draft(printed3).get("license_url") != "":
+        errors.append("[G7] F1 全 404 时草案 license_url 应为空")
+
+    # ④ 容错：(0, "", url) ⇒ unreachable 且不抛异常
+    def responder_zero(url):
+        return (0, "", url)
+
+    try:
+        info_zero = _g7_probe_with_stub("https://example.test/copyright", responder_zero)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"[G7] F1 容错失败：(0,\"\",url) 不应抛异常，实际 {exc!r}")
+    else:
+        if info_zero.get("verdict") != "unreachable":
+            errors.append(f"[G7] F1 容错：期望 unreachable，实际 {info_zero.get('verdict')!r}")
+
+    # ⑥ 二次指纹：final_url != requested 且 content_length == root_length(>0) ⇒ redirect_home
+    def responder_fingerprint(url):
+        return (200, "F" * 500, "https://example.test/other-landing")
+
+    info_fp = _g7_probe_with_stub(
+        "https://example.test/copyright", responder_fingerprint, root_length=500
+    )
+    if info_fp.get("verdict") != "redirect_home":
+        errors.append(
+            f"[G7] F1 二次指纹失败：内容长度与首页一致应判 redirect_home，实际 {info_fp.get('verdict')!r}"
+        )
+
+    # ⑤ (F1b-H2) 口径一致：final_url 与 requested **仅尾斜杠不同** ⇒ 不得判为「发生过重定向」，
+    # 更不得在 note 写出误导性「重定向后落地 …」（redirected 必须用 _url_key 归一化比较）。
+    def responder_trailing_slash(url):
+        return (200, "terms-body", url + "/")
+
+    info_slash = _g7_probe_with_stub("https://example.test/terms", responder_trailing_slash)
+    if info_slash.get("verdict") != "real":
+        errors.append(
+            f"[G7][H2] 口径一致：仅尾斜杠不同应判 real，实际 {info_slash.get('verdict')!r}"
+        )
+    if info_slash.get("note") != "":
+        errors.append(
+            f"[G7][H2] 口径不一致：仅尾斜杠不同被误判为发生重定向，note={info_slash.get('note')!r}"
+            "（raw 字符串比较回归；应改用 _url_key 归一化比较，不写误导性「重定向后落地 …」）"
+        )
+
+    print(
+        "[G7] F1 探测判定通过：redirect_home / real / unreachable / 容错 / 二次指纹 均正确，"
+        "redirect_home 不进草案 license_url；且仅尾斜杠不同不误判为发生重定向"
+    )
+
+
+def validate_g7_admit_e2e_root_length_wiring(errors: list) -> None:
+    """G7 新增（F1b-H1）：经 run_admit_source **端到端** 断言 root_length 已接线到生产路径。
+
+    [假绿防线] 既有 F1 测试**直接调用 probe_page 并显式传 root_length**，无法发现
+    「生产调用（run_admit_source）从未传值 ⇒ 二次指纹判据永假（休眠）」这类假绿。本断言
+    打桩 _http_get + _load_sources 走 run_admit_source 全程（零网络）：站点根探测返回 200
+    且 body 长度 L；某许可页候选返回 200，但落地 URL 在站点根之外、body 长度也 == L
+    ⇒ 该候选**必须**被判 redirect_home，且**不得**写入草案 license_url。
+    「撤销 H1 接线（run_admit_source 不再传 root_length）」将使本断言立即判红。
+    """
+    required = ("run_admit_source", "_http_get", "_load_sources", "_url_key", "probe_page")
+    missing = [n for n in required if not hasattr(ch, n)]
+    if missing:
+        errors.append(f"[G7][H1] curate_harvester 缺少端到端断言所需函数：{missing}")
+        return
+
+    home_body = "H" * 400  # L：首页内容长度指纹
+
+    def responder_root_and_lookalike(url):
+        # 站点根（entry_url / base_url）：200，落地即自身，长度 L
+        if ch._url_key(url) == ch._url_key(_G7_SITE_ROOT):
+            return (200, home_body, url)
+        # 许可页候选：200，但落地 URL 在站点根之外，长度也 == L（首页指纹一致）
+        return (200, home_body, "https://cdn.other.test/mirror")
+
+    code, printed = _g7_run_admit_stubbed(responder_root_and_lookalike, _G7_PROBE_SOURCE)
+    if code != 0:
+        errors.append(f"[G7][H1] 端到端运行应返回 0，实际 exit={code}")
+    if "疑似重定向到首页" not in printed:
+        errors.append(
+            "[G7][H1] 生产未接线：run_admit_source 未把 base_url 探测的 content_length 作为 "
+            "root_length 传给许可页候选 probe_page ⇒ 二次指纹判据休眠，落地站点根之外（长度与首页一致）的"
+            "假候选未被判 redirect_home —— 此断言专防「生产未接线 ⇒ 判据休眠」的假绿"
+        )
+    draft = _g7_extract_draft(printed)
+    if draft.get("license_url") != "":
+        errors.append(
+            f"[G7][H1] 生产未接线泄漏：指纹一致的假候选被写入草案 license_url={draft.get('license_url')!r}"
+            "（应判 redirect_home 并置空）"
+        )
+    print(
+        "[G7][H1] 端到端接线通过：base_url 内容长度已作为 root_length 传入候选探测，"
+        "假候选判 redirect_home 且不进草案 license_url"
+    )
+
+
+def validate_g7_url_key_normalization(errors: list) -> None:
+    """G7 新增（F1）：_url_key 归一化比较键边界（尾部斜杠 / fragment / 大小写）。"""
+    if not hasattr(ch, "_url_key"):
+        errors.append("[G7] curate_harvester 缺少 _url_key()")
+        return
+    pairs = (
+        ("https://a.com/x/", "https://a.com/x"),
+        ("https://a.com/", "https://a.com"),
+        ("https://a.com/x#f", "https://a.com/x"),
+    )
+    for left, right in pairs:
+        if ch._url_key(left) != ch._url_key(right):
+            errors.append(
+                f"[G7] F1 _url_key 归一化失败：{left!r} 与 {right!r} 键不相等"
+                f"（{ch._url_key(left)!r} vs {ch._url_key(right)!r}）"
+            )
+    # 反向：不同路径必须不等（防止归一化过度塌缩）
+    if ch._url_key("https://a.com/x") == ch._url_key("https://a.com/y"):
+        errors.append("[G7] F1 _url_key 过度归一化：/x 与 /y 键不应相等")
+    print("[G7] F1 _url_key 归一化通过：尾部斜杠 / fragment 等价，不同路径仍区分")
+
+
+def validate_g7_fetch_url_contract(errors: list) -> None:
+    """G7 新增（F1）：fetch_url 二元组契约零回归（防改成三元组无声破坏 5+ 处发现调用点）。"""
+    if not hasattr(ch, "_http_get"):
+        errors.append("[G7] curate_harvester 缺少 _http_get()（fetch_url 契约断言需打桩它）")
+        return
+    original = ch._http_get
+    ch._http_get = lambda url, timeout=15: (200, "<html>ok</html>", "https://example.test/final")
+    try:
+        result = ch.fetch_url("https://example.test/x")
+    finally:
+        ch._http_get = original
+    if not isinstance(result, tuple):
+        errors.append(f"[G7] F1 fetch_url 契约：返回值应为 tuple，实际 {type(result).__name__}")
+        return
+    if len(result) != 2:
+        errors.append(f"[G7] F1 fetch_url 契约破裂：应返回二元组，实际长度 {len(result)}")
+    if not isinstance(result[0], int):
+        errors.append(f"[G7] F1 fetch_url 契约：首元素应为 int 状态码，实际 {type(result[0]).__name__}")
+    print(
+        f"[G7] F1 fetch_url 二元组契约零回归通过：返回长度={len(result)}，"
+        f"首元素类型={type(result[0]).__name__}"
     )
 
 
@@ -2035,6 +2307,12 @@ def run_gate() -> None:
     validate_g7_idempotent_injection(errors)
     validate_g7_reverse_bad_impl(errors)
     validate_g7_admit_source_readonly(errors)
+    # [G7] F1 缺陷修复：准入探测假阳性（redirect_home 判定 + 草案只取真实候选 + 契约零回归）
+    validate_g7_probe_page_verdicts(errors)
+    # [G7] F1b-H1：端到端（经 run_admit_source）断言 root_length 已接线到生产路径
+    validate_g7_admit_e2e_root_length_wiring(errors)
+    validate_g7_url_key_normalization(errors)
+    validate_g7_fetch_url_contract(errors)
     # [G7] Task-6 收口：test:graph 必须挂载 test_source_discovery.py（紧接 test_daily_loop.py）
     validate_test_graph_wiring(errors)
 
