@@ -23,7 +23,9 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
         断言「今日上新」仅作附加展示、不污染轮换索引）
     G8（node 原生载入 rotation.ts 的真实行为断言：指纹/索引/lcm 防空壳假绿，含
         G8a 双时区（TZ=UTC / Asia/Shanghai）一致性 + G8b pickFreshArticle 真行为）
-G7（速测题占位注入）由后续 Task 逐步追加。
+    G7（速测题占位注入幂等：在 tempfile 副本上两次注入须 True/False 且 sha256 不变、
+        注入文本含 articleId 锚点且花括号配平；含反向用例证明「非幂等坏实现」可被判红；
+        以及 --admit-source 只读性：sources.json sha256 前后不变（No-Auto-Approve））
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
@@ -1687,38 +1689,309 @@ def validate_g4_pool_zero_side_effect(errors: list) -> None:
 def validate_g4_pool_empty_state(errors: list) -> None:
     """G4 主断言④ [Actionable-Empty-State]：空候选池必须显式报错并给出下一步。
 
-    以「sources.json 中不存在的 source_id」驱动 collect_pool_candidates 返回空，
-    断言 run_pool 返回非 0 且打印可执行下一步（--admit-source），禁止静默返回空表。
+    [Task-9 D2 收口] 空池提示统一为 npm 脚本形态 ``pnpm curate:admit <id>``（不再是原始
+    flag ``--admit-source``），并**按两类空因分别提示**：
+      (a) 无任何已准入（admitted）信源 ⇒ 提示先准入信源；
+      (b) 有已准入信源但候选耗尽 ⇒ 提示准入新信源或扩大 link_pattern。
+    断言 run_pool 返回非 0 且打印对应文案，禁止静默返回空表。
     变异自证③：若空池改为静默返回（exit 0 且无告警），本断言立即失败。
     """
     if not hasattr(ch, "run_pool"):
         errors.append("[G4] curate_harvester 缺少 run_pool()")
         return
 
+    # 原因(a)：指定一个不存在的 source_id ⇒ 过滤后无已准入信源。
     original_fetch = ch.fetch_url
     ch.fetch_url = lambda *args, **kwargs: (0, "")  # 零网络
+    buffer_a = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer_a):
+            code_a = ch.run_pool(source_id="__no_such_source__", limit=40)
+    finally:
+        ch.fetch_url = original_fetch
+    printed_a = buffer_a.getvalue()
+
+    if code_a == 0:
+        errors.append("[G4] 空候选池必须返回非零退出码（禁止静默返回空表），实际 exit=0")
+    if "候选池为空" not in printed_a:
+        errors.append(f"[G4] 空候选池必须打印显式告警「候选池为空」，实际 stdout={printed_a!r}")
+    if "pnpm curate:admit" not in printed_a:
+        errors.append(
+            f"[G4] 空候选池告警必须给出可执行下一步（pnpm curate:admit <id>），实际 stdout={printed_a!r}"
+        )
+    if "--admit-source" in printed_a:
+        errors.append(
+            f"[G4] 空候选池告警仍残留原始 flag「--admit-source」（D2 要求统一为 pnpm curate:admit）：{printed_a!r}"
+        )
+    if "原因(a)" not in printed_a:
+        errors.append(f"[G4] 无已准入信源时必须走「原因(a)」分支提示先准入信源：{printed_a!r}")
+
+    # 原因(b)：真实信源（WHO / 默沙东为 admitted）下零候选 ⇒ 候选耗尽。
+    original_fetch = ch.fetch_url
+    ch.fetch_url = lambda *args, **kwargs: (0, "")  # 零网络
+    buffer_b = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer_b):
+            code_b = ch.run_pool(source_id=None, limit=40)
+    finally:
+        ch.fetch_url = original_fetch
+    printed_b = buffer_b.getvalue()
+
+    if code_b == 0:
+        errors.append("[G4] 已准入信源候选耗尽时也必须返回非零退出码，实际 exit=0")
+    if "原因(b)" not in printed_b:
+        errors.append(
+            f"[G4] 有已准入信源但候选耗尽时必须走「原因(b)」分支（提示准入新信源/扩大 link_pattern）：{printed_b!r}"
+        )
+    if "link_pattern" not in printed_b:
+        errors.append(f"[G4] 原因(b) 提示须包含「扩大 link_pattern」的可执行建议：{printed_b!r}")
+
+    print(
+        f"[G4] 空池 Actionable-Empty-State 通过：exit={code_a}/{code_b}，"
+        f"含「候选池为空」+「pnpm curate:admit」，且 (a)/(b) 两类空因分别提示"
+    )
+
+
+# ---------------------------------------------------------------------------
+# G7：速测题占位注入幂等与 --admit-source 只读性（Task-9）
+# ---------------------------------------------------------------------------
+
+# 最小可注入的 TS 种子：绝不复用真实 src/data/dailyQuiz.ts 做注入测试（安全红线），
+# 仅需形如 DAILY_QUIZZES 的对象字面量即可驱动注入路径。
+_G7_QUIZ_SEED = (
+    "export interface QuizItem {\n"
+    "  articleId: string;\n"
+    "}\n"
+    "\n"
+    "export const DAILY_QUIZZES: Record<string, QuizItem> = {\n"
+    "  'existing-slug': {\n"
+    "    articleId: 'existing-slug',\n"
+    "    question: '既有题目',\n"
+    "  },\n"
+    "};\n"
+)
+
+
+def _brace_balance(text: str) -> tuple:
+    """返回 (左花括号数, 右花括号数)（按字符计数，供 G7 配平断言）。"""
+    return text.count("{"), text.count("}")
+
+
+def _count_key_occurrences(text: str, slug: str) -> int:
+    """统计 DAILY_QUIZZES 中该 slug 顶层键（``'<slug>': {``）出现次数。"""
+    return len(
+        re.findall(r"^\s*'" + re.escape(slug) + r"'\s*:\s*\{", text, flags=re.MULTILINE)
+    )
+
+
+def _bad_inject_always_append(quiz_path: Path, slug: str) -> bool:
+    """非幂等坏实现（仅用于 G7 反向用例自证）：从不检测已存在，永远追加并返回 True。"""
+    text = quiz_path.read_text(encoding="utf-8")
+    entry = "  '" + slug + "': {\n    articleId: '" + slug + "',\n  },\n"
+    close = text.rfind("};")
+    quiz_path.write_text(text[:close] + entry + text[close:], encoding="utf-8")
+    return True
+
+
+def validate_g7_idempotent_injection(errors: list) -> None:
+    """G7 主断言①②：占位注入幂等（tempfile 副本，严禁触碰真实 dailyQuiz.ts）。
+
+    - 第一次注入返回 True，第二次返回 False；
+    - 第二次前后文件 sha256 **完全不变**（无副作用）；
+    - 注入后文本含 ``articleId: '<slug>'`` 锚点，且花括号配平（``{`` 数 == ``}`` 数）；
+    - 同一 slug 顶层键恰好 1 条（不产生第二条占位）。
+    """
+    if not hasattr(ch, "inject_quiz_placeholder"):
+        errors.append("[G7] curate_harvester 缺少 inject_quiz_placeholder()")
+        return
+
+    slug = "g7-fixture-slug"
+    with tempfile.TemporaryDirectory() as tmp:
+        copy_path = Path(tmp) / "dailyQuiz.ts"
+        copy_path.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+
+        first = ch.inject_quiz_placeholder(copy_path, slug)
+        after_first = _read_text(copy_path)
+        sha_mid = _sha256(copy_path)
+
+        second = ch.inject_quiz_placeholder(copy_path, slug)
+        after_second = _read_text(copy_path)
+        sha_end = _sha256(copy_path)
+
+    if first is not True:
+        errors.append(f"[G7] 首次注入应返回 True，实际 {first!r}")
+    if second is not False:
+        errors.append(f"[G7] 二次注入应返回 False（幂等），实际 {second!r}")
+    if sha_mid != sha_end:
+        errors.append(
+            f"[G7] 二次注入产生副作用：副本 sha256 变化 {sha_mid[:12]}… -> {sha_end[:12]}…"
+        )
+    if after_first != after_second:
+        errors.append("[G7] 二次注入后文本内容发生变化（幂等性被破坏）")
+    if f"articleId: '{slug}'" not in after_first:
+        errors.append(f"[G7] 注入文本缺少 articleId 锚点 articleId: '{slug}'")
+    left, right = _brace_balance(after_first)
+    if left != right:
+        errors.append(f"[G7] 注入后花括号不配平：{left} 个 {{ vs {right} 个 }}")
+    occurrences = _count_key_occurrences(after_first, slug)
+    if occurrences != 1:
+        errors.append(f"[G7] 同一 slug 顶层键应恰好 1 条占位，实际 {occurrences} 条")
+
+    # 既有 slug 二次注入必须直接返回 False 且不改动文件。
+    with tempfile.TemporaryDirectory() as tmp:
+        exist_path = Path(tmp) / "dailyQuiz.ts"
+        exist_path.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+        sha_before = _sha256(exist_path)
+        repeat = ch.inject_quiz_placeholder(exist_path, "existing-slug")
+        sha_after = _sha256(exist_path)
+    if repeat is not False:
+        errors.append(f"[G7] 对已存在 slug 注入应返回 False，实际 {repeat!r}")
+    if sha_before != sha_after:
+        errors.append("[G7] 对已存在 slug 注入却改动了文件（应原样返回 False）")
+
+    print(
+        f"[G7] 占位注入幂等通过：首次 True / 二次 False，副本 sha256 不变 {sha_end[:12]}…，"
+        f"含 articleId 锚点且花括号配平（{left} 对）"
+    )
+
+
+def validate_g7_reverse_bad_impl(errors: list) -> None:
+    """G7 反向用例（MUST）：非幂等坏实现必须被 G7 判红语义捕获。
+
+    以「永远追加、二次仍返回 True」的坏实现驱动同一 tempfile 副本，断言其确实
+    破坏了 G7 三条不变量（二次 True / sha256 变化 / 出现 2 条占位）——
+    从而证明 G7 的幂等断言对坏实现**可红**（非恰好通过的假绿）。
+    """
+    slug = "g7-bad-slug"
+    with tempfile.TemporaryDirectory() as tmp:
+        bad_path = Path(tmp) / "dailyQuiz.ts"
+        bad_path.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+        bad_first = _bad_inject_always_append(bad_path, slug)
+        bad_sha_mid = _sha256(bad_path)
+        bad_second = _bad_inject_always_append(bad_path, slug)
+        bad_sha_end = _sha256(bad_path)
+        bad_text = _read_text(bad_path)
+
+    bad_occurrences = _count_key_occurrences(bad_text, slug)
+    if not (bad_first is True and bad_second is True):
+        errors.append(
+            f"[G7] 反向用例失效：坏实现应两次均返回 True，实际 {bad_first!r} / {bad_second!r}"
+        )
+    if bad_sha_mid == bad_sha_end:
+        errors.append("[G7] 反向用例失效：坏实现二次注入本应改变 sha256（幂等语义被破坏）")
+    if bad_occurrences != 2:
+        errors.append(f"[G7] 反向用例失效：坏实现应产生 2 条占位，实际 {bad_occurrences} 条")
+
+    if not hasattr(ch, "inject_quiz_placeholder"):
+        errors.append("[G7] curate_harvester 缺少 inject_quiz_placeholder()")
+        return
+    # 正向对照：真实实现驱动同一副本必须收敛为 1 条且二次 False。
+    with tempfile.TemporaryDirectory() as tmp:
+        good_path = Path(tmp) / "dailyQuiz.ts"
+        good_path.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+        good_first = ch.inject_quiz_placeholder(good_path, slug)
+        good_sha_mid = _sha256(good_path)
+        good_second = ch.inject_quiz_placeholder(good_path, slug)
+        good_sha_end = _sha256(good_path)
+        good_occurrences = _count_key_occurrences(_read_text(good_path), slug)
+
+    if not (good_first is True and good_second is False):
+        errors.append(
+            f"[G7] 正向对照失效：真实实现应 True/False，实际 {good_first!r} / {good_second!r}"
+        )
+    if good_sha_mid != good_sha_end:
+        errors.append("[G7] 正向对照失效：真实实现二次注入改变了 sha256")
+    if good_occurrences != 1:
+        errors.append(f"[G7] 正向对照失效：真实实现应恰好 1 条占位，实际 {good_occurrences} 条")
+
+    print(
+        f"[G7] 反向用例通过：非幂等坏实现破坏 3 条不变量（二次 True / sha256 变化 / "
+        f"{bad_occurrences} 条占位）；真实实现收敛为 1 条且二次 False"
+    )
+
+
+def validate_g7_admit_source_readonly(errors: list) -> None:
+    """G7 主断言④ [No-Auto-Approve]：--admit-source 只打印草案，绝不写回 sources.json。
+
+    以打桩 fetch_url 驱动 run_admit_source，断言运行前后 scripts/sources.json 的
+    sha256 **完全不变**（证明未自动置 admitted / 未自动填 license / 未写盘）。
+    """
+    if not hasattr(ch, "run_admit_source"):
+        errors.append("[G7] curate_harvester 缺少 run_admit_source()（--admit-source 分支未实现）")
+        return
+    if not SOURCES_FILE.is_file():
+        errors.append(f"[G7] 信源清单缺失：{SOURCES_FILE}")
+        return
+
+    original_fetch = ch.fetch_url
+    ch.fetch_url = lambda *args, **kwargs: (200, "<html><title>许可页</title></html>")
+    before = _sha256(SOURCES_FILE)
     buffer = io.StringIO()
     try:
         with contextlib.redirect_stdout(buffer):
-            code = ch.run_pool(source_id="__no_such_source__", limit=40)
+            code = ch.run_admit_source("plannedparenthood")
     finally:
         ch.fetch_url = original_fetch
+    after = _sha256(SOURCES_FILE)
     printed = buffer.getvalue()
 
-    if code == 0:
-        errors.append("[G4] 空候选池必须返回非零退出码（禁止静默返回空表），实际 exit=0")
-    if "候选池为空" not in printed:
-        errors.append(f"[G4] 空候选池必须打印显式告警「候选池为空」，实际 stdout={printed!r}")
-    if "--admit-source" not in printed:
+    if before != after:
         errors.append(
-            f"[G4] 空候选池告警必须给出可执行下一步（--admit-source <id>），实际 stdout={printed!r}"
+            f"[G7] --admit-source 产生副作用：sources.json sha256 变化 {before[:12]}… -> {after[:12]}…"
+            f"（No-Auto-Approve：严禁自动写回 sources.json）"
         )
-    print(f"[G4] 空池 Actionable-Empty-State 通过：exit={code}，含「候选池为空」+「--admit-source」")
+    if code != 0:
+        errors.append(f"[G7] --admit-source 应正常打印草案并返回 0，实际 exit={code}")
+    if "admission" not in printed:
+        errors.append(f"[G7] --admit-source 未打印 admission 草案：stdout={printed[:300]}")
+    if "人工" not in printed:
+        errors.append(f"[G7] --admit-source 未提示「请人工阅读许可页后自行填写」：stdout={printed[:300]}")
+    if "verified_by_run" not in printed:
+        errors.append(f"[G7] --admit-source 未提示 verified_by_run（须来自 CI 出口）：stdout={printed[:300]}")
+    print(
+        f"[G7] --admit-source 只读性通过：sources.json sha256 前后一致 {before[:12]}…，"
+        f"打印 admission 草案（{len(printed)} 字节）"
+    )
+
+
+def validate_test_graph_wiring(errors: list) -> None:
+    """G7 支撑断言（Task-6 收口）：确认 test_source_discovery.py 已挂入 ``test:graph``。
+
+    [假安全感防线] Task-6 新建的 scripts/test_source_discovery.py 若未挂入 test:graph，
+    则「写了门禁但没接线」，CI 中永不执行。此处以 package.json 文本断言钉死接线与**位置**
+    （必须紧接 scripts/test_daily_loop.py 之后），使「移除接线」立即变红（变异自证④）。
+    """
+    pkg_file = ROOT_DIR / "package.json"
+    if not pkg_file.is_file():
+        errors.append(f"[G7] package.json 缺失：{pkg_file}")
+        return
+    try:
+        scripts = json.loads(_read_text(pkg_file)).get("scripts", {})
+    except json.JSONDecodeError as exc:
+        errors.append(f"[G7] package.json 非法 JSON：{exc}")
+        return
+
+    graph = scripts.get("test:graph", "")
+    if "scripts/test_source_discovery.py" not in graph:
+        errors.append(
+            "[G7] test:graph 未挂入 scripts/test_source_discovery.py"
+            "（写了门禁却没接线 ⇒ CI 永不执行，属假安全感）"
+        )
+        return
+
+    expected = "scripts/test_daily_loop.py && python -X utf8 scripts/test_source_discovery.py"
+    if expected not in graph:
+        errors.append(
+            "[G7] test_source_discovery.py 未紧接 scripts/test_daily_loop.py 之后挂入 test:graph"
+            f"（期望包含：{expected!r}）"
+        )
+        return
+    print("[G7] test:graph 接线通过：test_source_discovery.py 紧接 test_daily_loop.py 之后已挂载")
 
 
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）。")
 
     errors: list = []
 
@@ -1758,6 +2031,13 @@ def run_gate() -> None:
     validate_g4_pool_zero_side_effect(errors)
     validate_g4_pool_empty_state(errors)
 
+    # [G7] 速测题占位注入幂等（tempfile 自证 + 反向坏实现可判红）+ --admit-source 只读不改 sources.json
+    validate_g7_idempotent_injection(errors)
+    validate_g7_reverse_bad_impl(errors)
+    validate_g7_admit_source_readonly(errors)
+    # [G7] Task-6 收口：test:graph 必须挂载 test_source_discovery.py（紧接 test_daily_loop.py）
+    validate_test_graph_wiring(errors)
+
     # [G8/G8a/G8b] node 原生载入 rotation.ts 的真实行为断言（探针失败即记明确错误，不静默跳过）
     probe = _run_rotation_probe(errors)
     validate_g8_rotation_behavior(errors, probe)
@@ -1770,7 +2050,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2、G3、G4、G5、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；信源 schema 合法（含 admitted⇒license 非空 fail-closed 反向用例）且 --pool 零副作用（台账 sha256 前后一致）与空池可执行报错；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3、G4、G5、G6、G7 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；信源 schema 合法（含 admitted⇒license 非空 fail-closed 反向用例）且 --pool 零副作用（台账 sha256 前后一致）与空池两类成因分别可执行报错；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；速测题占位注入幂等（tempfile 副本二次注入 sha256 不变 + 反向坏实现可判红）且 --admit-source 只读不写 sources.json（No-Auto-Approve）；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":

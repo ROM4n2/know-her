@@ -14,7 +14,9 @@
 		"curate:today": "python -X utf8 scripts/curate.py daily",
 		"curate:harvest": "python -X utf8 scripts/curate_harvester.py",
 		"curate:pool": "python -X utf8 scripts/curate_harvester.py --pool",
-		"test:graph": "python -X utf8 scripts/test_decision_tree.py && python -X utf8 scripts/test_glossary.py && python -X utf8 scripts/test_tools.py && python -X utf8 scripts/test_daily_loop.py && python -X utf8 scripts/test_article_hygiene.py && python -X utf8 scripts/test_security_contracts.py",
+		"curate:draft": "python -X utf8 scripts/curate_harvester.py --draft-url",
+		"curate:admit": "python -X utf8 scripts/curate_harvester.py --admit-source",
+		"test:graph": "python -X utf8 scripts/test_decision_tree.py && python -X utf8 scripts/test_glossary.py && python -X utf8 scripts/test_tools.py && python -X utf8 scripts/test_daily_loop.py && python -X utf8 scripts/test_source_discovery.py && python -X utf8 scripts/test_article_hygiene.py && python -X utf8 scripts/test_security_contracts.py",
 		"test": "pnpm check && pnpm test:graph && pnpm curate:check && pnpm build"
 	},
 	"dependencies": {

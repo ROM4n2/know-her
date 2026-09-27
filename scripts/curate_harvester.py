@@ -13,15 +13,18 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from html import unescape
+from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 ARTICLES_DIR = os.path.join(ROOT_DIR, "src", "content", "articles")
 SOURCES_FILE = os.path.join(SCRIPT_DIR, "sources.json")
 LEDGER_FILE = os.path.join(SCRIPT_DIR, ".curate-ledger.json")
+QUIZ_FILE = os.path.join(ROOT_DIR, "src", "data", "dailyQuiz.ts")
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
@@ -849,6 +852,61 @@ def _print_pool_table(ranked: list, category_counts: dict, limit: int) -> None:
         print(f"  - {category}: 已发布 {category_counts.get(category, 0)} 篇")
 
 
+def _load_sources() -> list:
+    """只读加载 ``scripts/sources.json``；缺失 / 非法 JSON / 非数组时返回 ``[]``。"""
+    if not os.path.exists(SOURCES_FILE):
+        return []
+    try:
+        with open(SOURCES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _admitted_sources(source_id: str | None = None) -> list:
+    """返回已准入（fail-closed 通过）的信源列表；``source_id`` 给定时按 id 过滤。"""
+    admitted: list = []
+    for src in _load_sources():
+        if not isinstance(src, dict) or not is_source_admitted(src):
+            continue
+        if source_id and src.get("id") != source_id:
+            continue
+        admitted.append(src)
+    return admitted
+
+
+def _print_empty_pool_hint(source_id: str | None) -> None:
+    """按两类空因分别打印可执行下一步（D2：统一为 ``pnpm curate:admit <id>`` 形态）。"""
+    print("\n❌ 候选池为空")
+    admitted = _admitted_sources(source_id)
+    # 守卫子句：无已准入信源 ⇒ 原因(a)；否则为候选耗尽 ⇒ 原因(b)。
+    if admitted:
+        print(
+            f"  原因(b)：已有 {len(admitted)} 个已准入（admitted）信源，但候选已耗尽"
+            f"（本次发现结果均已在台账 / 已发布）。\n"
+            f"  ➜ 请准入新信源：pnpm curate:admit <id>；"
+            f"或扩大现有信源 discovery.link_pattern / keywords 以捕获更多候选。"
+        )
+        return
+
+    matched = [
+        src
+        for src in _load_sources()
+        if isinstance(src, dict) and source_id and src.get("id") == source_id
+    ]
+    if source_id and not matched:
+        print(
+            f"  原因(a)：未在 sources.json 找到信源 '{source_id}'（或该信源尚未准入）。\n"
+            f"  ➜ 请先准入信源：pnpm curate:admit {source_id}"
+        )
+        return
+    print(
+        "  原因(a)：当前没有任何「已准入（admitted）」信源可供扫描。\n"
+        "  ➜ 请先准入信源：pnpm curate:admit <id>（该命令只打印准入证据草案，需人工阅读许可页后填写）"
+    )
+
+
 def run_pool(source_id: str | None = None, limit: int = POOL_DEFAULT_LIMIT) -> int:
     """``--pool`` 分支：输出按分类缺口优先排序的候选池表格（零副作用：只读台账，不写盘/不提 PR）。
 
@@ -857,16 +915,330 @@ def run_pool(source_id: str | None = None, limit: int = POOL_DEFAULT_LIMIT) -> i
     print("🔎 [候选池] 数据源 = 实时发现结果 − 台账已收录 URL（只读，零副作用）")
     pool = collect_pool_candidates(source_id=source_id)
     if not pool:
-        print(
-            "\n❌ 候选池为空：所有准入信源候选已耗尽，"
-            "请执行 python -X utf8 scripts/curate_harvester.py --admit-source <id> "
-            "准入新信源（Task-9 提供）"
-        )
+        _print_empty_pool_hint(source_id)
         return 1
 
     category_counts = count_articles_by_category()
     ranked = rank_candidates(pool, category_counts)
     _print_pool_table(ranked, category_counts, limit)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# M2：草稿生成（--draft-url）与信源准入证据草案（--admit-source）——Task-9
+# ---------------------------------------------------------------------------
+
+# 许可页候选路径：仅作「抓取证据收集」的探测清单，绝不代替人工阅读与判定。
+LICENSE_PATH_CANDIDATES = (
+    "/copyright",
+    "/terms",
+    "/terms-and-conditions",
+    "/legal",
+    "/about/policies/publishing/copyright",
+)
+# 本机出口不可信的站点实测（CI-Egress-Only 提示语，来自计划「Fog of War」）。
+LOCAL_EGRESS_UNTRUSTED_NOTE = (
+    "本机出口实测结果不可信（cdc.gov 403 / unesco.org 403 / nhc.gov.cn 412 / "
+    "scarleteen 与 amaze 000）"
+)
+
+
+def _host_of(url: str) -> str:
+    """返回 URL 的 host（解析失败返回空串）。"""
+    try:
+        return urllib.parse.urlparse(url).netloc
+    except ValueError:
+        return ""
+
+
+def _match_source_for_url(url: str, sources: list) -> dict:
+    """按 ``base_url`` 前缀匹配信源（取最长匹配）；无匹配返回 ``{}``（零破坏升级）。"""
+    best: dict = {}
+    best_len = -1
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        base = src.get("base_url") or ""
+        if base and url.startswith(base) and len(base) > best_len:
+            best, best_len = src, len(base)
+    return best
+
+
+def _skip_str_literal(text: str, start: int) -> int:
+    """从 ``text[start]``（引号字符）起跳过整个字符串字面量，返回闭合引号后的下标。"""
+    quote = text[start]
+    index = start + 1
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            return index + 1
+        index += 1
+    return length
+
+
+def _find_object_close(text: str, open_index: int) -> int:
+    """从 ``open_index``（``{``）起做字符串感知的花括号配平，返回匹配的 ``}`` 下标。
+
+    字符串字面量（单 / 双 / 反引号）内的花括号不参与配平；找不到匹配返回 -1。
+    """
+    depth = 0
+    index = open_index
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char in ("'", '"', "`"):
+            index = _skip_str_literal(text, index)
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return -1
+
+
+def _quiz_has_slug(source: str, slug: str) -> bool:
+    """判定 ``DAILY_QUIZZES`` 中是否已存在该 slug 顶层键（``'<slug>': {``）。"""
+    pattern = r"^\s*'" + re.escape(slug) + r"'\s*:\s*\{"
+    return re.search(pattern, source, flags=re.MULTILINE) is not None
+
+
+def _quiz_placeholder_entry(slug: str) -> str:
+    """构造一条**语法合法**的速测题占位条目（含 articleId 锚点与 TODO 人工补题锚点）。"""
+    return (
+        f"  '{slug}': {{\n"
+        f"    articleId: '{slug}',\n"
+        f"    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。\n"
+        f"    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。\n"
+        f"    question: '【待人工补题】请通读原文后填写速测题干',\n"
+        f"    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],\n"
+        f"    correctIndex: 0,\n"
+        f"    explanation: '【待人工补题】请填写简明权威原理解释',\n"
+        f"  }},\n"
+    )
+
+
+def inject_quiz_placeholder(quiz_path: Path, slug: str) -> bool:
+    """在 ``DAILY_QUIZZES`` 对象**末尾**插入一条速测题占位条目（幂等）。
+
+    - 已存在同 slug 顶层键 ⇒ 直接返回 ``False`` 且**不改动文件**（幂等，sha256 不变）；
+    - 成功插入 ⇒ 返回 ``True``；
+    - 找不到 ``DAILY_QUIZZES`` / 花括号不配平 / 不可读 ⇒ 返回 ``False``（不写盘）；
+    - 插入条目花括号配平、语法合法（否则 ``pnpm check`` 会红）。
+    """
+    quiz_path = Path(quiz_path)
+    try:
+        text = quiz_path.read_text(encoding="utf-8")
+    except OSError:
+        print(f"❌ 无法读取速测题文件：{quiz_path}")
+        return False
+
+    if _quiz_has_slug(text, slug):
+        return False
+
+    marker = text.find("DAILY_QUIZZES")
+    if marker == -1:
+        print(f"❌ 速测题文件缺少 DAILY_QUIZZES 对象：{quiz_path}")
+        return False
+    open_index = text.find("{", marker)
+    if open_index == -1:
+        return False
+    close_index = _find_object_close(text, open_index)
+    if close_index == -1:
+        print(f"❌ DAILY_QUIZZES 对象花括号不配平，拒绝注入：{quiz_path}")
+        return False
+
+    entry = _quiz_placeholder_entry(slug)
+    quiz_path.write_text(text[:close_index] + entry + text[close_index:], encoding="utf-8")
+    return True
+
+
+def _build_draft_candidate(url: str, sources: list) -> dict:
+    """为 ``--draft-url`` 构造候选字典（复用既有标题/分类/清理口径，不改内容规范）。"""
+    src = _match_source_for_url(url, sources)
+    status, html = fetch_url(url, timeout=15)
+    if status == 200 and html:
+        page_title, desc = extract_metadata(html)
+    else:
+        print(f"  ⚠️ 候选页抓取失败 (HTTP {status})，改为从 URL 派生标题（人工仍须核对原文）")
+        page_title, desc = "", ""
+
+    anchor_title = _title_from_url(url)
+    final_title = page_title if (page_title and len(page_title) >= len(anchor_title)) else anchor_title
+    final_title = clean_title(final_title) or anchor_title or url
+
+    category, tags = determine_category_and_tags(final_title, desc, src)
+    return {
+        "title": final_title,
+        "summary": desc,
+        "raw_desc": desc,
+        "category": category,
+        "tags": tags,
+        "source_url": url,
+        "source_name": src.get("name") or _host_of(url),
+        "slug": generate_slug(category, src.get("id") or "", url),
+        "source_id": src.get("id") or "",
+        "http_status": status,
+    }
+
+
+def _register_pending(url: str, source_id: str, http_status) -> None:
+    """[D1] 把候选以 ``status="pending"`` 登记入台账（`iter_pending` 的首个生产消费路径）。"""
+    ledger = load_ledger()
+    if url in ledger_seen_urls(ledger):
+        print("  ⏭️ 该候选 URL 已在台账中，跳过 pending 登记")
+        return
+    today = datetime.date.today().isoformat()
+    ledger.setdefault("processed_urls", []).append(
+        {
+            "url": url,
+            "status": "pending",
+            "source_id": source_id,
+            "first_seen": today,
+            "last_probed": today,
+            "http_status": http_status,
+        }
+    )
+    save_ledger(ledger)
+    print(f"  ✓ 已登记 pending 台账：{LEDGER_FILE}")
+
+
+def run_draft_url(url: str) -> int:
+    """``--draft-url <url>`` 分支：生成 MDX 骨架 + 注入速测题占位 + 登记 pending 台账。
+
+    返回进程退出码：0 = 成功；2 = 参数缺失 / 非法 URL。
+    本命令**不**自动提 PR（人工闸门）：仅在本地生成骨架与占位，并打印下一步人工动作。
+    """
+    url = (url or "").strip()
+    if not url:
+        print("❌ --draft-url 需要提供候选 URL：pnpm curate:draft <url>")
+        return 2
+    if not re.match(r"https?://", url):
+        print(f"❌ --draft-url 需要 http(s) URL，实际：{url!r}")
+        return 2
+
+    candidate = _build_draft_candidate(url, _load_sources())
+    slug = candidate["slug"]
+    target_path = os.path.join(ARTICLES_DIR, f"{slug}.mdx")
+    if os.path.exists(target_path):
+        slug = f"{slug}-{int(datetime.datetime.now().timestamp()) % 1000}"
+        candidate["slug"] = slug
+        target_path = os.path.join(ARTICLES_DIR, f"{slug}.mdx")
+
+    print(f"\n📝 [草稿生成] 候选：{candidate['title']}")
+    print(f"   分类={candidate['category']} 来源={candidate['source_name']} slug={slug}")
+
+    # 1) 生成 MDX 骨架（复用 compose_mdx_content，内容规范不得改动）
+    with open(target_path, "w", encoding="utf-8") as f:
+        f.write(compose_mdx_content(candidate))
+    print(f"  ✓ 已生成 MDX 骨架：{target_path}")
+
+    # 2) 注入速测题占位（幂等）
+    if inject_quiz_placeholder(Path(QUIZ_FILE), slug):
+        print(f"  ✓ 已注入速测题占位（articleId='{slug}'）到：{QUIZ_FILE}")
+    else:
+        print(f"  ⏭️ 速测题占位已存在（幂等，未改动）：{QUIZ_FILE}")
+
+    # 3) [D1] 登记 pending 台账，并展示 iter_pending 消费路径
+    _register_pending(candidate["source_url"], candidate["source_id"], candidate.get("http_status"))
+    print(f"  📌 当前台账 pending 队列：{len(iter_pending(load_ledger()))} 条（iter_pending 消费路径已激活）")
+
+    # 4) 打印下一步人工动作指引
+    print(
+        "\n" + "=" * 72 + "\n"
+        "✅ 草稿骨架已生成。请完成以下**人工动作**后再提 PR（机器不得自证）：\n"
+        f"  1) 通读原文，把 src/content/articles/{slug}.mdx 的三条占位要点改写为 3~5 条提炼干货，"
+        "并删除占位文字与注释块；\n"
+        f"  2) 补完速测题占位：编辑 src/data/dailyQuiz.ts 中 '{slug}' 条目，"
+        "清空占位文字并填写题干 / 选项 / 正解 / 解析；\n"
+        "  3) 运行 pnpm check && pnpm test 确认门禁全绿；\n"
+        "  4) 自行提 PR（本工具不自动提交、不自动打勾）。\n"
+        + "=" * 72
+    )
+    return 0
+
+
+def _license_url_candidates(src: dict) -> list:
+    """派生许可页候选 URL（既有 license_url 优先，再补常见路径）。"""
+    admission = src.get("admission") if isinstance(src.get("admission"), dict) else {}
+    candidates: list = []
+    existing = admission.get("license_url")
+    if isinstance(existing, str) and existing.strip():
+        candidates.append(existing.strip())
+    base_url = (src.get("base_url") or "").rstrip("/")
+    if base_url:
+        for path in LICENSE_PATH_CANDIDATES:
+            candidate_url = base_url + path
+            if candidate_url not in candidates:
+                candidates.append(candidate_url)
+    return candidates
+
+
+def run_admit_source(source_id: str) -> int:
+    """``--admit-source <id>`` 分支：打印准入证据草案（**只读，绝不写回 sources.json**）。
+
+    [No-Auto-Approve] 本命令**禁止**自动把 status 改为 admitted、**禁止**自动填 license、
+    **禁止**写回 sources.json；信任机制要求人工阅读许可页后自行填写。
+    返回进程退出码：0 = 已打印草案；2 = 参数缺失；1 = 未找到该信源。
+    """
+    source_id = (source_id or "").strip()
+    if not source_id:
+        print("❌ --admit-source 需要提供信源 ID：pnpm curate:admit <id>")
+        return 2
+
+    src = next(
+        (s for s in _load_sources() if isinstance(s, dict) and s.get("id") == source_id),
+        None,
+    )
+    if src is None:
+        print(f"❌ 未在 {SOURCES_FILE} 找到信源 id='{source_id}'")
+        return 1
+
+    base_url = src.get("base_url") or ""
+    entry_url = src.get("entry_url") or base_url
+
+    print(f"\n🛡️ [准入证据草案] 信源 id='{source_id}'（{src.get('name', '')}）")
+    print("   ⚠️ 本命令只读：不会修改 sources.json，也不会自动置 admitted / 自动填 license。")
+
+    print("\n① 可达性探测（本机出口，仅供参考，不可作准入证据）：")
+    for label, probe_url in (("entry_url", entry_url), ("base_url", base_url)):
+        if not probe_url:
+            continue
+        status, _ = fetch_url(probe_url, timeout=10)
+        print(f"   - {label}: {probe_url} → HTTP {status}")
+
+    print("\n② 许可页抓取证据收集（license_url 候选）：")
+    candidates = _license_url_candidates(src)
+    if not candidates:
+        print("   - （无 base_url，无法派生许可页候选；请人工补充）")
+    for candidate_url in candidates:
+        status, _ = fetch_url(candidate_url, timeout=10)
+        mark = "✅ 可达" if status == 200 else f"⚠️ 不可达 (HTTP {status})"
+        print(f"   - {candidate_url} → {mark}")
+
+    print("\n③ admission 草案（请人工补全后**自行**粘贴到 scripts/sources.json）：")
+    draft = {
+        "status": "probing",
+        "license": "",
+        "license_url": candidates[0] if candidates else "",
+        "verified_at": "",
+        "verified_by_run": "",
+    }
+    print(json.dumps(draft, ensure_ascii=False, indent=2))
+
+    print(
+        "\n⚠️ No-Auto-Approve：本命令**不会**自动通过。请人工打开上述许可页、阅读条款后，"
+        "再**自行**填写 license / license_url 并把 status 置为 \"admitted\"。\n"
+        "⚠️ CI-Egress-Only：verified_by_run 必须来自 CI 出口（GitHub Actions run URL）——"
+        f"{LOCAL_EGRESS_UNTRUSTED_NOTE}。\n"
+        "   （在本地执行本命令得到的可达性仅为参考，准入证据须补一次 CI 运行。）"
+    )
     return 0
 
 
@@ -1008,6 +1380,16 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="每次抓取并生成的候选数量（默认 1；--pool 默认 40）")
     parser.add_argument("--source-id", help="限定仅扫描指定信源 ID (who-fact-sheets / msd-women-health)")
     parser.add_argument("--pool", action="store_true", help="输出按分类缺口优先排序的候选池（只读，零副作用）")
+    parser.add_argument(
+        "--draft-url",
+        metavar="URL",
+        help="为指定候选 URL 生成 MDX 骨架 + 注入速测题占位 + 登记 pending（用法：pnpm curate:draft <url>）",
+    )
+    parser.add_argument(
+        "--admit-source",
+        metavar="SOURCE_ID",
+        help="输出指定信源的准入证据草案（只打印，绝不写回 sources.json；用法：pnpm curate:admit <id>）",
+    )
     parser.add_argument("--save-draft", action="store_true", help="直接在当前分支保存 .mdx 草稿文件")
     parser.add_argument("--create-pr", action="store_true", help="自动建立特性分支并提交 GitHub Draft PR")
 
@@ -1017,6 +1399,14 @@ def main():
     if args.pool:
         pool_limit = args.limit if args.limit is not None else POOL_DEFAULT_LIMIT
         sys.exit(run_pool(source_id=args.source_id, limit=pool_limit))
+
+    # --draft-url：生成骨架 + 注入速测题占位 + 登记 pending（人工闸门前置，不提 PR）。
+    if args.draft_url:
+        sys.exit(run_draft_url(args.draft_url))
+
+    # --admit-source：只打印准入证据草案（No-Auto-Approve：绝不写回 sources.json）。
+    if args.admit_source:
+        sys.exit(run_admit_source(args.admit_source))
 
     harvest_limit = args.limit if args.limit is not None else 1
     candidates = harvest_candidates(limit=harvest_limit, source_id=args.source_id)

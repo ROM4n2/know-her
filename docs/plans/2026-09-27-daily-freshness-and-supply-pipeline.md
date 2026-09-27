@@ -458,6 +458,11 @@
 - [ ] **Step 6: Physical Evidence Gate**。
 - [ ] **Step 7: Git atomic commit**：`git commit -m "feat(curate): 草稿生成同步注入速测题占位并新增信源准入CLI"`。
 
+> **Task-9 验收后遗留项（Checker 提出；M2 AFK 部分已完成，以下 3 项为可选加固，不阻断 Task-10 准入）**：
+> - **E1（真实隐患，建议优先）**：`--draft-url` 的候选 URL **未做规范化**（发现路径 `_build_discovered` 做了 `split("#")[0].rstrip("/")`，而草稿路径 `_build_draft_candidate` 未做），且 `run_draft_url` **未比对已发布文章 URL** ⇒ 同一 URL 二次 `--draft-url` 可能：(a) 台账出现两条同 url 条目（破坏「url 全局唯一」不变量）；(b) 因 slug 重名改尾缀而**新建第二篇同源 MDX**。**落点：Task-10 准入后首次实际使用 `curate:draft` 之前，或作为独立小修**。
+> - **E2（断言强度）**：G7 的「花括号配平」为**全文计数**弱断言（非字符串感知、非 TS 解析），门禁内未运行 `pnpm check` ⇒ 无法独立保证注入后 TS 语法合法。**落点：G7 加固（可断言注入点必位于 `DAILY_QUIZZES` 对象体内，或对 temp 副本做结构解析）**。
+> - **E3（风格一致性）**：`run_draft_url` 新增路径仍用 `os.path.join`，而同批次新增的 `inject_quiz_placeholder` 已用 `pathlib.Path` ⇒ 与 `[Instinct: Python-Standards]` 不一致。**落点：随 E1 一并收口**。
+
 ---
 
 ### Task 10: 新信源准入与 M2 验收 [Mode: HITL] [Role: Integration Builder]
