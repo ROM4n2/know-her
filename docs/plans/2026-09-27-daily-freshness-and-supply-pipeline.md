@@ -317,6 +317,13 @@
 - Modify: `scripts/curate_harvester.py`（`load_ledger` / `save_ledger` 升级 + `migrate_ledger_v1_to_v2`）
 - Modify: `scripts/.curate-ledger.json`（迁移为 v2）
 - Modify: `scripts/test_daily_loop.py`（G5 组断言）
+- Modify: `scripts/test_source_discovery.py`（**承接 Task-6 收口项 Y3**：T5 用例除打桩 `_SITEMAP_FETCH` 外，**同时**把 `ch.fetch_url` 置为抛异常/空返回，使「测试零网络」不再依赖单一 seam）
+
+> **Task-6 验收后承接的收口项（由 Checker 席位提出；本任务在同一批次的 `curate_harvester.py` 上顺带闭合）**：
+> - **C1（阻断级，必须先处理）**：台账 v2 把 `processed_urls` 从「字符串数组」变为「对象数组」后，`harvest_candidates` 中现有的 `set(ledger.get("processed_urls", []))` 会因 **dict 不可哈希**抛 `TypeError`；`create_draft_pr` 中的台账写入同理。本任务**必须同步改造这两处**为经 `load_ledger` / `iter_pending` 的对象口径，并在 G5 加一条「v2 台账下 `harvest_candidates` 可正常调用（不抛 TypeError）」的断言。
+> - **C2（误导性日志）**：sitemap **字节**体积超限分支只打印告警、**并未真正截断**，但文案声称「按 max_pages 截断处理」（与实际行为不符）；条数保护实际按 `MAX_SITEMAP_ENTRIES` 而非 `max_pages`。本任务须二选一：落实字节级截断，**或**把文案改为「字节超限，已记录告警（未截断）」。同时修正 Spec §4 中「按 `max_pages` 截断」的漂移措辞。
+> - **C3（静默空结果）**：anchor 分支在信源 `keywords` 为空时会**静默产出 0 候选**；sitemap/feed 分支不做 `keywords` 过滤（与 anchor 不对称）。本任务须至少加一条「`keywords` 为空 ⇒ 打印显式告警」的守卫；相关性收敛由 Task-8 的 `rank_candidates` 承担（并在 Task-8 复核是否需为三模式统一关键词过滤）。
+> - **C4（可选）**：把模块级可变 seam `_SITEMAP_FETCH` 改为 `_parse_sitemap` / `_collect_sitemap` 的**可选形参 `fetcher=`**（默认 `_default_sitemap_fetch`），消除生产模块中的测试专用全局可变状态；调用形态保持向后兼容。
 
 **Interfaces:**
 - Consumes: 既有 v1 台账（`{"version":1,"processed_urls":["url",...]}`）
@@ -404,6 +411,7 @@
 - Modify: `scripts/curate_harvester.py`（新增 `--draft-url` / `--admit-source` 分支 + `inject_quiz_placeholder()`）
 - Modify: `scripts/test_daily_loop.py`（新增 G7：占位注入路径断言）
 - Modify: `package.json`（`curate:draft` / `curate:admit`）
+- Modify: `package.json:16`（**Task-6 收口项**：把 Task-6 新建的 `scripts/test_source_discovery.py` 挂入 `test:graph`，位置紧接 `scripts/test_daily_loop.py` 之后——否则该门禁在 CI 中永不执行，属「写了门禁但没接线」的假安全感）
 
 **Interfaces:**
 - Consumes: `compose_mdx_content`、`DAILY_QUIZZES` 文件文本

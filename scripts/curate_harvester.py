@@ -14,6 +14,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from html import unescape
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -203,6 +204,296 @@ is_full_text: false
     return mdx
 
 
+# ---------------------------------------------------------------------------
+# M2：信源准入（fail-closed）与 anchor / sitemap / feed 三模式增量发现
+# ---------------------------------------------------------------------------
+
+# sitemap 体积保护阈值（超限即截断并告警，不中断其余信源）
+MAX_SITEMAP_ENTRIES = 5000
+MAX_SITEMAP_BYTES = 5 * 1024 * 1024
+
+
+def is_source_admitted(src: dict) -> bool:
+    """信源准入判定（fail-closed）。
+
+    仅当 ``admission.status == "admitted"`` 且 ``admission.license`` 为非空字符串时返回 True；
+    任何字段缺失 / 类型异常 / 状态非 admitted / license 为空（含纯空白）一律返回 False。
+    """
+    admission = src.get("admission")
+    if not isinstance(admission, dict):
+        return False
+    if admission.get("status") != "admitted":
+        return False
+    license_value = admission.get("license")
+    if not isinstance(license_value, str) or not license_value.strip():
+        return False
+    return True
+
+
+def _localname(tag) -> str:
+    """去除 XML 命名空间前缀，返回标签本地名（如 ``{ns}loc`` -> ``loc``）。"""
+    if not isinstance(tag, str):
+        return ""
+    if "}" in tag:
+        return tag.rsplit("}", 1)[1]
+    return tag
+
+
+def _title_from_url(url: str) -> str:
+    """从 URL 派生兜底标题（最后一段路径，经 clean_title 清洗）。"""
+    segment = url.rstrip("/").split("/")[-1]
+    return clean_title(segment.replace("-", " ").strip())
+
+
+def _default_sitemap_fetch(url: str) -> str:
+    """默认 sitemap 文本获取器（真实网络）。
+
+    测试可替换模块级 ``_SITEMAP_FETCH`` 以实现「零网络」的 sitemap index 递归验证。
+    """
+    status, text = fetch_url(url, timeout=10)
+    if status != 200 or not text:
+        return ""
+    return text
+
+
+# 可注入的 sitemap 获取器（模块级 seam）：递归解析子 sitemap 时使用。
+_SITEMAP_FETCH = _default_sitemap_fetch
+
+
+def _first_child_text(element, child_tag: str) -> str:
+    """返回子元素 ``child_tag`` 的文本（去空白）；无匹配返回空串。"""
+    for child in element:
+        if _localname(child.tag) == child_tag and child.text and child.text.strip():
+            return child.text.strip()
+    return ""
+
+
+def _first_child_attr(element, child_tag: str, attr: str) -> str:
+    """返回子元素 ``child_tag`` 的 ``attr`` 属性值（去空白）；无匹配返回空串。"""
+    for child in element:
+        if _localname(child.tag) != child_tag:
+            continue
+        value = child.get(attr)
+        if value and value.strip():
+            return value.strip()
+    return ""
+
+
+def _collect_sitemap(xml_text: str, link_pattern: str, max_pages: int, depth: int, out: list) -> None:
+    """递归收集 sitemap 页面链接；sitemap index 递归深度受 ``max_pages`` 约束。"""
+    root = ET.fromstring(xml_text)
+    if _localname(root.tag) == "sitemapindex":
+        if depth >= max_pages:
+            return
+        for sitemap_el in root:
+            if _localname(sitemap_el.tag) != "sitemap":
+                continue
+            child_url = _first_child_text(sitemap_el, "loc")
+            if not child_url:
+                continue
+            child_text = _SITEMAP_FETCH(child_url)
+            if child_text:
+                _collect_sitemap(child_text, link_pattern, max_pages, depth + 1, out)
+        return
+
+    for url_el in root:
+        if _localname(url_el.tag) != "url":
+            continue
+        loc = _first_child_text(url_el, "loc")
+        if not loc:
+            continue
+        if link_pattern and not re.search(link_pattern, loc):
+            continue
+        out.append(loc)
+
+
+def _parse_sitemap(xml_text: str, link_pattern: str, max_pages: int) -> list[str]:
+    """解析 sitemap XML 文本，返回匹配 ``link_pattern`` 的页面 URL 列表。
+
+    - ``urlset``：提取 ``<url><loc>``；空 sitemap 返回 ``[]``；
+    - ``sitemapindex``：经 ``_SITEMAP_FETCH`` 递归抓取子 sitemap，深度受 ``max_pages`` 约束；
+    - 非法 XML 抛 ``xml.etree.ElementTree.ParseError``（由上层捕获并降级为 anchor 模式）。
+    """
+    results: list[str] = []
+    _collect_sitemap(xml_text, link_pattern, max_pages, 1, results)
+    return results
+
+
+def _parse_feed(xml_text: str) -> list[str]:
+    """解析 feed XML 文本，返回条目链接列表（RSS ``item/link`` + Atom ``entry/link[@href]``）。
+
+    - 空 feed 返回 ``[]``；
+    - 非法 XML 抛 ``xml.etree.ElementTree.ParseError``（由上层捕获并降级为 anchor 模式）。
+    """
+    root = ET.fromstring(xml_text)
+    urls: list[str] = []
+    for element in root.iter():
+        tag = _localname(element.tag)
+        if tag == "item":
+            link = _first_child_text(element, "link")
+            if link:
+                urls.append(link)
+        elif tag == "entry":
+            href = _first_child_attr(element, "link", "href")
+            if href:
+                urls.append(href)
+    return urls
+
+
+def _build_discovered(urls: list[str], seen_urls: set) -> list[tuple[str, str]]:
+    """把 URL 列表规整为 ``(url, title)`` 候选并按 ``seen_urls`` 去重。"""
+    results: list[tuple[str, str]] = []
+    seen_in_batch: set[str] = set()
+    for raw in urls:
+        full_url = raw.split("#")[0].rstrip("/")
+        if full_url in seen_urls or full_url in seen_in_batch:
+            continue
+        seen_in_batch.add(full_url)
+        results.append((full_url, _title_from_url(full_url)))
+    return results
+
+
+def _discover_via_anchor(src: dict, entry_url: str, link_pattern: str, seen_urls: set) -> list[tuple[str, str]]:
+    """anchor 模式：抓取入口页单页并提取带锚文本的链接（与改造前逐字节等价）。"""
+    status, html = fetch_url(entry_url)
+    if status != 200 or not html:
+        print(f"  ⚠️ 入口请求失败 (HTTP {status})，跳过")
+        return []
+
+    link_regex = re.compile(
+        r"<a[^>]+href=[\"\'](" + link_pattern + r")[\"\'][^>]*>(.*?)</a>",
+        re.DOTALL | re.IGNORECASE,
+    )
+    found_anchors = link_regex.findall(html)
+    print(f"  ✓ 匹配到 {len(found_anchors)} 个链接条目")
+
+    base_url = src.get("base_url", "")
+    keywords = src.get("keywords", [])
+    filtered_items: list[tuple[str, str]] = []
+    seen_in_batch: set[str] = set()
+
+    for item in found_anchors:
+        rel_url = item[0]
+        raw_text = item[-1]
+        anchor_title = unescape(re.sub(r"<[^>]+>", "", raw_text)).strip()
+        anchor_title = clean_title(anchor_title)
+
+        if rel_url.startswith("http"):
+            full_url = rel_url
+        elif rel_url.startswith("/"):
+            full_url = base_url + rel_url
+        else:
+            full_url = base_url + "/" + rel_url
+
+        full_url = full_url.split("#")[0].rstrip("/")
+
+        if full_url in seen_urls or full_url in seen_in_batch:
+            continue
+
+        has_kw = any(kw in anchor_title for kw in keywords) or any(kw in rel_url for kw in keywords)
+        if not has_kw:
+            continue
+
+        seen_in_batch.add(full_url)
+        filtered_items.append((full_url, anchor_title))
+
+    print(f"  🎯 初筛命中 {len(filtered_items)} 篇未收录相关候选")
+    return filtered_items
+
+
+def _fallback_to_anchor(src: dict, link_pattern: str, seen_urls: set) -> list[tuple[str, str]]:
+    """降级到 anchor 模式（sitemap/feed 不可用时使用）。"""
+    entry_url = src.get("entry_url") or ""
+    return _discover_via_anchor(src, entry_url, src.get("link_pattern", link_pattern), seen_urls)
+
+
+def _discover_via_sitemap(src: dict, url: str, link_pattern: str, max_pages: int, seen_urls: set) -> list[tuple[str, str]]:
+    """sitemap 模式：解析 sitemap（含 index 递归），异常一律降级为 anchor 模式。"""
+    if url.lower().endswith(".gz"):
+        print("  ⚠️ sitemap 为 gzip 格式（需解码 gzip），本里程碑不支持，降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    status, text = fetch_url(url)
+    if status != 200 or not text:
+        print(f"  ⚠️ sitemap 请求失败 (HTTP {status})，降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    if len(text) > MAX_SITEMAP_BYTES:
+        print(f"  ⚠️ sitemap 文本超过 {MAX_SITEMAP_BYTES} 字节，触发体积保护（按 max_pages 截断处理）")
+
+    try:
+        locs = _parse_sitemap(text, link_pattern, max_pages)
+    except ET.ParseError as exc:
+        print(f"  ⚠️ sitemap XML 解析失败（{exc}），降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    if len(locs) > MAX_SITEMAP_ENTRIES:
+        print(f"  ⚠️ sitemap 条目数 {len(locs)} 超过上限 {MAX_SITEMAP_ENTRIES}，按上限截断")
+        locs = locs[:MAX_SITEMAP_ENTRIES]
+
+    print(f"  ✓ sitemap 解析出 {len(locs)} 条匹配链接")
+    return _build_discovered(locs, seen_urls)
+
+
+def _discover_via_feed(src: dict, url: str, link_pattern: str, seen_urls: set) -> list[tuple[str, str]]:
+    """feed 模式：解析 RSS / Atom（异常或空结果一律降级为 anchor 模式）。"""
+    status, text = fetch_url(url)
+    if status != 200 or not text:
+        print(f"  ⚠️ feed 请求失败 (HTTP {status})，降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    try:
+        links = _parse_feed(text)
+    except ET.ParseError as exc:
+        print(f"  ⚠️ feed XML 解析失败（{exc}），降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    if not links:
+        print("  ⚠️ feed 未解析出任何条目，降级到 anchor 模式")
+        return _fallback_to_anchor(src, link_pattern, seen_urls)
+
+    print(f"  ✓ feed 解析出 {len(links)} 条条目")
+    return _build_discovered(links, seen_urls)
+
+
+def discover_candidates(src: dict, seen_urls: set) -> list[tuple[str, str]]:
+    """按发现模式发现候选 ``(url, title)``；未准入信源 fail-closed 直接返回 ``[]``。
+
+    准入判定在任何网络访问**之前**执行（禁止「先抓后判」）。
+    ``discovery`` 字段缺省时按 ``{mode: "anchor", url: entry_url, link_pattern: link_pattern}`` 处理
+    （现有两条信源配置不改即可继续工作，零破坏升级）。
+    """
+    if not is_source_admitted(src):
+        admission = src.get("admission")
+        if isinstance(admission, dict):
+            status_text = admission.get("status", "<缺失>")
+            license_text = admission.get("license", "")
+        else:
+            status_text = "<缺失>"
+            license_text = ""
+        license_desc = "非空" if (isinstance(license_text, str) and license_text.strip()) else "空"
+        print(f"  ⛔ 信源未准入 (status={status_text}, license={license_desc})，跳过（fail-closed）")
+        return []
+
+    discovery = src.get("discovery")
+    if not isinstance(discovery, dict):
+        discovery = {}
+
+    mode = discovery.get("mode", "anchor")
+    url = discovery.get("url") or src.get("entry_url", "")
+    link_pattern = discovery.get("link_pattern") or src.get("link_pattern", "")
+    raw_max_pages = discovery.get("max_pages", 3)
+    max_pages = raw_max_pages if isinstance(raw_max_pages, int) else 3
+
+    print(f"\n🔍 正在扫描信源: {src.get('name', '')} ({url})")
+
+    if mode == "sitemap":
+        return _discover_via_sitemap(src, url, link_pattern, max_pages, seen_urls)
+    if mode == "feed":
+        return _discover_via_feed(src, url, link_pattern, seen_urls)
+    return _discover_via_anchor(src, url, link_pattern, seen_urls)
+
+
 def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dict]:
     if not os.path.exists(SOURCES_FILE):
         print(f"❌ 找不到数据源配置文件: {SOURCES_FILE}")
@@ -223,60 +514,11 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
         if source_id and src.get("id") != source_id:
             continue
 
-        print(f"\n🔍 正在扫描信源: {src['name']} ({src['entry_url']})")
-        status, html = fetch_url(src["entry_url"])
-        if status != 200 or not html:
-            print(f"  ⚠️ 入口请求失败 (HTTP {status})，跳过")
-            continue
-
-        # 从入口页面提取带有锚文本的链接: <a href="...">text</a>
-        pattern = src["link_pattern"]
-        link_regex = re.compile(
-            r"<a[^>]+href=[\"\'](" + pattern + r")[\"\'][^>]*>(.*?)</a>",
-            re.DOTALL | re.IGNORECASE,
-        )
-        found_anchors = link_regex.findall(html)
-        print(f"  ✓ 匹配到 {len(found_anchors)} 个链接条目")
-
-        base_url = src.get("base_url", "")
-        keywords = src.get("keywords", [])
-
-        # 预过滤出符合关键词且未曾处理过的条目
-        filtered_items = []
-        seen_in_batch = set()
-
-        for item in found_anchors:
-            rel_url = item[0]
-            raw_text = item[-1]
-            # 清理 anchor 文本作为初步标题
-            anchor_title = unescape(re.sub(r"<[^>]+>", "", raw_text)).strip()
-            anchor_title = clean_title(anchor_title)
-
-            # 组装完整 URL
-            if rel_url.startswith("http"):
-                full_url = rel_url
-            elif rel_url.startswith("/"):
-                full_url = base_url + rel_url
-            else:
-                full_url = base_url + "/" + rel_url
-
-            full_url = full_url.split("#")[0].rstrip("/")
-
-            if full_url in all_seen_urls or full_url in seen_in_batch:
-                continue
-
-            # 关键词初筛（标题或链接本身包含关键词）
-            has_kw = any(kw in anchor_title for kw in keywords) or any(kw in rel_url for kw in keywords)
-            if not has_kw:
-                continue
-
-            seen_in_batch.add(full_url)
-            filtered_items.append((full_url, anchor_title))
-
-        print(f"  🎯 初筛命中 {len(filtered_items)} 篇未收录相关候选")
+        # 候选发现（anchor / sitemap / feed）——未准入信源在此被硬跳过
+        discovered = discover_candidates(src, all_seen_urls)
 
         # 仅对初筛命中的候选发起真实探测
-        for full_url, anchor_title in filtered_items:
+        for full_url, anchor_title in discovered:
             if len(candidates) >= limit:
                 break
 

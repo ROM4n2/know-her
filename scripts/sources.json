@@ -5,6 +5,19 @@
     "entry_url": "https://www.who.int/zh/news-room/fact-sheets",
     "base_url": "https://www.who.int",
     "link_pattern": "/zh/news-room/fact-sheets/detail/([a-zA-Z0-9-]+)",
+    "discovery": {
+      "mode": "anchor",
+      "url": "https://www.who.int/zh/news-room/fact-sheets",
+      "link_pattern": "/zh/news-room/fact-sheets/detail/([a-zA-Z0-9-]+)",
+      "max_pages": 3
+    },
+    "admission": {
+      "status": "admitted",
+      "license": "link-only",
+      "license_url": "https://www.who.int/about/policies/publishing/copyright",
+      "verified_at": "2026-09-27",
+      "verified_by_run": ""
+    },
     "keywords": [
       "避孕", "月经", "人乳头瘤", "HPV", "性传播", "宫颈", "生殖", "性健康", 
       "人工流产", "安全套", "衣原体", "淋病", "梅毒", "生殖道感染", "家庭生育规划"
@@ -29,6 +42,19 @@
     "entry_url": "https://www.msdmanuals.cn/home/women-s-health-issues",
     "base_url": "https://www.msdmanuals.cn",
     "link_pattern": "/home/women-s-health-issues/([a-zA-Z0-9-]+/[a-zA-Z0-9-]+)",
+    "discovery": {
+      "mode": "anchor",
+      "url": "https://www.msdmanuals.cn/home/women-s-health-issues",
+      "link_pattern": "/home/women-s-health-issues/([a-zA-Z0-9-]+/[a-zA-Z0-9-]+)",
+      "max_pages": 3
+    },
+    "admission": {
+      "status": "admitted",
+      "license": "link-only",
+      "license_url": "https://www.msdmanuals.cn/home/resources-pages/terms-and-conditions",
+      "verified_at": "2026-09-27",
+      "verified_by_run": ""
+    },
     "keywords": [
       "避孕", "月经", "阴道", "阴蒂", "性交", "润滑", "痛经", "子宫", "出血",
       "排卵", "绝经", "盆腔", "念珠菌", "宫颈", "性反应", "性高潮"
@@ -45,6 +71,58 @@
       "出血": "body",
       "阴道": "body",
       "子宫": "body"
+    },
+    "default_category": "body"
+  },
+  {
+    "id": "plannedparenthood",
+    "name": "Planned Parenthood 学习中心",
+    "entry_url": "https://www.plannedparenthood.org/learn",
+    "base_url": "https://www.plannedparenthood.org",
+    "link_pattern": "/learn/",
+    "discovery": {
+      "mode": "sitemap",
+      "url": "https://www.plannedparenthood.org/sitemap.xml",
+      "link_pattern": "/learn/",
+      "max_pages": 3
+    },
+    "admission": {
+      "status": "probing",
+      "license": "",
+      "license_url": "",
+      "verified_at": "",
+      "verified_by_run": ""
+    },
+    "keywords": ["避孕", "性健康", "愉悦", "consent", "birth-control"],
+    "category_map": {
+      "避孕": "contraception",
+      "愉悦": "pleasure"
+    },
+    "default_category": "pleasure"
+  },
+  {
+    "id": "guokr",
+    "name": "果壳网",
+    "entry_url": "https://www.guokr.com/feed/",
+    "base_url": "https://www.guokr.com",
+    "link_pattern": "/article/",
+    "discovery": {
+      "mode": "feed",
+      "url": "https://www.guokr.com/feed/",
+      "link_pattern": "/article/",
+      "max_pages": 3
+    },
+    "admission": {
+      "status": "probing",
+      "license": "",
+      "license_url": "",
+      "verified_at": "",
+      "verified_by_run": ""
+    },
+    "keywords": ["避孕", "月经", "性健康", "生殖"],
+    "category_map": {
+      "避孕": "contraception",
+      "月经": "body"
     },
     "default_category": "body"
   }
