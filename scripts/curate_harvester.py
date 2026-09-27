@@ -714,6 +714,162 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
     return candidates
 
 
+# ---------------------------------------------------------------------------
+# M2：候选池 CLI（--pool）与分类缺口优先排序
+# ---------------------------------------------------------------------------
+
+# 四分类（与 src/content.config.ts 的 category 枚举、determine_category_and_tags 口径一致）。
+CATEGORIES = ("contraception", "pleasure", "body", "intimacy")
+DEFAULT_CATEGORY = "body"
+DISCOVERY_MODES = ("anchor", "sitemap", "feed")
+ADMISSION_STATUSES = ("admitted", "probing", "rejected")
+# --pool 默认输出条数（--limit 未显式传入时生效；harvest 默认仍为 1）。
+POOL_DEFAULT_LIMIT = 40
+
+
+def _normalize_category(candidate: dict) -> str:
+    """取候选的推定分类：合法则原样返回，缺失/非法回退到 default_category，再回退到全局默认。"""
+    category = candidate.get("category")
+    if isinstance(category, str) and category in CATEGORIES:
+        return category
+    fallback = candidate.get("default_category")
+    if isinstance(fallback, str) and fallback in CATEGORIES:
+        return fallback
+    return DEFAULT_CATEGORY
+
+
+def rank_candidates(candidates: list, category_counts: dict) -> list:
+    """按「分类缺口」重排候选：四分类按当前篇数升序（缺口大者优先），同分类内保持首次发现顺序。
+
+    - **纯函数**：不改动入参，返回元素为浅拷贝并回填规范化后的 ``category``；
+    - 排序键 = ``(当前该类已发布篇数, 输入下标)``；缺失的分类按 0 篇处理（缺口最大）；
+    - ``category`` 缺失或非法时归入 ``default_category``（**不得丢弃该候选**）；
+    - 空 ``candidates`` 返回 ``[]``。
+    """
+    if not candidates:
+        return []
+    counts = category_counts if isinstance(category_counts, dict) else {}
+
+    def _sort_key(indexed_item):
+        index, candidate = indexed_item
+        category = _normalize_category(candidate)
+        return (counts.get(category, 0), index)
+
+    ordered = sorted(enumerate(candidates), key=_sort_key)
+    return [
+        {**candidate, "category": _normalize_category(candidate)}
+        for _, candidate in ordered
+    ]
+
+
+def _read_text_file(path: str) -> str:
+    """只读读取 UTF-8 文本；不可读时返回空串（使调用方可用守卫子句扁平化处理）。"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def count_articles_by_category() -> dict:
+    """统计当前已发布文章的四分类篇数（**只读**：解析 frontmatter 的 ``category`` 字段）。
+
+    口径与内容集合 loader 对齐：仅顶层 ``.mdx``、排除 ``_`` 前缀内部文件。
+    """
+    counts = {category: 0 for category in CATEGORIES}
+    if not os.path.isdir(ARTICLES_DIR):
+        return counts
+    for name in os.listdir(ARTICLES_DIR):
+        if not name.endswith(".mdx") or name.startswith("_"):
+            continue
+        text = _read_text_file(os.path.join(ARTICLES_DIR, name))
+        match = re.search(r'^category:\s*"?([a-zA-Z0-9_-]+)"?', text, re.MULTILINE)
+        if not match:
+            continue
+        category = match.group(1)
+        counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
+def collect_pool_candidates(source_id: str | None = None) -> list[dict]:
+    """实时发现候选（``--pool`` 的数据源）：``discover_candidates`` 本次发现 − 台账已收录 URL。
+
+    [Task-7 语义钉死] 数据源**不是**「台账里 ``status == "pending"`` 的条目」——当前没有任何
+    代码写入 ``pending``，那样实现会永远输出空表。零副作用：仅经 ``load_ledger()`` 只读读取台账，
+    **严禁调用 save_ledger()**。
+    """
+    if not os.path.exists(SOURCES_FILE):
+        print(f"❌ 找不到数据源配置文件: {SOURCES_FILE}")
+        return []
+
+    with open(SOURCES_FILE, "r", encoding="utf-8") as f:
+        sources = json.load(f)
+
+    ledger = load_ledger()
+    seen_urls = ledger_seen_urls(ledger) | get_existing_article_urls()
+
+    pool: list = []
+    seq = 0
+    for src in sources:
+        if source_id and src.get("id") != source_id:
+            continue
+        for full_url, title in discover_candidates(src, seen_urls):
+            seen_urls.add(full_url)
+            seq += 1
+            category, _tags = determine_category_and_tags(title, "", src)
+            pool.append(
+                {
+                    "title": title,
+                    "category": category,
+                    "default_category": src.get("default_category", DEFAULT_CATEGORY),
+                    "source_name": src.get("name", ""),
+                    "source_id": src.get("id", ""),
+                    "url": full_url,
+                    "first_seen": seq,
+                }
+            )
+    return pool
+
+
+def _print_pool_table(ranked: list, category_counts: dict, limit: int) -> None:
+    """打印候选池表格（标题 / 来源 / 推定分类 / 首次发现）与表尾缺口汇总。"""
+    shown = ranked[:limit] if limit and limit > 0 else ranked
+    print("")
+    print("标题 | 来源 | 推定分类 | 首次发现")
+    print("-" * 88)
+    for candidate in shown:
+        print(
+            f"{candidate.get('title', '')} | {candidate.get('source_name', '')} | "
+            f"{candidate.get('category', '')} | {candidate.get('first_seen', '')}"
+        )
+    print("-" * 88)
+    print(f"候选总数：{len(ranked)} 条（本次输出 {len(shown)} 条，--limit={limit}）")
+    print("各分类缺口现状（当前篇数升序，缺口大者优先）：")
+    for category in sorted(CATEGORIES, key=lambda name: (category_counts.get(name, 0), name)):
+        print(f"  - {category}: 已发布 {category_counts.get(category, 0)} 篇")
+
+
+def run_pool(source_id: str | None = None, limit: int = POOL_DEFAULT_LIMIT) -> int:
+    """``--pool`` 分支：输出按分类缺口优先排序的候选池表格（零副作用：只读台账，不写盘/不提 PR）。
+
+    返回进程退出码：0 = 正常输出；1 = 空候选池（Actionable-Empty-State，禁止静默返回空表）。
+    """
+    print("🔎 [候选池] 数据源 = 实时发现结果 − 台账已收录 URL（只读，零副作用）")
+    pool = collect_pool_candidates(source_id=source_id)
+    if not pool:
+        print(
+            "\n❌ 候选池为空：所有准入信源候选已耗尽，"
+            "请执行 python -X utf8 scripts/curate_harvester.py --admit-source <id> "
+            "准入新信源（Task-9 提供）"
+        )
+        return 1
+
+    category_counts = count_articles_by_category()
+    ranked = rank_candidates(pool, category_counts)
+    _print_pool_table(ranked, category_counts, limit)
+    return 0
+
+
 def create_draft_pr(candidate: dict) -> bool:
     slug = candidate["slug"]
     branch_name = f"candidate/{slug}"
@@ -849,14 +1005,21 @@ def create_draft_pr(candidate: dict) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="know-her 权威科普候选源自动抓取与草稿合成引擎")
     parser.add_argument("--dry-run", action="store_true", help="仅抓取并展示候选，不写文件不提 PR")
-    parser.add_argument("--limit", type=int, default=1, help="每次抓取并生成的候选数量（默认 1）")
+    parser.add_argument("--limit", type=int, default=None, help="每次抓取并生成的候选数量（默认 1；--pool 默认 40）")
     parser.add_argument("--source-id", help="限定仅扫描指定信源 ID (who-fact-sheets / msd-women-health)")
+    parser.add_argument("--pool", action="store_true", help="输出按分类缺口优先排序的候选池（只读，零副作用）")
     parser.add_argument("--save-draft", action="store_true", help="直接在当前分支保存 .mdx 草稿文件")
     parser.add_argument("--create-pr", action="store_true", help="自动建立特性分支并提交 GitHub Draft PR")
 
     args = parser.parse_args()
 
-    candidates = harvest_candidates(limit=args.limit, source_id=args.source_id)
+    # --pool：零副作用只读分支（不写台账、不写文章、不建分支、不提 PR，严禁 save_ledger）。
+    if args.pool:
+        pool_limit = args.limit if args.limit is not None else POOL_DEFAULT_LIMIT
+        sys.exit(run_pool(source_id=args.source_id, limit=pool_limit))
+
+    harvest_limit = args.limit if args.limit is not None else 1
+    candidates = harvest_candidates(limit=harvest_limit, source_id=args.source_id)
     if not candidates:
         print("\n✨ 今日无新增待收录候选或全部候选均已在台账中。")
         return

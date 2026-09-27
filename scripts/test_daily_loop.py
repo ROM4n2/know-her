@@ -9,17 +9,21 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 / G2 / G3 / G5 / G6 / G8 断言：
+本文件当前实现 G1 / G2 / G3 / G4 / G5 / G6 / G8 断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
     G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
+    G4（信源清单 schema 合法性 + --pool 候选池零副作用：discovery.mode / admission.status
+        枚举合法、admitted ⇒ license 非空（fail-closed，含反向用例）、base_url/discovery.url/
+        entry_url 均 http(s):// 前缀；rank_candidates 缺口升序排序；--pool 运行前后台账
+        sha256 完全一致（以已是 v2 的真实台账驱动，规避 v1 迁移写回误判）；空池必须显式报错）
     G5（候选池台账 v2：v1->v2 迁移结构 / 幂等等式 / 重复 URL 去重 + 丢弃条数打印 /
         真实台账字段完备 / v2 台账下 harvest_candidates 不抛 TypeError（C1 回归））
     G6（今日上新窗口：rotation.pickFreshArticle 源码契约 + 定日边界用例 +
         断言「今日上新」仅作附加展示、不污染轮换索引）
     G8（node 原生载入 rotation.ts 的真实行为断言：指纹/索引/lcm 防空壳假绿，含
         G8a 双时区（TZ=UTC / Asia/Shanghai）一致性 + G8b pickFreshArticle 真行为）
-G4（信源准入合法）、G7（速测题占位注入）由后续 Task 逐步追加。
+G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
@@ -28,6 +32,7 @@ G4（信源准入合法）、G7（速测题占位注入）由后续 Task 逐步�
 
 import contextlib
 import datetime
+import hashlib
 import io
 import json
 import re
@@ -46,6 +51,7 @@ import curate_harvester as ch
 ROOT_DIR = SCRIPT_DIR.parent
 
 LEDGER_FILE = SCRIPT_DIR / ".curate-ledger.json"
+SOURCES_FILE = SCRIPT_DIR / "sources.json"
 ARTICLES_DIR = ROOT_DIR / "src" / "content" / "articles"
 GLOSSARY_DIR = ROOT_DIR / "src" / "content" / "glossary"
 QUIZ_FILE = ROOT_DIR / "src" / "data" / "dailyQuiz.ts"
@@ -1460,9 +1466,259 @@ def validate_g5_harvest_no_typeerror(errors: list) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# G4：信源清单 schema 合法性与 --pool 候选池零副作用（Task-8）
+# ---------------------------------------------------------------------------
+
+DISCOVERY_MODES = ("anchor", "sitemap", "feed")
+ADMISSION_STATUSES = ("admitted", "probing", "rejected")
+
+
+def _sha256(path: Path) -> str:
+    """返回文件内容的 sha256 十六进制摘要（用于校验 --pool 零副作用）。"""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _source_schema_problems(src) -> list:
+    """纯函数：返回单条信源 schema 的合法性问题列表（空 = 合法）。
+
+    覆盖 G4 四类断言：
+      ① discovery.mode ∈ {anchor, sitemap, feed}；
+      ② admission.status ∈ {admitted, probing, rejected}；
+      ③ fail-closed：status == "admitted" ⇒ license 必须非空；
+      ④ base_url / discovery.url / entry_url 必须以 http(s):// 开头。
+    """
+    if not isinstance(src, dict):
+        return [f"信源非对象：{src!r}"]
+    src_id = src.get("id", "<无 id>")
+    problems: list = []
+
+    discovery = src.get("discovery")
+    if not isinstance(discovery, dict):
+        problems.append(f"[{src_id}] 缺少 discovery 对象")
+        discovery = {}
+    if discovery.get("mode") not in DISCOVERY_MODES:
+        problems.append(
+            f"[{src_id}] discovery.mode 非法：{discovery.get('mode')!r}（合法：{DISCOVERY_MODES}）"
+        )
+
+    admission = src.get("admission")
+    if not isinstance(admission, dict):
+        problems.append(f"[{src_id}] 缺少 admission 对象")
+        admission = {}
+    status = admission.get("status")
+    if status not in ADMISSION_STATUSES:
+        problems.append(
+            f"[{src_id}] admission.status 非法：{status!r}（合法：{ADMISSION_STATUSES}）"
+        )
+    license_value = admission.get("license")
+    if status == "admitted" and not (isinstance(license_value, str) and license_value.strip()):
+        problems.append(
+            f"[{src_id}] fail-closed 违背：admission.status == 'admitted' 但 license 为空"
+            f"（admitted 信源必须携带非空 license）"
+        )
+
+    for label, value in (
+        ("base_url", src.get("base_url")),
+        ("discovery.url", discovery.get("url")),
+        ("entry_url", src.get("entry_url")),
+    ):
+        if not (isinstance(value, str) and re.match(r"https?://", value)):
+            problems.append(f"[{src_id}] {label} 必须以 http(s):// 开头：{value!r}")
+    return problems
+
+
+def validate_g4_source_schema(errors: list) -> None:
+    """G4 主断言①：遍历真实 scripts/sources.json，逐条校验 schema 合法性。"""
+    if not SOURCES_FILE.is_file():
+        errors.append(f"[G4] 信源清单缺失：{SOURCES_FILE}")
+        return
+    try:
+        sources = json.loads(_read_text(SOURCES_FILE))
+    except json.JSONDecodeError as exc:
+        errors.append(f"[G4] sources.json 非法 JSON：{exc}")
+        return
+    if not isinstance(sources, list) or not sources:
+        errors.append(f"[G4] sources.json 应为非空数组，实际 {type(sources).__name__}")
+        return
+
+    for src in sources:
+        for problem in _source_schema_problems(src):
+            errors.append(f"[G4] {problem}")
+    print(
+        f"[G4] 信源 schema 断言通过：{len(sources)} 条信源的 discovery.mode / admission.status / "
+        f"admitted⇒license 非空 / http(s) 前缀均合法"
+    )
+
+
+def validate_g4_source_schema_reverse(errors: list) -> None:
+    """G4 反向用例（MUST）：构造 admitted 但 license 为空的信源，断言校验函数返回非空错误。
+
+    证明 fail-closed 的「admitted ⇒ license 非空」校验真生效（而非恰好通过）。
+    """
+    bad = {
+        "id": "bad-admitted-empty-license",
+        "name": "坏信源（admitted 但 license 空）",
+        "entry_url": "https://example.org/entry",
+        "base_url": "https://example.org",
+        "discovery": {"mode": "anchor", "url": "https://example.org/entry"},
+        "admission": {"status": "admitted", "license": ""},
+    }
+    problems = _source_schema_problems(bad)
+    if not problems:
+        errors.append(
+            "[G4] 反向用例失效：admitted 但 license 为空必须返回非空错误列表（fail-closed），实际为空"
+        )
+        return
+    if not any("license" in p for p in problems):
+        errors.append(f"[G4] 反向用例失效：错误信息未点名 license（fail-closed 未覆盖）：{problems}")
+        return
+    print(f"[G4] 反向用例通过：admitted+空 license 检出 {len(problems)} 条错误（fail-closed 生效）")
+
+
+def validate_g4_rank_candidates(errors: list) -> None:
+    """G4 主断言②：rank_candidates 纯函数语义。
+
+    - 分类缺口升序优先（当前篇数少者排前），同分类内保持输入（首次发现）顺序；
+    - 不得丢弃候选、不得改动入参；空输入返回 []；
+    - category 缺失/非法 ⇒ 归入 default_category 并参与排序（不丢弃）。
+
+    变异自证①：若把排序改为「分类篇数降序（缺口小者优先）」，本断言立即失败。
+    """
+    if not hasattr(ch, "rank_candidates"):
+        errors.append("[G4] curate_harvester 缺少 rank_candidates()")
+        return
+
+    counts = {"contraception": 0, "pleasure": 2, "body": 5, "intimacy": 1}
+    candidates = [
+        {"title": "b1", "category": "body"},
+        {"title": "p1", "category": "pleasure"},
+        {"title": "c1", "category": "contraception"},
+        {"title": "i1", "category": "intimacy"},
+        {"title": "b2", "category": "body"},
+        {"title": "c2", "category": "contraception"},
+    ]
+    snapshot = [c["title"] for c in candidates]
+
+    ordered = ch.rank_candidates(candidates, counts)
+    order = [c["title"] for c in ordered]
+    expected = ["c1", "c2", "i1", "p1", "b1", "b2"]
+    if order != expected:
+        errors.append(
+            f"[G4] rank_candidates 排序错误：期望 {expected}（分类缺口升序 + 同分类稳定），实际 {order}"
+        )
+    if len(ordered) != len(candidates):
+        errors.append(f"[G4] rank_candidates 不得丢弃候选：输入 {len(candidates)}，实际 {len(ordered)}")
+    if [c["title"] for c in candidates] != snapshot:
+        errors.append("[G4] rank_candidates 不得改动入参（输入顺序被破坏）")
+
+    if ch.rank_candidates([], counts) != []:
+        errors.append("[G4] rank_candidates 空输入必须返回 []")
+
+    messy = [
+        {"title": "x1"},
+        {"title": "x2", "category": "not-a-category"},
+        {"title": "x3", "category": "intimacy"},
+    ]
+    messy_ordered = ch.rank_candidates(messy, counts)
+    if len(messy_ordered) != 3:
+        errors.append(f"[G4] rank_candidates 不得丢弃缺/非法分类候选：{messy_ordered}")
+    elif messy_ordered[0]["title"] != "x3":
+        errors.append(
+            f"[G4] 缺/非法分类应归入 default_category 并参与排序（intimacy 缺口更大应排前），"
+            f"实际 {[c['title'] for c in messy_ordered]}"
+        )
+    elif messy_ordered[1].get("category") not in ("body",):
+        errors.append(
+            f"[G4] 缺/非法分类未归入 default_category：{messy_ordered[1]!r}"
+        )
+    print(
+        f"[G4] rank_candidates 断言通过：缺口升序 {order}；空池 -> []；"
+        f"缺/非法分类归入 default_category 且不丢弃"
+    )
+
+
+def validate_g4_pool_zero_side_effect(errors: list) -> None:
+    """G4 主断言③：--pool 零副作用——运行前后台账文件 sha256 完全一致。
+
+    [Task-7 语义钉死] 必须以**已是 v2** 的真实台账驱动（load_ledger 仅在读到 v1 时才写回；
+    若用 v1 夹具，迁移写回会被误判为 --pool 的副作用）。全程打桩 fetch_url，零真实网络。
+    变异自证②：若在 --pool 路径加入 save_ledger(...) 调用，sha256 立即变化 ⇒ 本断言失败。
+    """
+    if not hasattr(ch, "run_pool"):
+        errors.append("[G4] curate_harvester 缺少 run_pool()（--pool 分支未实现）")
+        return
+    if not LEDGER_FILE.is_file():
+        errors.append(f"[G4] 台账文件缺失：{LEDGER_FILE}")
+        return
+
+    fixture_html = (
+        "<html><body>"
+        '<a href="/zh/news-room/fact-sheets/detail/fixture-pool-a">避孕方法</a>'
+        '<a href="/zh/news-room/fact-sheets/detail/fixture-pool-b">月经周期</a>'
+        "</body></html>"
+    )
+    original_fetch = ch.fetch_url
+    ch.fetch_url = lambda *args, **kwargs: (200, fixture_html)
+    before = _sha256(LEDGER_FILE)
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            code = ch.run_pool(limit=40)
+    finally:
+        ch.fetch_url = original_fetch
+    after = _sha256(LEDGER_FILE)
+    printed = buffer.getvalue()
+
+    if before != after:
+        errors.append(
+            f"[G4] --pool 产生副作用：台账 sha256 变化 {before} -> {after}"
+            f"（--pool 路径必须只读，严禁调用 save_ledger）"
+        )
+    if code != 0:
+        errors.append(
+            f"[G4] --pool 应零副作用正常返回 0（打桩发现非空候选），实际 exit={code}：stdout={printed[:400]}"
+        )
+    if "候选总数" not in printed:
+        errors.append(f"[G4] --pool 未输出汇总（候选总数 + 分类缺口）：stdout={printed[:400]}")
+    print(f"[G4] --pool 零副作用通过：台账 sha256 前后一致 {before[:12]}…（{len(printed)} 字节 stdout）")
+
+
+def validate_g4_pool_empty_state(errors: list) -> None:
+    """G4 主断言④ [Actionable-Empty-State]：空候选池必须显式报错并给出下一步。
+
+    以「sources.json 中不存在的 source_id」驱动 collect_pool_candidates 返回空，
+    断言 run_pool 返回非 0 且打印可执行下一步（--admit-source），禁止静默返回空表。
+    变异自证③：若空池改为静默返回（exit 0 且无告警），本断言立即失败。
+    """
+    if not hasattr(ch, "run_pool"):
+        errors.append("[G4] curate_harvester 缺少 run_pool()")
+        return
+
+    original_fetch = ch.fetch_url
+    ch.fetch_url = lambda *args, **kwargs: (0, "")  # 零网络
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            code = ch.run_pool(source_id="__no_such_source__", limit=40)
+    finally:
+        ch.fetch_url = original_fetch
+    printed = buffer.getvalue()
+
+    if code == 0:
+        errors.append("[G4] 空候选池必须返回非零退出码（禁止静默返回空表），实际 exit=0")
+    if "候选池为空" not in printed:
+        errors.append(f"[G4] 空候选池必须打印显式告警「候选池为空」，实际 stdout={printed!r}")
+    if "--admit-source" not in printed:
+        errors.append(
+            f"[G4] 空候选池告警必须给出可执行下一步（--admit-source <id>），实际 stdout={printed!r}"
+        )
+    print(f"[G4] 空池 Actionable-Empty-State 通过：exit={code}，含「候选池为空」+「--admit-source」")
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G4/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）；G7 由后续 Task 追加。")
 
     errors: list = []
 
@@ -1495,6 +1751,13 @@ def run_gate() -> None:
     validate_g5_real_ledger(errors)
     validate_g5_harvest_no_typeerror(errors)
 
+    # [G4] 信源清单 schema 合法性 + 反向用例 + rank_candidates + --pool 零副作用/空池可执行报错
+    validate_g4_source_schema(errors)
+    validate_g4_source_schema_reverse(errors)
+    validate_g4_rank_candidates(errors)
+    validate_g4_pool_zero_side_effect(errors)
+    validate_g4_pool_empty_state(errors)
+
     # [G8/G8a/G8b] node 原生载入 rotation.ts 的真实行为断言（探针失败即记明确错误，不静默跳过）
     probe = _run_rotation_probe(errors)
     validate_g8_rotation_behavior(errors, probe)
@@ -1507,7 +1770,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2、G3、G5、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3、G4、G5、G6 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；信源 schema 合法（含 admitted⇒license 非空 fail-closed 反向用例）且 --pool 零副作用（台账 sha256 前后一致）与空池可执行报错；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":

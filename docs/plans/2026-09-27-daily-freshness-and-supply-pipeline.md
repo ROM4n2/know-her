@@ -415,7 +415,13 @@
 - Modify: `scripts/curate_harvester.py`（新增 `--draft-url` / `--admit-source` 分支 + `inject_quiz_placeholder()`）
 - Modify: `scripts/test_daily_loop.py`（新增 G7：占位注入路径断言）
 - Modify: `package.json`（`curate:draft` / `curate:admit`）
-- Modify: `package.json:16`（**Task-6 收口项**：把 Task-6 新建的 `scripts/test_source_discovery.py` 挂入 `test:graph`，位置紧接 `scripts/test_daily_loop.py` 之后——否则该门禁在 CI 中永不执行，属「写了门禁但没接线」的假安全感）
+- Modify: `package.json`（**Task-6 收口项**：把 Task-6 新建的 `scripts/test_source_discovery.py` 挂入 `test:graph`，位置紧接 `scripts/test_daily_loop.py` 之后——否则该门禁在 CI 中永不执行，属「写了门禁但没接线」的假安全感。**行号提示**：`curate:pool` 已于 Task-8 插入，`test:graph` 现实际位于 `package.json:17`，请按语义定位而非盲改 `:16`）
+
+> **Task-8 验收后承接的收口项**：
+> - **D1（`pending` 写入者接线，必做）**：`status="pending"` 目前**没有任何写入者**（`iter_pending` 亦无生产消费方）。本任务的 `--draft-url` 在生成骨架时**必须把该候选以 `status="pending"` 写入台账**，此次接线同时激活 `iter_pending` 的消费路径。
+> - **D2（空池提示统一，必做）**：Task-8 的空池提示仍用原始 flag（`--admit-source`），且对「零个 admitted 信源」与「已准入源候选耗尽」两类原因共用同一句「候选池已耗尽」文案（后者不准确）。本任务建立 `curate:admit` npm 脚本后，须把提示统一为 `pnpm curate:admit <id>` 形式，并**按两类原因分别给出对应提示**。
+> - **D3（读口径澄清，建议）**：`--pool` 的「零副作用」目前是**条件不变量**（依赖真实台账恰为规范 v2；`load_ledger` 在 `migrated != data` 时仍会条件写回）。本任务若顺带改造 `load_ledger`，建议增加 `write_back=False` 只读形参供 `--pool` 使用，使零副作用**无条件**成立（不阻塞：当前口径已被 Task-7 语义显式接受）。
+> - **D4（G4 门禁与运行时契约不一致，建议）**：G4 要求 `discovery` 字段必需，而运行时 `discover_candidates` 对缺失 `discovery` 按默认 anchor 容忍。二选一并文档化（放宽门禁 or 移除兼容分支）。
 
 **Interfaces:**
 - Consumes: `compose_mdx_content`、`DAILY_QUIZZES` 文件文本
