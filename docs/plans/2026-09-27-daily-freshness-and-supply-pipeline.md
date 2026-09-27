@@ -20,7 +20,7 @@
 - **用户拍板 2026-09-27**：① 基线 = ADR-0002；② 「新鲜」定义 = **每周 2~3 篇新长文 + 每天首页有可判定变化**；③ 方案 = **A（新鲜组合）+ B（增量供给）组合起步，C（形态工厂）留位**。
 - **实测事实 C1–C4**（写入 Spec §1.1）：供给池仅剩 48 篇候选；人工提炼为硬天花板；文章 26 篇 vs 速测题 25 道已漂移；首页轮换周期 = 文章总数。
 - **发现模式选型实测依据**：plannedparenthood.org `/sitemap.xml` = 200 ⇒ sitemap 模式；guokr.com `/feed/` = 200 ⇒ feed 模式；dxy.com / knowsex.net / res.knowsex.org 三者皆 404 ⇒ 保留 anchor 模式；cdc.gov/unesco.org 403、nhc.gov.cn 412 ⇒ **准入核验必须在 CI 出口执行**。
-- **数学不变量**：`lcm(26,25,28) = 9100 天`（≈24.9 年），门禁阈值 `MIN_UNIQUE_CYCLE_DAYS = 3650`。
+- **数学不变量（2026-09-27 Task-2 执行期修正）**：速测题与今日文章 1:1 绑定（G1 强制），**不是独立轮换维度**；真实周期 = `lcm(文章池, 词条池)` = `lcm(26,28) = 364 天`（约一年）。门禁阈值 `MIN_UNIQUE_CYCLE_DAYS = 90`（一季）+ 不退化断言 `A % G != 0 && G % A != 0`。原 `9100 天 / 3650 阈值` 建立在「速测题是独立维度」的错误前提上，已废弃（修正记录见 Spec §3.1.3）。
 - **复用纪律**：复用既有 `getDayOfYear`（`dailyQuiz.ts:324-331`）、`fetch_url` / `clean_title` / `compose_mdx_content`（`curate_harvester.py`）、既有门禁脚本范式（`scripts/test_tools.py` 的 `errors: list` 收集 + `sys.exit(1)` 模式）。
 
 ---
@@ -41,28 +41,28 @@
   - `export function getTodayIndex(totalCount: number, date?: Date): number`
   - `export function getWeekIndex(totalWeeks: number, date?: Date): number`（`Math.floor((dayOfYear - 1) / 7) % totalWeeks`）
   - `export function lcm(values: number[]): number`（0 或空数组返回 0）
-  - `export function computeFingerprint(date: Date, poolSizes: number[]): string`（形如 `"3-12-7"`）
-  - `export const MIN_UNIQUE_CYCLE_DAYS = 3650`
+  - `export function computeFingerprint(date: Date, poolSizes: number[]): string`（形如 `"3-12"`；修正后语义上只传 `[文章池, 词条池]`）
+  - `export const MIN_UNIQUE_CYCLE_DAYS = 90`（**修正后阈值**：一季；原 3650 建立在「速测题是独立维度」的错误前提上）
 
 **Injected Instincts (Compile-Time Rule Injection):**
 - [ ] `[Instinct: Parser-Defensive]`（vault `01-Rules/MARKDOWN-REGISTRY-VALIDATION.md §2`）：门禁脚本必须先喂「空池 / 单元素池」边界输入，确认能解析出非 0 结果，不得只测通过路径。
-- [ ] `[Instinct: Reverse-Test]`：G3 断言必须包含反向用例——人为把池规模改成 `(26,25,26)` 时 `lcm = 650 < 3650`，断言必须失败。
+- [ ] `[Instinct: Reverse-Test]`：G3 断言必须包含反向用例——① 周期型：`(A,G)=(26,26)` ⇒ `lcm = 26 < 90`，必须报错；② 相位型：`(A,G)=(26,26)` 或 `(28,28)` ⇒ `A % G == 0`，必须报"同相位坍缩"错误；③ 正向对照：`(26,28)` ⇒ 364 ≥ 90 且互不整除，必须通过。
 - [ ] `[Instinct: Python-Standards]`（vault `03-Languages/Python/PYTHON-STANDARDS.md §4.3`）：新增脚本路径操作统一 `pathlib.Path`，禁止 `dir + "/" + file` 字符串拼接。
 - [ ] `[Instinct: Zero-Regression]`：`rotation.ts` 的 `getDayOfYear` 必须与 `dailyQuiz.ts:324-331` 现行实现逐位等价（含 `getTimezoneOffset()` 处理），否则打卡跨日判断会错位。
 
 **Subagent Prompt Scaffold (for /dfs-exec):**
 > "Implement Task 1: 轮换数学单一真值源与指纹唯一性门禁.
 > Mode: AFK | Role: TDD Builder
-> Goal: 把散落在 `dailyQuiz.ts` 的轮换数学收敛为 `src/data/rotation.ts` 纯函数模块，并新建 `scripts/test_daily_loop.py` 的 G3 组断言（池规模 → lcm → ≥3650 天不重复），把「新鲜」变成 CI 可守的不变量。
+> Goal: 把散落在 `dailyQuiz.ts` 的轮换数学收敛为 `src/data/rotation.ts` 纯函数模块，并新建 `scripts/test_daily_loop.py` 的 G3 组断言（**文章池 × 词条池 → lcm → ≥90 天不重复 + 两池不退化**），把「新鲜」变成 CI 可守的不变量。
 > Target Files: Create `src/data/rotation.ts`；Create `scripts/test_daily_loop.py`；Modify `src/data/dailyQuiz.ts:321-341`（改为 re-export）。
-> Injected Instincts: Parser-Defensive（空池/单元素边界自检）、Reverse-Test（坏池规模必须断言失败）、Python-Standards（`pathlib.Path`）、Zero-Regression（`getDayOfYear` 逐位等价）。
+> Injected Instincts: Parser-Defensive（空池/单元素边界自检）、Reverse-Test（坏池规模与同相位必须断言失败）、Python-Standards（`pathlib.Path`）、Zero-Regression（`getDayOfYear` 逐位等价）。
 > TDD Steps:
-> 1. 先写 `scripts/test_daily_loop.py`：从真实文件统计三池规模（`src/content/articles/*.mdx` 排除 `_` 前缀、`dailyQuiz.ts` 的 `'<slug>': {` 键数、`src/content/glossary/*.md`），断言 `lcm(sizes) >= 3650` 并打印实际天数；同时加反向用例断言 `lcm([26,25,26]) < 3650`（RED，因脚本尚未包含 G1/G2/G4/G5，先只跑 G3）。
-> 2. 运行 `python -X utf8 scripts/test_daily_loop.py` 验证 G3 失败于「`rotation` 相关断言缺失/脚本未注册」。
+> 1. 先写 `scripts/test_daily_loop.py`：从真实文件统计池规模（`src/content/articles/*.mdx` 排除 `_` 前缀、`src/content/glossary/*.md`；速测池仅用于 G1 与相位一致性校验，**不参与周期计算**），断言 `lcm([A, G]) >= 90` 且 `A % G != 0 && G % A != 0`，打印实际周期与软告警；同时加反向用例 `(26,26)` 与正向对照 `(26,28)`（RED）。
+> 2. 运行 `python -X utf8 scripts/test_daily_loop.py` 验证 G3 失败于「`rotation` 真值源缺失/未 re-export」。
 > 3. 创建 `src/data/rotation.ts`（纯函数，含 `lcm` 手写实现：`a*b/gcd`，避免依赖第三方大数库）。
 > 4. 修改 `src/data/dailyQuiz.ts:321-341`：删除原实现，改为 `export { getDayOfYear, getTodayIndex } from './rotation';`，并把 `QuizItem` 相关代码保持不动。
 > 5. 运行 `python -X utf8 scripts/test_daily_loop.py` 与 `pnpm check` 验证全绿。
-> 6. 门禁自检：临时把某池规模改为使 `lcm < 3650` 的数值，确认脚本 exit 1；恢复后确认 exit 0。
+> 6. 门禁自检：临时把词条池缩到使 `lcm < 90` 的数值，确认脚本 exit 1；恢复后确认 exit 0。
 > Return: 测试执行物理凭据（命令 + exit code + stdout 片段 + `git diff --stat`）。"
 
 **Step Breakdown:**
@@ -79,8 +79,9 @@
 ### Task 2: G1 文章↔速测题 1:1 门禁 + 补齐已漂移的 FGM 速测题 [Mode: AFK] [Role: TDD Builder]
 
 **Files:**
-- Modify: `scripts/test_daily_loop.py`（新增 G1 组）
+- Modify: `scripts/test_daily_loop.py`（新增 G1 组；**修订轮追加**：按修正后口径重写 G3 组、抽出纯函数 `check_cycle_threshold`）
 - Modify: `src/data/dailyQuiz.ts`（在 `DAILY_QUIZZES` 末尾追加 `'body-female-genital-mutilation'` 条目）
+- Modify: `src/data/rotation.ts`（**修订轮追加**：`MIN_UNIQUE_CYCLE_DAYS` 3650 → 90 + 头注释口径更正）
 
 **Interfaces:**
 - Consumes: `DAILY_QUIZZES: Record<string, QuizItem>`、文章文件名集合
@@ -123,6 +124,8 @@
 - Create: `src/components/DailyTerm.astro`
 - Modify: `src/pages/index.astro:1-33`（引入 glossary collection 与 `getWeekIndex`）与 `:32-33`（渲染位）
 
+> **衔接说明（Task-2 验收后追加）**：`scripts/test_daily_loop.py` 中已存在但 G3 修订后暂无调用方的 `count_quiz_pool()`（第 57 行）**必须由本任务的 G2 组接管消费**（G2 断言「三池规模均 ≥ 1」需要速测池计数）；若 G2 最终不消费它，则由本任务一并删除，禁止留下无调用方的死代码。
+
 **Interfaces:**
 - Consumes: `getCollection('glossary')`、`rotation.getTodayIndex`
 - Produces:
@@ -137,11 +140,11 @@
 **Subagent Prompt Scaffold (for /dfs-exec):**
 > "Implement Task 3: 每日一词组件与 G2 池非空门禁.
 > Mode: AFK | Role: TDD Builder
-> Goal: 让首页在「今日精选 + 速测」之外增加第三个轮换源（28 词条池），把组合指纹周期从 `lcm(26,25)=650` 提升到 `lcm(26,25,28)=9100` 天，并用 G2 门禁保证三池永不为空。
+> Goal: 让首页在「今日精选 + 速测」之外增加**第二个独立的**轮换源（28 词条池），把首页当日组合周期从「文章池自身周期 26 天」提升到 `lcm(26,28) = 364 天`（约一年），并用 G2 门禁保证三池永不为空。**注意**：速测题与今日文章 1:1 绑定，不构成独立维度（修正记录见 Spec §3.1.3），故本任务的真实增益来自词条池而非速测池。
 > Target Files: Modify `scripts/test_daily_loop.py`；Create `src/components/DailyTerm.astro`；Modify `src/pages/index.astro`。
 > Injected Instincts: Zero-Emoji、Zero-InnerHTML、Paper-Ink-Consistency。
 > TDD Steps:
-> 1. 在 `scripts/test_daily_loop.py` 增加 G2：三池规模均 ≥ 1，并额外断言 `lcm(三池) >= 1000`（引入第三池后周期必须显著跃升，防止「加了组件但没接进指纹」的假绿）。
+> 1. 在 `scripts/test_daily_loop.py` 增加 G2：三池规模均 ≥ 1，并额外断言 **`lcm(文章池, 词条池) > 文章池`**（证明词条池**真的参与**周期计算，而非与文章池同相位/被整除的假接入——这是「加了组件但没接进指纹」的假绿防线）。
 > 2. 运行 `python -X utf8 scripts/test_daily_loop.py` 验证 G2 失败（RED，因为脚本尚无第三池统计）。
 > 3. 实现 G2 统计逻辑（读 `src/content/glossary/*.md` 计数），并创建 `src/components/DailyTerm.astro`（显示词条名 / `en_term` / 80 字内 `definition` / 词典锚点链接）。
 > 4. 在 `src/pages/index.astro` 引入 `getCollection('glossary')`，按 `getTodayIndex(glossary.length)` 选词并挂载 `<DailyTerm />`。
@@ -149,13 +152,13 @@
 > Return: 物理执行凭据（命令 + exit code + 构建页数 + `git diff --stat`）。"
 
 **Step Breakdown:**
-- [ ] **Step 1: Write the failing test (RED)**：G2 + 三池 lcm ≥ 1000 断言。
+- [ ] **Step 1: Write the failing test (RED)**：G2 三池非空 + `lcm(文章池, 词条池) > 文章池`（证明词条池真的参与周期，非假接入）。
 - [ ] **Step 2: Run test and verify it fails with expected message**。
 - [ ] **Step 3: Implement minimal production code (GREEN)**：`DailyTerm.astro` + 首页组装。
 - [ ] **Step 4: Run tests and verify all green**：`test_daily_loop.py` + `pnpm check` + `pnpm build`。
 - [ ] **Step 5: Refactor & Flatten with guard clauses (REFACTOR)**：词条池为空时不挂载组件。
 - [ ] **Step 6: Physical Evidence Gate**。
-- [ ] **Step 7: Git atomic commit**：`git commit -m "feat(daily): 落地每日一词轮换组件并扩展组合指纹至9100天"`。
+- [ ] **Step 7: Git atomic commit**：`git commit -m "feat(daily): 落地每日一词轮换组件并将首页当日组合周期扩展至364天"`。
 
 ---
 
@@ -203,9 +206,10 @@
 
 ### Task 5: 门禁接入 CI 全链路并完成 M1 验收 [Mode: AFK] [Role: Integration Builder]
 
-> **Task-1 验收后追加的加固项（来自 Checker 席位的对抗性变异检查）**：
-> - **YELLOW-1（弱断言）**：Task-1 的门禁对 `rotation.ts` 仅做**源码 token 扫描**，空壳实现（如 `computeFingerprint` 恒返回 `""`）可骗过门禁 ⇒ 本任务必须补一条**行为断言**：用 `node --input-type=module -e` 载入 `rotation.ts`（Node 24 原生 TS 类型剥离），断言 `computeFingerprint(new Date('2026-01-01T00:00:00+08:00'), [26,25,28])` 与手算一致、`getTodayIndex(0) === 0`、`lcm([26,25,26]) === 650`。
-> - **YELLOW-2（反向用例偏间接）**：现有反向用例只验证 Python `lcm()` 自身，未驱动门禁失败路径 ⇒ 本任务必须抽出纯函数 `check_cycle_threshold(sizes: list[int], threshold: int) -> list[str]`，并断言 `check_cycle_threshold([26,25,26], 3650)` **返回非空错误列表**（直接证明「坏数据 ⇒ 门禁失败」）。
+> **Task-1/Task-2 验收后追加的加固项（来自 Checker 席位的对抗性变异检查）**：
+> - **YELLOW-0（真实护栏缺口，优先级最高）**：Task-2 修订轮后，「两池不退化」分支**没有可红的独立反向用例**——反向用例只断言 `check_cycle_threshold([26,26], 90)` 返回**非空**，不判内容与条数；推演证明「删掉该纯函数内的整除判定循环」后 CI **仍全绿**（`[26,26]` 靠阈值分支仍返回 1 条非空）。⇒ 本任务必须补：① 断言 `len(collapsed) == 2` 且消息文本分别包含「周期坍缩」与「同相位坍缩」；② 补一个**只触发相位分支**的判别用例 `[100, 50]`（`lcm=100 ≥ 90` 过阈值，但 `50 | 100` 必须触发同相位坍缩）；③ 顺带把该脚本 docstring 中「零 Emoji」措辞改为「站点内容零 Emoji；脚本输出沿用仓库既有 `❌`/`✅` 门禁范式」，消除自相矛盾。
+> - **YELLOW-1（弱断言）**：Task-1 的门禁对 `rotation.ts` 仅做**源码 token 扫描**，空壳实现（如 `computeFingerprint` 恒返回 `""`）可骗过门禁 ⇒ 本任务必须补一条**行为断言**：用 `node --input-type=module -e` 载入 `rotation.ts`（Node 24 原生 TS 类型剥离），断言 `computeFingerprint(new Date('2026-01-01T00:00:00+08:00'), [26, 28])` 与手算一致、`getTodayIndex(0) === 0`、`lcm([26, 28]) === 364`。
+> - **YELLOW-2（反向用例偏间接）**：现有反向用例只验证 Python `lcm()` 自身，未驱动门禁失败路径 ⇒ 本任务必须抽出纯函数 `check_cycle_threshold(pool_sizes: list[int], threshold: int) -> list[str]`，并断言 `check_cycle_threshold([26, 26], 90)` **返回非空错误列表**（周期坍缩 + 同相位双错误，直接证明「坏数据 ⇒ 门禁失败」）。
 
 **Files:**
 - Modify: `package.json:16`（`test:graph` 追挂 `test_daily_loop.py`）
@@ -228,7 +232,7 @@
 > 1. 修改 `package.json` 的 `test:graph`，在 `test_tools.py` 之后插入 `python -X utf8 scripts/test_daily_loop.py`。
 > 2. 运行 `pnpm test`，确认 6 套脚本全绿 + `astro check` 零错误 + 构建页数（应为 36 页）。
 > 3. 反向验证：临时把 `dailyQuiz.ts` 某条 key 删除，确认 `pnpm test` 在 G1 处 fail；恢复。
-> 4. 验证 M1 验收标准：`python -X utf8 scripts/test_daily_loop.py` 输出 `lcm ≥ 3650` 的实际天数与三池规模。
+> 4. 验证 M1 验收标准：`python -X utf8 scripts/test_daily_loop.py` 输出实际周期（`lcm(文章池, 词条池) = 364` 天）、池规模与软告警状态。
 > Return: 物理执行凭据（`pnpm test` 完整 stdout 尾部 + exit code 0）。"
 
 **Step Breakdown:**

@@ -3,14 +3,17 @@
 test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 
 守护「每天首页内容不重复」这一可判定的数学不变量：
-    三池规模 (articles, quiz, glossary) -> 最小公倍数 lcm -> 不重复天数 >= MIN_UNIQUE_CYCLE_DAYS
+    真实独立维度 = (文章池 A, 词条池 G) -> 最小公倍数 lcm -> 不重复天数 >= MIN_UNIQUE_CYCLE_DAYS
 
-当日三元组合指纹 (文章索引, 速测索引, 词条索引) 的重复周期 = lcm(三池规模)。
-只要 lcm >= 3650（约 10 年），即可断言「工作日均首页新鲜」为可验证事实而非口号。
+速测题与今日文章 1:1 绑定（G1 门禁强制），不是独立轮换维度，故不参与周期计算
+（修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
+其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前仅实现 G3 组断言（池规模 -> lcm -> >= 3650 天不重复）。
-G1（文章↔速测题 1:1）、G2（轮换池非空）、G4（信源准入合法）、
-G5（台账 schema）、G6（今日上新窗口）、G7（速测题占位注入）由后续 Task 逐步追加。
+本文件当前实现 G1 与 G3 两组断言：
+    G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
+    G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
+G2（轮换池非空）、G4（信源准入合法）、G5（台账 schema）、
+G6（今日上新窗口）、G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；零 Emoji。
@@ -18,6 +21,7 @@ G5（台账 schema）、G6（今日上新窗口）、G7（速测题占位注入�
 
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -28,8 +32,8 @@ GLOSSARY_DIR = ROOT_DIR / "src" / "content" / "glossary"
 QUIZ_FILE = ROOT_DIR / "src" / "data" / "dailyQuiz.ts"
 ROTATION_FILE = ROOT_DIR / "src" / "data" / "rotation.ts"
 
-# 组合指纹不重复天数下限（>= 10 年）。与 src/data/rotation.ts 的 MIN_UNIQUE_CYCLE_DAYS 对齐。
-MIN_UNIQUE_CYCLE_DAYS = 3650
+# 首页当日组合周期下限（一季）。与 src/data/rotation.ts 的 MIN_UNIQUE_CYCLE_DAYS 对齐。
+MIN_UNIQUE_CYCLE_DAYS = 90
 
 
 def _read_text(path: Path) -> str:
@@ -70,6 +74,27 @@ def count_glossary_pool() -> int:
     return sum(1 for _ in GLOSSARY_DIR.glob("*.md"))
 
 
+def article_slugs(directory: Path = ARTICLES_DIR) -> set:
+    """文章 slug 集合：*.mdx 文件名（不含扩展名），排除以 '_' 开头的模板/草稿。"""
+    if not directory.is_dir():
+        return set()
+    return {path.stem for path in directory.glob("*.mdx") if not path.name.startswith("_")}
+
+
+def quiz_keys(quiz_file: Path = QUIZ_FILE) -> set:
+    """速测题键集合：DAILY_QUIZZES 顶层形如 '<slug>': { 的 slug（注释内不算）。"""
+    if not quiz_file.is_file():
+        return set()
+    source = _strip_ts_comments(_read_text(quiz_file))
+    marker = source.find("DAILY_QUIZZES")
+    if marker == -1:
+        return set()
+    region = source[marker:]
+    return set(
+        re.findall(r"^\s*'([a-z0-9][a-z0-9-]*)'\s*:\s*\{", region, flags=re.MULTILINE)
+    )
+
+
 def _gcd(a: int, b: int) -> int:
     """欧几里得算法求最大公约数。"""
     x, y = abs(a), abs(b)
@@ -90,34 +115,86 @@ def lcm(values: list) -> int:
     return result
 
 
-def validate_g3_pool_cycle(errors: list) -> None:
-    """G3 主断言：从真实文件统计三池规模，断言 lcm(sizes) >= MIN_UNIQUE_CYCLE_DAYS。"""
-    sizes = [count_article_pool(), count_quiz_pool(), count_glossary_pool()]
-    if min(sizes) < 1:
-        errors.append(f"轮换池存在空池，无法计算组合指纹周期：articles/quiz/glossary = {sizes}")
-        return
+def check_cycle_threshold(pool_sizes: list, threshold: int) -> list:
+    """纯函数：判定一组轮换池规模是否满足「当日组合唯一性周期」门禁。
 
-    cycle_days = lcm(sizes)
-    print(f"[G3] 实际池规模 articles={sizes[0]} quiz={sizes[1]} glossary={sizes[2]}")
+    输入池规模列表与阈值，返回错误消息列表（空列表 = 通过）。调用者只看返回值，
+    因此「坏数据 ⇒ 门禁失败」被直接证明，而非间接推理。
+    - 空池守卫：池规模列表为空或任一池 < 1 时记错误并短路。
+    - 周期下限：lcm(pool_sizes) < threshold 记为「周期坍缩」错误。
+    - 不退化断言：任意两池互相整除（a % b == 0 或 b % a == 0）记为「同相位坍缩」错误，
+      防止周期坍缩为 max(a, b)。
+    """
+    errors: list = []
+    if not pool_sizes or any(size < 1 for size in pool_sizes):
+        errors.append(f"轮换池存在空池，无法计算当日组合周期：pool_sizes={pool_sizes}")
+        return errors
+
+    cycle_days = lcm(pool_sizes)
+    if cycle_days < threshold:
+        errors.append(
+            f"当日组合周期仅 {cycle_days} 天 < 门禁阈值 {threshold} 天（周期坍缩）；"
+            f"请扩充内容池（当前池规模 {pool_sizes}）"
+        )
+
+    for i in range(len(pool_sizes)):
+        for j in range(i + 1, len(pool_sizes)):
+            a, b = pool_sizes[i], pool_sizes[j]
+            if a % b == 0 or b % a == 0:
+                errors.append(
+                    f"轮换池同相位坍缩：池规模 {a} 与 {b} 互相整除，"
+                    f"当日组合周期坍缩为 max({a}, {b})={max(a, b)}，请确保两池互不整除"
+                )
+    return errors
+
+
+def validate_g3_pool_cycle(errors: list) -> None:
+    """G3 主断言：真实周期只由 (文章池, 词条池) 决定。
+
+    速测题与今日文章 1:1 绑定（G1 强制），不是独立轮换维度，故不参与周期计算。
+    门禁调用纯函数 check_cycle_threshold 判定阈值 + 不退化；周期 < 365 时打印软告警。
+    """
+    articles = count_article_pool()
+    glossary = count_glossary_pool()
+    sizes = [articles, glossary]
+    cycle_days = lcm(sizes) if min(sizes) >= 1 else 0
+
+    print(f"[G3] 池规模 articles={articles} glossary={glossary}")
     print(
-        f"[G3] 组合指纹不重复周期 = lcm({sizes}) = {cycle_days} 天"
+        f"[G3] 首页当日组合周期 = lcm({articles}, {glossary}) = {cycle_days} 天"
         f"（阈值 {MIN_UNIQUE_CYCLE_DAYS}，达标={cycle_days >= MIN_UNIQUE_CYCLE_DAYS}）"
     )
-    if cycle_days < MIN_UNIQUE_CYCLE_DAYS:
-        errors.append(
-            f"组合指纹不重复周期仅 {cycle_days} 天 < 门禁阈值 {MIN_UNIQUE_CYCLE_DAYS} 天；"
-            f"请扩充内容池（当前池规模 {sizes}）"
+    if 0 < cycle_days < 365:
+        print(
+            f"[G3] 软告警：首页当日组合周期 {cycle_days} 天 < 365 天（约一年），"
+            f"建议扩充内容池以延长新鲜度窗口（不阻断门禁）"
         )
+
+    errors.extend(check_cycle_threshold(sizes, MIN_UNIQUE_CYCLE_DAYS))
 
 
 def validate_self_checks(errors: list) -> None:
-    """反向用例 + 空池/单元素边界自检（证明门禁本身有效）。"""
-    # 反向用例：池规模失衡使 lcm 跌破阈值，门禁必须能识别为「不达标」。
-    bad_cycle = lcm([26, 25, 26])
-    if bad_cycle >= MIN_UNIQUE_CYCLE_DAYS:
+    """反向用例 + 空池/单元素边界自检（直接调用门禁纯函数，证明门禁本身有效）。"""
+    # 反向用例①（同相位周期坍缩）：(26, 26) ⇒ lcm=26 < 90 且互相整除，必须返回非空错误。
+    collapsed = check_cycle_threshold([26, 26], MIN_UNIQUE_CYCLE_DAYS)
+    if not collapsed:
         errors.append(
-            f"反向用例失效：失衡池 lcm([26,25,26])={bad_cycle} 应 < {MIN_UNIQUE_CYCLE_DAYS}"
+            "反向用例失效：check_cycle_threshold([26,26], 90) 应返回非空错误列表"
+            "（周期坍缩 + 同相位坍缩），实际为空"
         )
+    print(
+        f"[G3] 反向用例①通过：[26,26] 检出 {len(collapsed)} 条错误"
+        f"（周期坍缩 + 同相位坍缩）"
+    )
+
+    # 正向对照：互不整除的 (26, 28) ⇒ lcm=364 >= 90，必须通过（空错误列表）。
+    healthy = check_cycle_threshold([26, 28], MIN_UNIQUE_CYCLE_DAYS)
+    if healthy:
+        errors.append(
+            f"正向对照失效：check_cycle_threshold([26,28], 90) 应通过（空错误列表），"
+            f"实际 {healthy}"
+        )
+
     # 边界：空池 -> 0，单元素 -> 自身。
     if lcm([]) != 0:
         errors.append(f"边界自检失效：lcm([]) 应返回 0，实际 {lcm([])}")
@@ -138,7 +215,7 @@ def validate_rotation_contract(errors: list) -> None:
         "export function getWeekIndex(",
         "export function lcm(",
         "export function computeFingerprint(",
-        "export const MIN_UNIQUE_CYCLE_DAYS = 3650",
+        "export const MIN_UNIQUE_CYCLE_DAYS = 90",
     ]
     for token in required_exports:
         if token not in source:
@@ -162,12 +239,105 @@ def validate_daily_quiz_reexport(errors: list) -> None:
         errors.append("dailyQuiz.ts 未从 './rotation' 转出轮换数学（单一真值源被破坏）")
 
 
+def validate_quiz_coverage(
+    errors: list,
+    articles_dir: Path = ARTICLES_DIR,
+    quiz_file: Path = QUIZ_FILE,
+) -> list:
+    """G1 主断言：文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1。
+
+    既查缺题（文章无对应速测题），也查孤儿题（速测题无对应文章）；
+    任一方向有差集即记错误，错误信息可直接指导修复。
+    返回本次新增追加到 errors 的条目（供反向夹具用例断言非空）。
+    """
+    before = len(errors)
+    slugs = article_slugs(articles_dir)
+    keys = quiz_keys(quiz_file)
+
+    # 守卫子句：内容池均未就绪则短路，避免在空目录下产生误报噪声。
+    if not slugs and not keys:
+        return errors[before:]
+    # 守卫子句：无文章却有题 -> 全部按孤儿题处理。
+    if not slugs:
+        for key in sorted(keys):
+            errors.append(
+                f"❌ 速测题 '{key}' 是孤儿题（无对应文章）→ 请在 src/content/articles/ "
+                f"新建 '{key}.mdx' 或从 src/data/dailyQuiz.ts 删除该 key"
+            )
+        return errors[before:]
+    # 守卫子句：有文章却无题 -> 全部按缺题处理，一次性点名所有 slug。
+    if not keys:
+        for slug in sorted(slugs):
+            errors.append(
+                f"❌ 文章 '{slug}' 缺少速测题 → 请在 src/data/dailyQuiz.ts 的 "
+                f"DAILY_QUIZZES 增加 key '{slug}'"
+            )
+        return errors[before:]
+
+    for slug in sorted(slugs - keys):
+        errors.append(
+            f"❌ 文章 '{slug}' 缺少速测题 → 请在 src/data/dailyQuiz.ts 的 "
+            f"DAILY_QUIZZES 增加 key '{slug}'"
+        )
+    for key in sorted(keys - slugs):
+        errors.append(
+            f"❌ 速测题 '{key}' 是孤儿题（无对应文章）→ 请在 src/content/articles/ "
+            f"新建 '{key}.mdx' 或从 src/data/dailyQuiz.ts 删除该 key"
+        )
+
+    print(
+        f"[G1] 文章 slug 数 ={len(slugs)}，速测题键数 ={len(keys)}，"
+        f"1:1 覆盖 ={len(slugs & keys)}（缺题 {len(slugs - keys)}，孤儿题 {len(keys - slugs)}）"
+    )
+    return errors[before:]
+
+
+def validate_quiz_coverage_reverse_test(errors: list) -> None:
+    """G1 反向用例 [Instinct: Reverse-Test]：夹具「1 篇文章 + 0 道题」下必须报错。
+
+    若此用例通过（即 G1 在夹具下反而静默），说明门禁形同虚设，记错误。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        fixture_articles = tmp_dir / "articles"
+        fixture_articles.mkdir()
+        (fixture_articles / "fixture-article-without-quiz.mdx").write_text(
+            "---\ntitle: 夹具\n---\n", encoding="utf-8"
+        )
+        fixture_quiz = tmp_dir / "dailyQuiz.ts"
+        fixture_quiz.write_text(
+            "export const DAILY_QUIZZES: Record<string, QuizItem> = {\n};\n",
+            encoding="utf-8",
+        )
+        fixture_errors = validate_quiz_coverage(
+            [], articles_dir=fixture_articles, quiz_file=fixture_quiz
+        )
+
+    if not fixture_errors:
+        errors.append(
+            "反向用例失效：夹具（1 篇文章 + 0 道题）下 validate_quiz_coverage "
+            "应返回非空错误列表，实际为空"
+        )
+        return
+
+    joined = "\n".join(fixture_errors)
+    if "fixture-article-without-quiz" not in joined:
+        errors.append(
+            "反向用例失效：夹具错误信息未点名缺失 slug 'fixture-article-without-quiz'，不可执行"
+        )
+        return
+
+    print(f"[G1] 反向用例通过：夹具（1 篇文章 + 0 道题）下检出 {len(fixture_errors)} 条错误并点名缺失 slug")
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 本任务仅实现 G3（池规模 -> lcm -> >= 3650 天不重复）；G1/G2/G4/G5/G6/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）与 G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）；G2/G4/G5/G6/G7 由后续 Task 追加。")
 
     errors: list = []
 
+    validate_quiz_coverage(errors)
+    validate_quiz_coverage_reverse_test(errors)
     validate_g3_pool_cycle(errors)
     validate_self_checks(errors)
     validate_rotation_contract(errors)
@@ -179,7 +349,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G3 全绿：组合指纹不重复周期 >= 3650 天，反向用例与边界自检均通过。")
+    print("[PASS] G1 与 G3 全绿：文章<->速测题 1:1；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化，反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":

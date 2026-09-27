@@ -46,7 +46,7 @@
 2. **Step 2**：新增 `DailyTerm` 展示「每日一词」（28 词条池轮换）→ 30 秒内获得一个可带走的医学常识；
 3. **Step 3**：完成速测获得即时解析与连续打卡天数（`localStorage` 本地存储，零隐私外传）→ 形成次日回访动机。
 
-> **新鲜感的判定**：当日三元组 `(文章索引, 速测索引, 词条索引)` 构成「当日指纹」，其不重复周期 = `lcm(26, 25, 28) = 9100 天 ≈ 24.9 年`（数学证明见 §3.1.3）。即：**无需新增任何人工成本，首页内容在可预见年限内不会重复**。
+> **新鲜感的判定**：当日二元组 `(文章索引, 词条索引)` 构成「当日指纹」（速测题与今日文章 1:1 绑定，非独立维度，见 §3.1.3 的修正说明），其不重复周期 = `lcm(26, 28) = 364 天`（约一年）。即：**无需新增任何人工成本，首页当日组合在约一年内不会重复**，且周期随内容池增长而增长。
 
 ### 2.2 维护者每周旅程（Happy Path ≤ 3 步，M2 生效后）
 
@@ -82,7 +82,7 @@
 
 | 组件 | 职责 | 接口签名 |
 |---|---|---|
-| `src/data/rotation.ts`（新建） | 轮换数学的**唯一真值源**：积日、周序号、指纹 | `getDayOfYear(date?): number`、`getWeekIndex(totalWeeks: number, date?): number`、`getTodayIndex(totalCount, date?): number`、`getCombinedFingerprint(date?): string`、`ROTATION_POOLS: {articles:number; quiz:number; glossary:number}` |
+| `src/data/rotation.ts`（新建） | 轮换数学的**唯一真值源**：积日、周序号、指纹 | `getDayOfYear(date?): number`、`getWeekIndex(totalWeeks: number, date?): number`、`getTodayIndex(totalCount, date?): number`、`lcm(values: number[]): number`、`computeFingerprint(date: Date, poolSizes: number[]): string`、`MIN_UNIQUE_CYCLE_DAYS = 90`、`pickFreshArticle(...)`（Task 4） |
 | `src/components/DailyCard.astro`（改造） | 今日精选 + 速测 + 今日上新置顶 | Props `{ article, quiz, freshArticle? }` |
 | `src/components/DailyTerm.astro`（新建） | 每日一词（词条名 + 释义 + 词典锚点） | Props `{ term: CollectionEntry<'glossary'> }` |
 | `src/pages/index.astro`（改造） | 组装三者，计算当日池索引 | 无 |
@@ -94,15 +94,20 @@
 - **无新增持久化**：轮换为纯函数（日期 → 索引），无状态、无 DB、无 `localStorage` 写入（打卡沿用现有 `DailyCard` 的 `safeGetItem/safeSetItem` 容灾实现）。
 - **池来源**：`articles`（`getCollection('articles')` 排除 `_` 开头）、`DAILY_QUIZZES`、`glossary`（`getCollection('glossary')`）。
 
-#### 3.1.3 唯一性证明（可验证不变量）
+#### 3.1.3 唯一性证明（可验证不变量）—— 含一次口径修正
 
-设三池规模为 `a=26, q=25, g=28`，当日指纹 = `(day-1) mod a, (day-1) mod q, (day-1) mod g`。
+> **修正说明（2026-09-27，Task-2 执行期由独立实现子代理发现）**：初版把「速测题池」当作与文章池**独立**的轮换维度，据此得出 `lcm(26,25,28)=9100` 天。**该推导错误**：`index.astro` 中速测题由今日精选文章决定（`DAILY_QUIZZES[featuredArticle.id]`），而 M1 的 G1 门禁更强制「文章 ↔ 速测题 1:1」——两者**同相位**，速测题根本不构成独立维度。修正如下（不降低门槛标准，只修正错误的数学前提）。
 
-- 指纹重复 ⟺ `d ≡ 0 (mod a) ∧ d ≡ 0 (mod q) ∧ d ≡ 0 (mod g)`，最小正周期 = `lcm(a,q,g)`；
-- `26 = 2×13`，`25 = 5²`，`28 = 2²×7` → `lcm = 2²×5²×7×13 = 9100`（天）；
-- 断言 `lcm(pools) ≥ 3650`（≥10 年不重复）由 `scripts/test_daily_loop.py` 强制，**池规模变化时自动重算**。
+设文章池规模 `A`、词条池规模 `G`，当日指纹 = `((day-1) mod A, (day-1) mod G)`：
 
-**推论（护栏）**：若任一池规模缩到使 `lcm < 3650`，门禁失败并提示扩池——把「新鲜度」变成 CI 可守的不变量而非口号。
+- 指纹重复 ⟺ `d ≡ 0 (mod A) ∧ d ≡ 0 (mod G)` ⇒ 最小正周期 = `lcm(A, G)`；
+- 当前 `A=26`、`G=28` ⇒ `lcm(26,28) = 2²×7×13 = 364` 天（**约一年内首页每日组合不重复**）；
+- **门槛 `MIN_UNIQUE_CYCLE_DAYS = 90`（一季）**：放弃初版 3650 天——该数字建立在错误推导之上，在当前内容规模下数学上不可达；
+- **不退化断言（MUST）**：`A % G != 0 && G % A != 0`，防止两池同相位/互相整除导致周期坍缩为 `max(A,G)`；
+- **软告警**：周期 < 365 天时打印告警但不阻断（避免门禁变成发布障碍），当前 364 天处于告警边缘；
+- **增长路径**：周期随内容池规模自然增长（周更 2~3 篇 + 词条同步扩充）；门禁守下限并打印当前值供人工观察趋势。
+
+**推论（护栏）**：把「新鲜度」从不可验收的口号变成「可复算的下限 + 可观测的趋势」；真正的供给安全网由 M2 的候选池规模守（见 §3.2.3）。
 
 ### 3.2 方案 B：增量候选供给管道（M2）
 
@@ -179,7 +184,7 @@
 |---|---|
 | G1 内容-速测 1:1 | 每篇文章恰有 1 道速测题；无孤儿题（题有文章不存在）；失败时列出缺失清单 |
 | G2 轮换池非空 | `articles / quiz / glossary` 三池均 ≥ 1 |
-| G3 指纹唯一性 | `lcm(池规模) ≥ 3650`，并打印实际不重复天数 |
+| G3 指纹唯一性 | `lcm(文章池, 词条池) ≥ MIN_UNIQUE_CYCLE_DAYS(90)` + 不退化断言 `A % G != 0 && G % A != 0`，并打印实际周期（当前 364 天）与软告警 |
 | G4 信源准入合法 | 每个信源 `discovery.mode` ∈ {anchor, sitemap, feed}；`admission.status` ∈ 合法集；`status == "admitted"` ⇒ `license` 非空（fail-closed） |
 | G5 台账 schema | `version == 2`；每个条目字段完备；`url` 全局唯一；迁移函数幂等（同一 v1 输入两次迁移结果相同） |
 
@@ -270,7 +275,7 @@ pnpm test                                       # 全链路：check + 6 套测�
 
 | 里程碑 | 范围 | 验收标准 |
 |---|---|---|
-| **M1 每日新鲜组合 + 防漂移门禁** | `rotation.ts`、`DailyTerm.astro`、`DailyCard` 改造、今日上新置顶、`test_daily_loop.py` G1/G2/G3、补齐 FGM 缺失速测题 | `pnpm test` 全绿；G1/G2/G3 生效；首页当日出现「今日精选 + 速测 + 每日一词」三元组合；`lcm` 断言打印 ≥ 3650 |
+| **M1 每日新鲜组合 + 防漂移门禁** | `rotation.ts`、`DailyTerm.astro`、`DailyCard` 改造、今日上新置顶、`test_daily_loop.py` G1/G2/G3、补齐 FGM 缺失速测题 | `pnpm test` 全绿；G1/G2/G3 生效；首页当日出现「今日精选 + 速测 + 每日一词」三元组合；G3 打印实际周期 `lcm(26,28)=364` 天 ≥ 阈值 90 且两池不退化 |
 | **M2 增量候选供给管道** | `sources.json` v2、三种发现模式、台账 v2 与迁移、`curate:pool` / `curate:draft` / `curate:admit`、G4/G5 | `pnpm test` 全绿；`curate:pool` 在现有 2 信源上输出 ≥40 条带分类排序的候选；至少 1 个新信源走完 `curate:admit` 并进入 `admitted`；候选池条目在 CI run 中有可达性证据 |
 
 ---
