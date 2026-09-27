@@ -17,6 +17,7 @@ dist/
 node_modules/
 .astro/
 .vscode/
+.codebuddy/
 artifact/
 .worktrees/
 __pycache__/
