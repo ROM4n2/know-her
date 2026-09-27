@@ -1,0 +1,19 @@
+# lychee 外链巡检配置（ADR-0001 D2：lychee-action 定时链检）
+#
+# 巡检边界原则：只对「站内已发布内容 + 开源规范文档」做真实可达性巡检。
+# docs/**（Phase 1 需求验证取证记录、ADR 历史、计划文档）与 WORKMEMORY/**（内部工作日志）
+# 不参与巡检——前者含有意保留的「供应方失效」失败证据原文（属证据本体，不得为了绿链而改写历史取证），
+# 巡检它们只会产生永久噪声，而不是发现需要修复的发布内容问题。
+# 具体扫描范围由 .github/workflows/lychee.yml 的 globs 显式声明。
+
+# ---- 网络弹性：CI 出口对部分站点（知乎、丁香园）偶发慢响应，放宽超时与重试以消除超时噪声 ----
+timeout = 30
+max_retries = 3
+retry_wait_time = 5
+
+# ---- 已知硬反爬主机白名单：人工核验页面真实可达，机器探测恒返回 403 ----
+# 与 scripts/curate.py 的「403 降级重试仍 403 判定为 BOT_BLOCKED 并放行」口径保持一致；
+# mayoclinic.org 对本机浏览器 UA 实测同样返回 403，属 WAF 反爬机制而非死链。
+exclude = [
+  "^https://www\\.mayoclinic\\.org/",
+]

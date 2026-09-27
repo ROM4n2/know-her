@@ -38,23 +38,25 @@ jobs:
       - name: Collect changed markdown files
         id: changed
         run: |
+          # 归档目录（docs/** 取证记录、WORKMEMORY/** 工作日志）不参与发布内容链检
           git diff --name-only --diff-filter=ACMR \
             "origin/${{ github.base_ref }}...HEAD" -- '*.md' '*.mdx' \
+            | grep -vE '^(docs|WORKMEMORY)/' \
             > changed.txt || true
           if [ -s changed.txt ]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
             echo "Changed markdown files:" && cat changed.txt
           else
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            echo "No markdown files changed."
+            echo "No publishable markdown files changed."
           fi
 
       - name: Run lychee on changed files
         if: steps.changed.outputs.has_changes == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
-          # $(cat changed.txt) 由 action 入口的 eval 展开
-          args: --verbose --no-progress --cache --max-cache-age 1d $(cat changed.txt)
+          # $(cat changed.txt) 由 action 入口的 eval 展开；--config 读取仓库根 .lychee.toml
+          args: --config .lychee.toml --verbose --no-progress --cache --max-cache-age 1d $(cat changed.txt)
           fail: true
           failIfEmpty: false
           jobSummary: true
@@ -84,13 +86,30 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --verbose --no-progress --cache --max-cache-age 1d './**/*.md' './**/*.mdx'
+          # 显式声明巡检范围 = 站内发布内容（src/content/**）+ 开源规范文档（仓库根 3 份）。
+          # docs/** 与 WORKMEMORY/** 为内部归档（含有意保留的失效证据原文），不巡检。
+          args: >-
+            --config .lychee.toml --verbose --no-progress --cache --max-cache-age 1d
+            './src/content/**/*.md' './src/content/**/*.mdx'
+            './README.md' './CONTRIBUTING.md' './CODE_OF_CONDUCT.md'
           fail: false
           output: ./lychee-report.md
           jobSummary: true
 
-      - name: Create issue from broken links report
+      - name: Check for existing open report issue
+        id: dedup
         if: steps.lychee.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --label broken-links --state open --json number --jq 'length')
+          echo "existing=$existing" >> "$GITHUB_OUTPUT"
+          if [ "$existing" != "0" ]; then
+            echo "⏭️ 已存在待处理链检 issue（$existing 个），本次不重复开单；请先处理旧单。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create issue from broken links report
+        if: steps.lychee.outputs.exit_code != '0' && steps.dedup.outputs.existing == '0'
         uses: peter-evans/create-issue-from-file@v5
         with:
           title: "链检报告：发现失效外链"
