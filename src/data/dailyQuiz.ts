@@ -319,22 +319,7 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
 };
 
 /**
- * 计算基于北京时间（UTC+8）的当年度积日（Day of Year）
+ * 轮换数学已收敛为单一真值源 src/data/rotation.ts。
+ * 在此转出以保持既有导入路径 `from './dailyQuiz'`（如 index.astro）不破坏。
  */
-export function getDayOfYear(date: Date = new Date()): number {
-  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
-  const bjTime = new Date(utc + 3600000 * 8);
-  const start = new Date(bjTime.getFullYear(), 0, 0);
-  const diff = bjTime.getTime() - start.getTime();
-  const oneDay = 1000 * 60 * 60 * 24;
-  return Math.floor(diff / oneDay);
-}
-
-/**
- * 根据文章数量与日期，确定性返回今日主推索引
- */
-export function getTodayIndex(totalCount: number, date?: Date): number {
-  if (totalCount <= 0) return 0;
-  const day = getDayOfYear(date);
-  return (day - 1) % totalCount;
-}
+export { getDayOfYear, getTodayIndex } from './rotation';
