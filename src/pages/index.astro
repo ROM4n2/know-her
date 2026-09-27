@@ -3,6 +3,7 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import Search from '../components/Search.astro';
 import DailyCard from '../components/DailyCard.astro';
+import DailyTerm from '../components/DailyTerm.astro';
 import AmbientHero from '../components/AmbientHero.astro';
 import { CATEGORIES, SITE_TITLE, SITE_DESCRIPTION, type CategoryKey } from '../consts';
 import { DAILY_QUIZZES, getTodayIndex } from '../data/dailyQuiz';
@@ -15,6 +16,10 @@ const articles = entries
       b.data.pubDate.getTime() - a.data.pubDate.getTime() || b.id.localeCompare(a.id),
   );
 
+// 词条池：按 id 升序排序保证轮换索引在不同构建间确定性（否则每日一词会漂移）
+const allTerms: CollectionEntry<'glossary'>[] = await getCollection('glossary');
+const sortedTerms = [...allTerms].sort((a, b) => a.id.localeCompare(b.id));
+
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
   : `${import.meta.env.BASE_URL}/`;
@@ -23,6 +28,9 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 const todayIdx = getTodayIndex(articles.length);
 const featuredArticle = articles[todayIdx] ?? articles[0];
 const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefined;
+
+// 第二个独立轮换源：每日一词（与文章池共同构成 lcm(26, 28) = 364 天不重复组合）
+const todayTerm = sortedTerms[getTodayIndex(sortedTerms.length)] ?? sortedTerms[0];
 ---
 
 <Base title={SITE_TITLE} description={SITE_DESCRIPTION}>
@@ -31,6 +39,9 @@ const todayQuiz = featuredArticle ? DAILY_QUIZZES[featuredArticle.id] : undefine
 
   {/* 今日精选科普与每日速测打卡 */}
   {featuredArticle && <DailyCard article={featuredArticle} quiz={todayQuiz} />}
+
+  {/* 每日一词：第二个独立轮换源（空池降级：不渲染、不留占位） */}
+  {sortedTerms.length > 0 && todayTerm && <DailyTerm term={todayTerm} />}
 
   {/* 搜索与随机漫游 */}
   <section class="mb-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3" aria-label="站内检索与随机漫游">

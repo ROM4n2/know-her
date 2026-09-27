@@ -9,11 +9,12 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 与 G3 两组断言：
+本文件当前实现 G1 / G2 / G3 三组断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
+    G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
-G2（轮换池非空）、G4（信源准入合法）、G5（台账 schema）、
-G6（今日上新窗口）、G7（速测题占位注入）由后续 Task 逐步追加。
+G4（信源准入合法）、G5（台账 schema）、G6（今日上新窗口）、
+G7（速测题占位注入）由后续 Task 逐步追加。
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；零 Emoji。
@@ -148,6 +149,30 @@ def check_cycle_threshold(pool_sizes: list, threshold: int) -> list:
     return errors
 
 
+def check_glossary_participation(article_pool: int, glossary_pool: int) -> list:
+    """纯函数：判定词条池是否真的参与首页当日组合周期计算。
+
+    G2 核心防线：断言 lcm(文章池, 词条池) > 文章池。若词条池与文章池同相位
+    （互相整除），lcm 会坍缩回文章池自身，即「加了组件却没接进指纹」的假接入。
+    返回错误消息列表（空列表 = 通过）。
+    """
+    errors: list = []
+    if article_pool < 1 or glossary_pool < 1:
+        errors.append(
+            f"轮换池存在空池，无法证明词条池参与周期："
+            f"article_pool={article_pool}, glossary_pool={glossary_pool}"
+        )
+        return errors
+
+    cycle_days = lcm([article_pool, glossary_pool])
+    if cycle_days <= article_pool:
+        errors.append(
+            f"词条池假接入：lcm({article_pool}, {glossary_pool})={cycle_days} <= 文章池 {article_pool}，"
+            f"说明词条池与文章池同相位/被整除，未真正参与当日组合周期计算"
+        )
+    return errors
+
+
 def validate_g3_pool_cycle(errors: list) -> None:
     """G3 主断言：真实周期只由 (文章池, 词条池) 决定。
 
@@ -171,6 +196,73 @@ def validate_g3_pool_cycle(errors: list) -> None:
         )
 
     errors.extend(check_cycle_threshold(sizes, MIN_UNIQUE_CYCLE_DAYS))
+
+
+def validate_g2_pool_nonempty(errors: list) -> None:
+    """G2 主断言：三池（文章 / 速测 / 词条）规模均 >= 1，且词条池真的参与周期计算。
+
+    速测池计数显式复用既有 count_quiz_pool()（不得留无调用方死代码）；
+    词条池断言 lcm(文章池, 词条池) > 文章池，证明词条池独立相位而非被整除的假接入。
+    """
+    articles = count_article_pool()
+    quiz = count_quiz_pool()
+    glossary = count_glossary_pool()
+
+    print(f"[G2] 三池规模 articles={articles} quiz={quiz} glossary={glossary}")
+
+    # 空池守卫前置：任一池为空即短路返回，避免后续 lcm 把「空池」误当作可计算组合。
+    empty_pools = [
+        name
+        for name, size in (("articles", articles), ("quiz", quiz), ("glossary", glossary))
+        if size < 1
+    ]
+    if empty_pools:
+        errors.append(
+            f"轮换池存在空池（{', '.join(empty_pools)}）："
+            f"articles={articles}, quiz={quiz}, glossary={glossary}，请补齐对应内容源后再轮换"
+        )
+        return
+
+    cycle_days = lcm([articles, glossary])
+    print(
+        f"[G2] lcm(文章池, 词条池) = lcm({articles}, {glossary}) = {cycle_days} 天，"
+        f"> 文章池 {articles} 天 = {cycle_days > articles}（词条池真参与周期，非假接入）"
+    )
+    errors.extend(check_glossary_participation(articles, glossary))
+
+
+def validate_g2_reverse_test(errors: list) -> None:
+    """G2 反向用例 [Instinct: Reverse-Test]：词条池与文章池同相位时 G2 必须失败。
+
+    直接以 (26, 26)（lcm 坍缩回文章池自身）驱动 check_glossary_participation，
+    断言其返回非空「假接入」错误；并以互不整除的 (26, 28) 作正向对照断言通过。
+    """
+    collapsed = check_glossary_participation(26, 26)
+    if not collapsed:
+        errors.append(
+            "反向用例失效：check_glossary_participation(26, 26) 应返回非空错误列表"
+            "（lcm(26,26)=26 <= 26，词条池未参与周期），实际为空"
+        )
+        return
+
+    joined = "\n".join(collapsed)
+    if "假接入" not in joined:
+        errors.append(
+            f"反向用例失效：check_glossary_participation(26, 26) 错误信息未点名「假接入」，不可执行：{joined}"
+        )
+        return
+
+    healthy = check_glossary_participation(26, 28)
+    if healthy:
+        errors.append(
+            f"正向对照失效：check_glossary_participation(26, 28) 应通过（空错误列表），实际 {healthy}"
+        )
+        return
+
+    print(
+        f"[G2] 反向用例通过：(26,26) 检出 {len(collapsed)} 条「假接入」错误；"
+        f"正向对照 (26,28) lcm=364 通过"
+    )
 
 
 def validate_self_checks(errors: list) -> None:
@@ -332,13 +424,15 @@ def validate_quiz_coverage_reverse_test(errors: list) -> None:
 
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）与 G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）；G2/G4/G5/G6/G7 由后续 Task 追加。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）与 G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）；G4/G5/G6/G7 由后续 Task 追加。")
 
     errors: list = []
 
     validate_quiz_coverage(errors)
     validate_quiz_coverage_reverse_test(errors)
     validate_g3_pool_cycle(errors)
+    validate_g2_pool_nonempty(errors)
+    validate_g2_reverse_test(errors)
     validate_self_checks(errors)
     validate_rotation_contract(errors)
     validate_daily_quiz_reexport(errors)
@@ -349,7 +443,7 @@ def run_gate() -> None:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1 与 G3 全绿：文章<->速测题 1:1；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化，反向用例与边界自检均通过。")
+    print("[PASS] G1、G2 与 G3 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化，反向用例与边界自检均通过。")
 
 
 if __name__ == "__main__":

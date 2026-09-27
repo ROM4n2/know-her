@@ -122,7 +122,7 @@
 **Files:**
 - Modify: `scripts/test_daily_loop.py`（新增 G2 组）
 - Create: `src/components/DailyTerm.astro`
-- Modify: `src/pages/index.astro:1-33`（引入 glossary collection 与 `getWeekIndex`）与 `:32-33`（渲染位）
+- Modify: `src/pages/index.astro:20-44`（引入 glossary collection、按 id 确定性排序、`getTodayIndex` 轮换与条件挂载）
 
 > **衔接说明（Task-2 验收后追加）**：`scripts/test_daily_loop.py` 中已存在但 G3 修订后暂无调用方的 `count_quiz_pool()`（第 57 行）**必须由本任务的 G2 组接管消费**（G2 断言「三池规模均 ≥ 1」需要速测池计数）；若 G2 最终不消费它，则由本任务一并删除，禁止留下无调用方的死代码。
 
@@ -164,15 +164,19 @@
 
 ### Task 4: 「今日上新」置顶规则 [Mode: AFK] [Role: TDD Builder]
 
+> **设计修正（2026-09-27，Task-3 验收后由 Checker 席位风险提示驱动）**：
+> 初版写的是「新文章**优先占据今日精选位**（替换轮换结果）」。该做法会**扰动轮换不变量**：替换后文章维度在 7 天窗口内被冻结为同一篇（`index.astro` 按 `pubDate` 降序排序 ⇒ 最新文恒在索引 0），而词条维度继续按日推进 ⇒ 冻结期内的 7 个 `(最新文, 词条)` 组合会在随后轮换命中索引 0 时**再次出现**（例如 `Y ≡ 1 (mod 26)` 且 `Y ≡ X (mod 28)` 有解），即 `lcm(26,28)=364` 的「364 天内不重复」承诺出现**期内重复**。
+> **修正决策**：上新改为**附加展示**而非替换——「今日精选」的轮换索引（`getTodayIndex(articles.length)`）**完全不变**，若 7 天窗口内存在新文，则在 `DailyCard` 内**增补一条「今日上新」条带**（含标题与直达链接）。这样：① 产品目标（新文立刻可见，不被 26 天轮换埋没）达成；② 轮换不变量**零扰动**，G3 的 364 天承诺保持严格成立；③ 不需要新增第三个轮换维度。
+
 **Files:**
-- Modify: `src/components/DailyCard.astro:9-14`（Props 扩展）与 `:66-97`（上新徽标位）
-- Modify: `src/pages/index.astro`（7 天窗口计算）
+- Modify: `src/components/DailyCard.astro:9-14`（Props 扩展）与 `:66-97`（上新条带位）
+- Modify: `src/pages/index.astro`（7 天窗口计算 + **locale 无关的确定性排序改造**）
 - Modify: `scripts/test_daily_loop.py`（新增 G6：上新窗口纯函数断言）
 
 **Interfaces:**
 - Consumes: `articles`（按 `pubDate` 降序已排序）
 - Produces:
-  - `rotation.pickFreshArticle<T>(items: T[], getDate: (t: T) => Date, today: Date, windowDays = 7): T | null`
+  - `rotation.pickFreshArticle<T>(items: T[], getDate: (t: T) => Date, today: Date, windowDays = 7): T | null`（**纯函数，仅用于附加条带，不参与轮换索引计算**）
   - `DailyCard.astro` Props 增加 `freshArticle?: CollectionEntry<'articles'>`
 
 **Injected Instincts (Compile-Time Rule Injection):**
@@ -196,7 +200,7 @@
 **Step Breakdown:**
 - [ ] **Step 1: Write the failing test (RED)**：G6 四组边界断言。
 - [ ] **Step 2: Run test and verify it fails with expected message**。
-- [ ] **Step 3: Implement minimal production code (GREEN)**：`pickFreshArticle` + 组件徽标 + 首页接线。
+- [ ] **Step 3: Implement minimal production code (GREEN)**：`pickFreshArticle` + `DailyCard` 上新条带（附加展示，不改轮换索引）+ 首页接线；**并顺带把 `index.astro` 的 `localeCompare` 排序改为 locale 无关比较器**（`a.id < b.id ? -1 : a.id > b.id ? 1 : 0`），消除 ICU/locale 差异导致的轮换漂移风险（Task-3 验收 YELLOW-3）。
 - [ ] **Step 4: Run tests and verify all green**。
 - [ ] **Step 5: Refactor & Flatten with guard clauses (REFACTOR)**。
 - [ ] **Step 6: Physical Evidence Gate**。
@@ -208,6 +212,8 @@
 
 > **Task-1/Task-2 验收后追加的加固项（来自 Checker 席位的对抗性变异检查）**：
 > - **YELLOW-0（真实护栏缺口，优先级最高）**：Task-2 修订轮后，「两池不退化」分支**没有可红的独立反向用例**——反向用例只断言 `check_cycle_threshold([26,26], 90)` 返回**非空**，不判内容与条数；推演证明「删掉该纯函数内的整除判定循环」后 CI **仍全绿**（`[26,26]` 靠阈值分支仍返回 1 条非空）。⇒ 本任务必须补：① 断言 `len(collapsed) == 2` 且消息文本分别包含「周期坍缩」与「同相位坍缩」；② 补一个**只触发相位分支**的判别用例 `[100, 50]`（`lcm=100 ≥ 90` 过阈值，但 `50 | 100` 必须触发同相位坍缩）；③ 顺带把该脚本 docstring 中「零 Emoji」措辞改为「站点内容零 Emoji；脚本输出沿用仓库既有 `❌`/`✅` 门禁范式」，消除自相矛盾。
+> - **YELLOW-4（Task-3 验收新增 · 门禁与运行时计数口径漂移）**：`count_glossary_pool()` 当前用 `GLOSSARY_DIR.glob('*.md')`（仅顶层、不排除 `_` 前缀、不含 `.mdx`），而内容集合 loader 是 `glob({ pattern: '**/*.{md,mdx}' })` 递归加载 ⇒ 一旦 glossary 出现子目录或 `.mdx`，门禁统计的池规模将与首页实际渲染的池规模**静默脱钩**。本任务必须把文章池与词条池的计数口径**对齐**（递归 + `.md`/`.mdx` + 排除 `_` 前缀），并补一条断言：**门禁统计的池规模 == 站点实际可渲染的池规模**。
+> - **YELLOW-5（Task-3 验收新增 · G2 反向用例与真实池解耦）**：Task-3 的 G2 反向用例为**硬编码** `(26,26)` 纯函数调用，与真实池脱钩；删除 G2 主断言调用后门禁对真实数据仍绿（仅靠 G3/G1 兜底）。本任务必须补一条**基于真实池的变异断言**（例如断言 `check_glossary_participation(真实池规模, 真实池规模)` 必返非空），使「假接入」防线不再依赖一次性手工验证。
 > - **YELLOW-1（弱断言）**：Task-1 的门禁对 `rotation.ts` 仅做**源码 token 扫描**，空壳实现（如 `computeFingerprint` 恒返回 `""`）可骗过门禁 ⇒ 本任务必须补一条**行为断言**：用 `node --input-type=module -e` 载入 `rotation.ts`（Node 24 原生 TS 类型剥离），断言 `computeFingerprint(new Date('2026-01-01T00:00:00+08:00'), [26, 28])` 与手算一致、`getTodayIndex(0) === 0`、`lcm([26, 28]) === 364`。
 > - **YELLOW-2（反向用例偏间接）**：现有反向用例只验证 Python `lcm()` 自身，未驱动门禁失败路径 ⇒ 本任务必须抽出纯函数 `check_cycle_threshold(pool_sizes: list[int], threshold: int) -> list[str]`，并断言 `check_cycle_threshold([26, 26], 90)` **返回非空错误列表**（周期坍缩 + 同相位双错误，直接证明「坏数据 ⇒ 门禁失败」）。
 

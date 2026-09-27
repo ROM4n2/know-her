@@ -1,0 +1,65 @@
+---
+/**
+ * DailyTerm.astro — 首页「每日一词」纸墨卡片组件
+ * 从 glossary collection 轮换取一条词条，展示 80 字内释义并直达词典锚点。
+ * 纯服务端渲染：零客户端脚本、零 innerHTML、零 Emoji（与 DailyCard 纸墨体系一致）。
+ */
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  term: CollectionEntry<'glossary'>;
+}
+
+const { term } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+const glossaryLink = `${base}glossary/#term-${term.id}`;
+---
+
+<section
+  class="relative mb-10 overflow-hidden rounded-3xl border border-[#15140F]/15 bg-white p-6 sm:p-7 shadow-[3px_3px_0_rgba(21,20,15,0.08)]"
+  aria-label="每日一词"
+>
+  {/* 顶部结构化微标签栏 */}
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-[#15140F]/10 pb-3.5">
+    <div class="flex items-center gap-2">
+      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#15140F] text-white text-xs font-bold font-mono shadow-2xs">
+        {term.data.letter}
+      </span>
+      <div>
+        <span class="text-[10px] font-mono font-bold uppercase tracking-[0.25em] text-[#8B8676] block">
+          02 // WORD OF THE DAY
+        </span>
+        <h2 class="text-sm font-bold text-[#15140F]">每日一词</h2>
+      </div>
+    </div>
+
+    <a
+      href={glossaryLink}
+      class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/20 bg-[#FAF8F5] px-3 py-1 text-xs font-semibold text-[#15140F] shadow-2xs hover:border-rose-400 hover:text-rose-600 transition-all"
+    >
+      <span>进入词典</span>
+      <span>→</span>
+    </a>
+  </div>
+
+  {/* 词条主体：名字 / 外文名 / 释义 */}
+  <div class="flex flex-col gap-1.5">
+    <h3 class="text-lg sm:text-xl font-bold tracking-tight leading-snug text-[#15140F]">
+      <a href={glossaryLink} class="hover:text-rose-600 transition-colors">
+        {term.data.term}
+      </a>
+    </h3>
+
+    {term.data.en_term && (
+      <span class="text-xs font-mono text-[#8B8676]">{term.data.en_term}</span>
+    )}
+
+    <p class="mt-1 text-xs sm:text-sm text-[#2A2620] leading-relaxed line-clamp-3">
+      {term.data.definition}
+    </p>
+  </div>
+</section>
