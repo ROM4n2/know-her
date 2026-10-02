@@ -32,6 +32,14 @@ import urllib.error
 ARTICLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src", "content", "articles")
 VALID_CATEGORIES = ["contraception", "pleasure", "body", "intimacy"]
 
+# [P0-2] 机器占位标记：命中即说明「机器替人陈述内容已就绪」（机器自证），一律判红。
+# 这是**防呆**，只会让门禁更红：既有断言一条不放宽，仅新增一类「占位不得进库」的判据。
+# [黄卡-1] 本表是全仓**唯一真值源**（scripts/test_daily_loop.py 只引用、不得另立副本）：
+#   · ``待维护者人工提炼`` = 模板 summary 的占位文本（见 curate_harvester.compose_mdx_content）。
+#     此前漏收 ⇒ 维护者改完三条要点却忘了 summary 时 curate:check **仍绿**，占位描述直达读者。
+#   新增任何机器占位文本时，必须同步登记到本表，否则防呆对该文本空转。
+PLACEHOLDER_MARKERS = ["待人工提炼", "待人工补题", "待维护者人工提炼", "TODO(human)"]
+
 CATEGORY_NAMES = {
     "contraception": "安全避孕",
     "pleasure": "愉悦探索",
@@ -79,10 +87,16 @@ def cmd_check(args):
     files = [f for f in os.listdir(ARTICLES_DIR) if f.endswith(".mdx") and not f.startswith("_")]
     errors = 0
     print(f"🔍 检查 {len(files)} 篇文章的 frontmatter 契约...\n")
+    allow_machine_draft = bool(getattr(args, "allow_machine_draft", False))
+    if allow_machine_draft:
+        print("ℹ️ 已开启 --allow-machine-draft：本次**豁免**占位标记判红（仅供机器生成草稿时的结构自检，"
+              "合并门禁 pnpm curate:check 严禁使用）\n")
+
     for fname in sorted(files):
         fpath = os.path.join(ARTICLES_DIR, fname)
         with open(fpath, "r", encoding="utf-8") as f:
-            meta, body = parse_frontmatter(f.read())
+            text = f.read()
+        meta, body = parse_frontmatter(text)
         
         required_fields = ["title", "pubDate", "summary", "category", "source_url", "source_name"]
         missing = [rf for rf in required_fields if rf not in meta or not meta[rf]]
@@ -102,6 +116,16 @@ def cmd_check(args):
             print(f"❌ {fname}: source_url 必须是合法的 http/https URL: {url}")
             errors += 1
             continue
+
+        # [P0-2] 占位防呆：机器占位标记进库 = 机器替人向读者陈述内容已就绪（自证），
+        # 命中即判红。**不得**为了让门禁变绿而删改文章——只能由人工补写内容。
+        if not allow_machine_draft:
+            hits = [m for m in PLACEHOLDER_MARKERS if m in text]
+            if hits:
+                print(f"❌ {fname}: 含机器占位标记 {hits}"
+                      f"（须由人工补写完整后才能合并；机器不得自证）")
+                errors += 1
+                continue
 
         print(f"✅ {fname} ({CATEGORY_NAMES.get(cat)}) 格式规范")
 
@@ -332,7 +356,13 @@ def main():
     subparsers.add_parser("list", help="列出所有已收录科普文章")
 
     # check
-    subparsers.add_parser("check", help="校验文章格式合规性")
+    check_p = subparsers.add_parser("check", help="校验文章格式合规性")
+    check_p.add_argument(
+        "--allow-machine-draft",
+        action="store_true",
+        help="豁免「机器占位标记」判红：仅供 curate_harvester 在生成草稿时做结构自检"
+             "（草稿按设计含占位，须由人工补写）；合并门禁 pnpm curate:check 严禁使用本开关",
+    )
 
     # check-links
     check_links_p = subparsers.add_parser("check-links", help="在线探测词条原出处外链可达性（五态分级，杜绝404）")

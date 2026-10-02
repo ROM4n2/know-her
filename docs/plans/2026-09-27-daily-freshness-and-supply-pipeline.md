@@ -496,6 +496,24 @@
 
 **已执行的 GitHub 侧操作**：关闭 PR #4（附原因）并删除分支 `candidate/contraception-oral-contraceptives`，解开死锁；当前零 open PR、零候选分支。该候选将随后续流水线基于最新 master 重新生成。
 
+#### 附录二：三席群审后的 P0 止血回合（2026-10-02~03）
+
+上表四项修复上线后，用 `dfs-team` 群审（code-reviewer / sre-resilience / product-ux 三席 + 两名怀疑者反证，原始 42 条塌缩为 25 条），产出 **3 条 CONFIRMED 的 P0**，本回合全部修复：
+
+| P0 | 缺陷 | 实证 | 修法 |
+|---|---|---|---|
+| 1 | **关闭候选 PR ⇒ 次日 `--force-with-lease` 静默覆盖远端人工提交（不可恢复）** | lease 基准取自 `refs/remotes/origin/<branch>`，而 `remote.origin.fetch` 是全量 refspec + `fetch-depth: 0` ⇒ `origin/<branch>` 存在 ⇒ lease 成立 ⇒ **覆盖** | `_remote_branch_exists`（`git ls-remote --heads`，**重试 1 次后 fail-closed**）在 push 前守卫；命中 ⇒ 返回 `PR_RESULT_SKIPPED_REMOTE_EXISTS` + `::warning::` + `git push origin --delete` 解锁指引，**绝不推送**；force 改为普通 push；`gh pr create` 失败兜底删远端分支。**门禁断言为打桩 `subprocess.run` 的行为级断言**（零 `--force*`/`-f` + push 前确有 ls-remote + 反空转），不用文本扫描（后者会被注释里的 `--force-with-lease` 字面量误伤） |
+| 2 | **机器替人向读者声明「已核验」并给全站最高证据等级**（踩「机器不得自证」红线） | 模板硬编码 `evidence_tier: "A"`（schema 默认应是更保守的 `B`）、`last_verified_at` 填今天；`curate.py` 只校验非空 ⇒ 全部放行并渲染给读者 | 模板**省略** `last_verified_at` / `reviewed_by` / `evidence_tier`（后者走 schema 默认 B）；新增占位防呆（`curate.py` + G9），标记表补 `待维护者人工提炼` 并改为**单一真值源**（测试端引用 `curate.PLACEHOLDER_MARKERS`） |
+| 3 | **每日 PR 路径不注入速测题占位，且所有可见指引都不提速测题** ⇒ 人做完 checklist 仍无法让 G1 变绿 | 线上 PR #5 body 四条 checklist 无一提速测题；CI 红在 `[G1] 缺少速测题` | `create_draft_pr` 注入占位 + `git add` 纳入 `dailyQuiz.ts`；模板与 PR 正文均点名「补全速测题」并说明 G1 强制 1:1；PR 正文加「`dailyQuiz.ts` 冲突只需保留双方条目」化解指引 |
+
+另闭合 **E1（已登记未修）**：`run_draft_url` 判重前置到写盘之前 ⇒ 同 URL 二次执行只产 1 个 `.mdx`，不再双份且 G1 不再被对称骗过。
+
+**评审红卡（已在同一批吃掉）**：新状态 `PR_RESULT_SKIPPED_REMOTE_EXISTS` 在 `run_create_pr` 中无分支处理 ⇒ 落入 `failed` ⇒ 每天 `::error::` + **exit 1**，把 R4 刚消灭的「定时 Harvest 每天变红」又造回来。已改为与 `SKIPPED_DUPLICATE` 同列（属**等待人工**而非故障）：`failed == 0` ⇒ `_report_backlog`（exit 0 + `::warning::` + 解锁命令）；仅 `failed > 0` ⇒ `_report_failure`（exit 1 + `::error::`）。
+
+证据：门禁 G1~G9 全绿；**变异自证共 12 例**（P0 回合 7 例 + 红卡回合 5 例）全部「破坏 ⇒ exit 1 ⇒ sha256 逐字节还原 ⇒ 复绿」；三项实测 + `pnpm test` 36 页 + `curate:check` 26/26 + dry-run 全绿。
+
+**P0-3 的已知代价（接受）**：候选分支携带 `dailyQuiz.ts`，多 PR 并存时会与 master 冲突（共享热点从台账换成了题库）。不注入则 G1 必红、代价更大；化解靠「冲突时保留双方条目」指引，**不建议**自动串行化为单 PR 队列。根治需拆 `src/data/quizzes/<slug>.ts` 侧车文件（应单开 ADR）。
+
 **残留风险（已知，未修）**：① 台账在 CI 中**不再持久化** ⇒ 跨运行去重完全依赖「已合并文章 `source_url`」+「open-PR 守卫」；**PR 被「关闭（拒绝）而非合并」的候选无持久记忆，可能被反复提起**。② E① 自检为 `continue-on-error` 非阻断，草稿被破坏时 Harvest 仍绿（仅摘要记录）。③ G9 对 `satteri` 的 pnpm 路径有硬耦合：上游换引擎会**响亮变红**（非静默），需同步更新 `_resolve_mdx_compiler`。④ 模板 frontmatter 未转义引号（`title`/`source_name` 含 `"` 会破坏 YAML）——**既有问题**，本批未处理。
 
 #### F1 修复后对两个新信源的重新判定（**直接改变 Task-10 决策依据**）

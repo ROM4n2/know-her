@@ -29,12 +29,25 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
     G9（草稿模板真实 MDX 编译：compose_mdx_content 输出经 node + 本项目 MDX 引擎真实编译须通过、
         且不含 `<!--`、无抓取文本 raw_desc 泄漏；含反向用例证明 `<!--` 与 JSX 注释内 `*/` 抓取文本
         均可判红；候选分支不带台账（git add 仅暂存 .mdx）；跳过/零进展语义可区分且 ::warning:: 可见）
+    G9[P0 止血]（**行为级**断言，拒绝文本扫描：以打桩 subprocess.run 记录的真实实参为物证）
+        P0-1 远端分支永不强制覆盖：实际 git push 实参零 --force*/-f（含反空转守卫）+ 推送前
+        必须真实调用 git ls-remote --heads origin <branch>；远端已存在 ⇒ 不推送 + 给出解锁指引；
+        P0-2 模板不得机器自证（无 last_verified_at / reviewed_by / evidence_tier）；
+        P0-3 PR 路径必须注入速测题占位并把 dailyQuiz.ts 纳入 git add；
+        E1 判重前置到写盘之前（同一 URL 二次执行只产出 1 个 .mdx / 1 条占位）
+    G9[红卡]（远端残留 = **等待人工**，非故障）``PR_RESULT_SKIPPED_REMOTE_EXISTS`` 与
+        ``PR_RESULT_SKIPPED_DUPLICATE`` 同列：exit 0 + ``::warning::`` + 解锁命令、零 ``::error::``
+    G9[黄卡清理]①占位标记**单一真值源** curate.PLACEHOLDER_MARKERS，且必须覆盖模板 summary 的
+        占位文本；②还原 dailyQuiz.ts 失败**必须告警**（禁 ``except OSError: pass``）；
+        ③``ls-remote`` 重试 1 次后再 fail-closed；④生产模块零 ``os.system(`` / ``shell=True`` 后门；
+        ⑤PR 正文含 dailyQuiz.ts 冲突化解指引（保留双方条目）
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
       站点内容（.mdx/.astro）零 Emoji；脚本输出沿用仓库既有 ❌/✅/[PASS]/[FAIL] 门禁范式。
 """
 
+import argparse
 import contextlib
 import datetime
 import hashlib
@@ -53,6 +66,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import curate_harvester as ch
+# [黄卡-1] 机器占位标记的**单一真值源**：门禁端（curate.py）定义，测试端只引用、不得另立副本。
+import curate
 
 ROOT_DIR = SCRIPT_DIR.parent
 
@@ -2427,6 +2442,8 @@ def _make_pr_subprocess_stub(
     push_fail_slugs=(),
     gh_create_fail: bool = False,
     status_dirty_fn=None,
+    remote_exists_branches=(),
+    ls_remote_fail_times: int = 0,
 ):
     """构造记录型 ``subprocess.run`` 替身：模拟 git/gh，零真实进程、零网络。
 
@@ -2435,10 +2452,16 @@ def _make_pr_subprocess_stub(
     - ``prefetch_ok``：预取是否成功（False ⇒ 返回非零，触发逐候选 ``--head`` 回退）；
     - ``push_fail_slugs``：命中这些子串的分支 ``git push`` 返回非零（模拟 push 阶段失败）；
     - ``gh_create_fail``：``gh pr create`` 返回非零（模拟创建失败）；
-    - ``status_dirty_fn``：可选回调，返回 True 时 ``git status --porcelain`` 报脏（模拟失败候选污染工作区）。
+    - ``status_dirty_fn``：可选回调，返回 True 时 ``git status --porcelain`` 报脏（模拟失败候选污染工作区）；
+    - ``remote_exists_branches``：``git ls-remote --heads origin <branch>`` 返回非空输出的分支
+      （模拟「远端已残留该分支，可能含人工提交」；[P0-1] 的默认空集 = 远端不存在 ⇒ 正常推送）；
+    - ``ls_remote_fail_times``：前 N 次 ``git ls-remote`` 返回**非零**（模拟网络抖动），
+      用于断言「重试 1 次后再 fail-closed」（单次抖动不得让整批候选被误判「远端已存在」而跳过）。
     遵守 ``check=True`` 语义：非零退出码时抛 ``CalledProcessError``（否则 push 重试/失败逻辑无法触发）。
     """
     occupied = {str(b) for b in (open_pr_branches or ())}
+    remote_occupied = {str(b) for b in (remote_exists_branches or ())}
+    ls_remote_state = {"calls": 0}
 
     def _complete(returncode, stdout="", stderr="", check=False, cmd=None):
         result = _FakeCompleted(returncode, stdout, stderr)
@@ -2455,6 +2478,16 @@ def _make_pr_subprocess_stub(
             return _complete(0, " M some-dirty-file\n" if dirty else "", check=check, cmd=cmd)
         if head == ["git", "branch", "--show-current"]:
             return _complete(0, "master\n", check=check, cmd=cmd)
+        if head[:2] == ["git", "ls-remote"]:
+            ls_remote_state["calls"] += 1
+            if ls_remote_state["calls"] <= ls_remote_fail_times:
+                return _complete(1, "", "git: network jitter", check=check, cmd=cmd)
+            branch = cmd[-1]
+            if branch in remote_occupied:
+                return _complete(
+                    0, f"deadbeef1234567890\trefs/heads/{branch}\n", check=check, cmd=cmd
+                )
+            return _complete(0, "", check=check, cmd=cmd)
         if head[:3] == ["gh", "pr", "list"]:
             if "--head" in cmd:
                 return _complete(
@@ -2489,6 +2522,7 @@ def _stubbed_create_draft_pr_env(existing_open_pr: bool, **stub_kwargs):
     original_run = subprocess.run
     original_articles = ch.ARTICLES_DIR
     original_ledger = ch.LEDGER_FILE
+    original_quiz = ch.QUIZ_FILE
     original_cache = getattr(ch, "_OPEN_CANDIDATE_BRANCHES", None)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -2496,6 +2530,14 @@ def _stubbed_create_draft_pr_env(existing_open_pr: bool, **stub_kwargs):
         articles_dir.mkdir(parents=True, exist_ok=True)
         ch.ARTICLES_DIR = str(articles_dir)
         ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+        # [P0-3] create_draft_pr 会**真实写入** src/data/dailyQuiz.ts（注入速测题占位）。
+        # 不重定向就会污染仓库真文件（G1 的 1:1 随即被破坏）⇒ 复制到 temp 后再注入。
+        quiz_file = tmp_dir / "dailyQuiz.ts"
+        try:
+            quiz_file.write_text(_read_text(Path(original_quiz)), encoding="utf-8")
+        except OSError:
+            quiz_file.write_text("export const DAILY_QUIZZES = {};\n", encoding="utf-8")
+        ch.QUIZ_FILE = str(quiz_file)
         if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
             ch._OPEN_CANDIDATE_BRANCHES = None
         subprocess.run = _make_pr_subprocess_stub(recorded, existing_open_pr, **stub_kwargs)
@@ -2505,6 +2547,7 @@ def _stubbed_create_draft_pr_env(existing_open_pr: bool, **stub_kwargs):
             subprocess.run = original_run
             ch.ARTICLES_DIR = original_articles
             ch.LEDGER_FILE = original_ledger
+            ch.QUIZ_FILE = original_quiz
             if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
                 ch._OPEN_CANDIDATE_BRANCHES = original_cache
 
@@ -2828,6 +2871,7 @@ def validate_g9_failed_candidate_isolated(errors: list) -> None:
     original_save = ch.save_ledger
     original_articles = ch.ARTICLES_DIR
     original_ledger = ch.LEDGER_FILE
+    original_quiz = ch.QUIZ_FILE
     original_cache = getattr(ch, "_OPEN_CANDIDATE_BRANCHES", None)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -2835,6 +2879,13 @@ def validate_g9_failed_candidate_isolated(errors: list) -> None:
         articles_dir.mkdir(parents=True, exist_ok=True)
         ch.ARTICLES_DIR = str(articles_dir)
         ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+        # [P0-3] 速测题占位注入必须落在 temp 副本，不得污染仓库真文件
+        quiz_file = tmp_dir / "dailyQuiz.ts"
+        try:
+            quiz_file.write_text(_read_text(Path(original_quiz)), encoding="utf-8")
+        except OSError:
+            quiz_file.write_text("export const DAILY_QUIZZES = {};\n", encoding="utf-8")
+        ch.QUIZ_FILE = str(quiz_file)
         state = {"ledger_dirty": False}
 
         def _save_probe(ledger):
@@ -2860,6 +2911,7 @@ def validate_g9_failed_candidate_isolated(errors: list) -> None:
             ch.save_ledger = original_save
             ch.ARTICLES_DIR = original_articles
             ch.LEDGER_FILE = original_ledger
+            ch.QUIZ_FILE = original_quiz
             if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
                 ch._OPEN_CANDIDATE_BRANCHES = original_cache
         printed = buffer.getvalue()
@@ -2957,6 +3009,743 @@ def validate_g9_prefetch_exclude(errors: list) -> None:
         print(
             "[G9][R3] 预过滤通过：单次预取即排除 2 个被占用候选、只创建首个未被占用者；"
             "预取失败退回逐个 --head 检查（不崩，积压 exit 0）"
+        )
+
+
+# [黄卡-1] 机器占位标记：命中即说明「机器替人陈述内容已就绪」，属机器自证，禁止进库。
+# **单一真值源**：一律引用 curate.py（门禁端）的 PLACEHOLDER_MARKERS。此前测试端另存一份字面量
+# 副本 ⇒ 与门禁端必然漂移（本轮实证：模板 summary 的占位文本「待维护者人工提炼」门禁表缺失，
+# 测试副本无感 ⇒ 维护者忘了 summary 时 curate:check 仍绿，占位描述直达读者）。
+PLACEHOLDER_MARKERS = tuple(curate.PLACEHOLDER_MARKERS)
+
+
+def _is_force_flag(arg) -> bool:
+    """[P0-1] 判定一个 git 实参是否属于「强制推送族」。
+
+    覆盖 ``--force`` / ``--force-with-lease`` / ``--force-if-includes`` 等长参，
+    以及 ``-f`` 与其组合短参（``-uf`` / ``-fu``，git 允许短参合并书写）。
+    """
+    text = str(arg)
+    if text.startswith("--force"):
+        return True
+    if text.startswith("-") and not text.startswith("--"):
+        return "f" in set(text[1:])
+    return False
+
+
+def _drive_create_draft_pr(**stub_kwargs) -> tuple:
+    """在**全打桩**环境里真实驱动一次 ``create_draft_pr``，返回 ``(result, calls, printed)``。
+
+    ``calls`` 是打桩 ``subprocess.run`` 收到的每一次**真实实参**（按调用顺序），
+    是行为断言的唯一物证来源：零真实 git、零真实 gh、零网络。
+    """
+    buffer = io.StringIO()
+    with _stubbed_create_draft_pr_env(existing_open_pr=False, **stub_kwargs) as recorded:
+        with contextlib.redirect_stdout(buffer):
+            result = ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+        calls = [list(cmd) for cmd in recorded]
+    return result, calls, buffer.getvalue()
+
+
+def validate_g9_no_force_overwrite(errors: list) -> None:
+    """G9[P0-1]：候选分支**永不**强制覆盖远端（关闭 PR 后次日 force 推送会静默覆盖人工提交）。
+
+    **本断言是行为级的，不是文本扫描**（历史教训：``inspect.getsource`` 里正则找 ``--force``
+    会命中解释性注释中的字面量 ⇒ 注释里写个 ``--force*`` 就误判红、删掉注释就不判红，
+    判别力完全取决于注释措辞，属脆弱门禁，已废弃）。
+
+    行为断言的做法：打桩 ``subprocess.run`` 记录每一次真实实参，驱动一次完整的
+    ``create_draft_pr``（远端不存在 ⇒ 真正走推送路径），据此断言：
+
+    - 实际发出的**每条** ``git push`` 实参中都不出现任何 ``--force*`` / ``-f``；
+    - 推送**之前**确实调用过 ``git ls-remote --heads origin <branch>``（守卫真执行了，非摆设）；
+    - 反空转：正常路径必须观测到 >= 1 次 ``git push``，否则「零 force」退化成永真断言。
+
+    另两条实测（同为行为级）：
+
+    - ``ls-remote`` 返回非空 ⇒ 返回 ``PR_RESULT_SKIPPED_REMOTE_EXISTS``、**不推送**，
+      且打印 ``::warning::`` 与**可执行的解锁指引**（``git push origin --delete <branch>``）；
+    - 相互作用：``gh pr create`` 失败把分支留在远端，若不清理会被新守卫永久阻塞
+      ⇒ 必须 best-effort 执行 ``git push origin --delete``。
+    """
+    required = (
+        "create_draft_pr",
+        "PR_RESULT_CREATED",
+        "PR_RESULT_SKIPPED_DUPLICATE",
+        "PR_RESULT_SKIPPED_REMOTE_EXISTS",
+        "PR_RESULT_ERROR",
+    )
+    missing = [name for name in required if not hasattr(ch, name)]
+    if missing:
+        errors.append(f"[G9][P0-1] curate_harvester 缺少远端守卫所需成员：{missing}")
+        return
+    values = [getattr(ch, name) for name in required[1:]]
+    if len(set(values)) != len(values):
+        errors.append(f"[G9][P0-1] PR_RESULT_* 四个常量必须两两不同，实际 {values}")
+
+    branch = "candidate/g9-fixture"
+    ls_remote_cmd = ["git", "ls-remote", "--heads", "origin", branch]
+
+    # —— 行为断言①：正常路径（远端不存在）⇒ 真实推送，且实参零 force ——
+    result_ok, rec_ok, printed_ok = _drive_create_draft_pr()
+    pushes_ok = [cmd for cmd in rec_ok if cmd[:2] == ["git", "push"]]
+    force_hits = [(cmd, arg) for cmd in pushes_ok for arg in cmd if _is_force_flag(arg)]
+    ls_remote_idx = next((i for i, c in enumerate(rec_ok) if c[:2] == ["git", "ls-remote"]), None)
+    first_push_idx = next((i for i, c in enumerate(rec_ok) if c[:2] == ["git", "push"]), None)
+
+    if force_hits:
+        errors.append(
+            "[G9][P0-1] 行为断言：实际执行的 git push 携带强制推送参数（会静默覆盖远端人工提交，"
+            f"不可恢复）：{force_hits}"
+        )
+    if not pushes_ok:
+        errors.append(
+            "[G9][P0-1] 行为断言空转：正常路径未观测到任何 git push"
+            "（「零 --force*」将退化为永真断言，失去判别力）："
+            f"recorded={rec_ok}"
+        )
+    if ls_remote_cmd not in rec_ok:
+        errors.append(
+            "[G9][P0-1] 推送前未真实调用 `git ls-remote --heads origin <branch>`"
+            "（存在性守卫未执行 ⇒ 残留分支会被静默覆盖）："
+            f"实际 ls-remote 调用={[c for c in rec_ok if c[:2] == ['git', 'ls-remote']]}"
+        )
+    if (
+        ls_remote_idx is not None
+        and first_push_idx is not None
+        and ls_remote_idx > first_push_idx
+    ):
+        errors.append(
+            f"[G9][P0-1] ls-remote 探测发生在 push 之后（idx {ls_remote_idx} > {first_push_idx}）"
+            "⇒ 守卫形同虚设，覆盖风险仍在"
+        )
+    if result_ok != ch.PR_RESULT_CREATED:
+        errors.append(
+            f"[G9][P0-1] 远端不存在时应正常创建并返回 PR_RESULT_CREATED，实际 {result_ok!r}"
+            f"（输出尾部：{printed_ok[-200:]!r}）"
+        )
+
+    # —— 行为断言②：远端已存在 ⇒ 返回可区分的「已存在」常量、git push 从未被调用 ——
+    result, rec_exists, printed = _drive_create_draft_pr(remote_exists_branches=(branch,))
+    pushes = [cmd for cmd in rec_exists if cmd[:2] == ["git", "push"]]
+    if result != ch.PR_RESULT_SKIPPED_REMOTE_EXISTS:
+        errors.append(
+            f"[G9][P0-1] 远端分支已存在时应返回 PR_RESULT_SKIPPED_REMOTE_EXISTS，实际 {result!r}"
+        )
+    if pushes:
+        errors.append(f"[G9][P0-1] 远端分支已存在时仍执行了 git push（会覆盖人工提交）：{pushes}")
+    if "::warning::" not in printed:
+        errors.append(f"[G9][P0-1] 跳过未在 Actions UI 可见（缺 ::warning::）：{printed[-300:]!r}")
+    if "git push origin --delete" not in printed:
+        errors.append(
+            f"[G9][P0-1] 跳过提示缺少**可执行**的解锁指引（git push origin --delete）：{printed[-300:]!r}"
+        )
+    if branch not in printed:
+        errors.append(f"[G9][P0-1] 跳过提示未点名分支（维护者无从执行解锁）：{printed[-300:]!r}")
+
+    # —— 行为断言③：相互作用 —— gh pr create 失败 ⇒ 分支已留在远端 ⇒ 必须 best-effort 删除
+    _result2, rec2, _printed2 = _drive_create_draft_pr(gh_create_fail=True)
+    deletes = [cmd for cmd in rec2 if cmd[:2] == ["git", "push"] and "--delete" in cmd]
+    if not deletes:
+        errors.append(
+            "[G9][P0-1] gh pr create 失败后未 best-effort 删除远端残留分支"
+            "（该候选会被新增的 ls-remote 守卫永久阻塞）"
+        )
+
+    # —— 静态守卫（行为断言的补强）——：行为断言只钉住「记录的实参」，若有绕过 subprocess
+    # 记录的隐藏通道（os.system / shell=True）仍可真推。故生产模块源码**不得**出现二者。
+    # 只扫生产模块（curate_harvester.py / curate.py），不扫本测试文件（本文件含二者字面量）。
+    shell_backdoors = []
+    for module_name in ("curate_harvester.py", "curate.py"):
+        try:
+            source = _read_text(SCRIPT_DIR / module_name)
+        except OSError as exc:
+            errors.append(f"[G9][P0-1] 无法读取生产模块 {module_name} 源码以做后门扫描：{exc}")
+            continue
+        for token in ("os.system(", "shell=True"):
+            if token in source:
+                shell_backdoors.append((module_name, token))
+    if shell_backdoors:
+        errors.append(
+            f"[G9][P0-1] 生产模块存在绕过行为断言的隐藏执行通道 {shell_backdoors}"
+            "（os.system / shell=True 可真推而不被 subprocess 打桩观测到）"
+        )
+
+    if (
+        not missing
+        and len(set(values)) == len(values)
+        and not force_hits
+        and bool(pushes_ok)
+        and ls_remote_cmd in rec_ok
+        and not (ls_remote_idx is not None and first_push_idx is not None and ls_remote_idx > first_push_idx)
+        and result_ok == ch.PR_RESULT_CREATED
+        and result == ch.PR_RESULT_SKIPPED_REMOTE_EXISTS
+        and not pushes
+        and "::warning::" in printed
+        and "git push origin --delete" in printed
+        and branch in printed
+        and deletes
+        and not shell_backdoors
+    ):
+        print(
+            "[G9][P0-1] 远端守卫通过（**行为断言**，非文本扫描）："
+            f"实际发出的 {len(pushes_ok)} 次 git push 实参零 --force*/-f（反空转：已观测到真实推送）；"
+            f"推送前先执行 `git ls-remote --heads origin {branch}`；远端已存在 ⇒ 返回 "
+            f"{result!r}、git push 从未被调用、并给出可删除指引；gh pr create 失败后 best-effort 删除远端分支；"
+            "生产模块零 os.system( / shell=True 隐藏执行通道"
+        )
+
+
+def validate_g9_no_machine_self_attestation(errors: list) -> None:
+    """G9[P0-2]：机器不得替人声明「已核验」/ 自评全站最高证据等级。
+
+    - ``compose_mdx_content`` 产物**不得**含 ``last_verified_at`` / ``reviewed_by`` / ``evidence_tier``
+      （省略后者以让 ``src/content.config.ts`` 的 schema default 成为唯一真值源）；
+    - 占位防呆：任一既有 ``src/content/articles/*.mdx`` 命中机器占位标记 ⇒ 判红。
+    """
+    if not hasattr(ch, "compose_mdx_content"):
+        errors.append("[G9][P0-2] curate_harvester 缺少 compose_mdx_content()")
+        return
+
+    mdx = ch.compose_mdx_content(dict(_G9_FIXTURE_CANDIDATE))
+    for forbidden in ("last_verified_at", "reviewed_by"):
+        if forbidden in mdx:
+            errors.append(
+                f"[G9][P0-2] 草稿模板仍由机器自填 `{forbidden}`"
+                "（机器替人向读者声明「已核验」，踩中「机器不得自证」红线）"
+            )
+    if "evidence_tier" in mdx:
+        errors.append(
+            "[G9][P0-2] 草稿模板仍写入 evidence_tier（应省略以走 schema 默认 B；"
+            "硬编码 A = 机器自评全站最高证据等级）"
+        )
+
+    hits = []
+    for path in sorted(ARTICLES_DIR.glob("*.mdx")):
+        text = _read_text(path)
+        found = [m for m in PLACEHOLDER_MARKERS if m in text]
+        if found:
+            hits.append((path.name, found))
+    if hits:
+        errors.append(
+            f"[G9][P0-2] 既有文章残留机器占位标记（线上已有占位内容，须人工补写后方可合并）：{hits}"
+        )
+
+    ok = (
+        "last_verified_at" not in mdx
+        and "reviewed_by" not in mdx
+        and "evidence_tier" not in mdx
+        and not hits
+    )
+    if ok:
+        print(
+            "[G9][P0-2] 机器不自证通过：草稿模板不含 last_verified_at / reviewed_by / evidence_tier"
+            f"（证据等级交给 schema 默认）；{len(list(ARTICLES_DIR.glob('*.mdx')))} 篇既有文章零占位标记"
+        )
+
+
+def validate_g9_pr_path_quiz_placeholder(errors: list) -> None:
+    """G9[P0-3]：每日 PR 路径必须与本地路径一样注入速测题占位，且**所有可见指引**都点名速测题。
+
+    - ``create_draft_pr`` 必须调用 ``inject_quiz_placeholder`` 并把 ``dailyQuiz.ts`` 纳入 ``git add``；
+    - 模板注释块 与 PR 正文 checklist 各须含一条「补全速测题占位」，且说明 G1 强制 1:1。
+    """
+    if not hasattr(ch, "create_draft_pr"):
+        errors.append("[G9][P0-3] curate_harvester 缺少 create_draft_pr()")
+        return
+
+    mdx = ch.compose_mdx_content(dict(_G9_FIXTURE_CANDIDATE))
+    if "速测题" not in mdx:
+        errors.append(
+            "[G9][P0-3] 草稿模板注释块缺少「补全速测题占位」指引"
+            "（维护者照模板做完仍会红在 [G1] 且不知缺什么）"
+        )
+    if "1:1" not in mdx:
+        errors.append("[G9][P0-3] 模板速测题指引未说明 G1 门禁强制文章↔速测题 1:1")
+
+    with _stubbed_create_draft_pr_env(existing_open_pr=False) as recorded:
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+        quiz_text = Path(ch.QUIZ_FILE).read_text(encoding="utf-8")
+    staged = [arg for cmd in recorded if cmd[:2] == ["git", "add"] for arg in cmd[2:]]
+    if not any(str(arg).endswith("dailyQuiz.ts") for arg in staged):
+        errors.append(f"[G9][P0-3] create_draft_pr 未把 dailyQuiz.ts 纳入 git add：{staged}")
+    if "articleId: 'g9-fixture'" not in quiz_text:
+        errors.append(
+            "[G9][P0-3] create_draft_pr 未注入速测题占位"
+            "（候选分支内缺题 ⇒ [G1] 判定「文章缺少速测题」，PR 在分支内无法自洽）"
+        )
+    pr_create = next((cmd for cmd in recorded if cmd[:3] == ["gh", "pr", "create"]), None)
+    body = ""
+    if pr_create is not None and "--body" in pr_create:
+        body = pr_create[pr_create.index("--body") + 1]
+    if "速测题" not in body:
+        errors.append("[G9][P0-3] PR 正文 checklist 缺少速测题条目（可见指引不完整 ⇒ 维护者无法变绿）")
+    if "1:1" not in body:
+        errors.append("[G9][P0-3] PR 正文速测题条目未说明 G1 门禁强制文章↔速测题 1:1")
+    # [黄卡-5] 冲突化解指引：dailyQuiz.ts 的冲突只需「保留双方条目」（各条目按 articleId 独立），
+    # 否则维护者按「二选一」的直觉解法删掉他人条目 ⇒ G1 的 1:1 被破坏、他人文章立刻没了题。
+    if "冲突" not in body:
+        errors.append(
+            "[G9][P0-3][黄卡-5] PR 正文缺少「冲突化解」指引（多候选并行时 dailyQuiz.ts 必然冲突，"
+            "维护者不知如何解 ⇒ 易误删他人条目）"
+        )
+    if "保留双方条目" not in body:
+        errors.append(
+            "[G9][P0-3][黄卡-5] PR 正文未点明「保留双方条目」（dailyQuiz.ts 冲突的正确解法；"
+            "缺省会被理解成二选一 ⇒ 删他人条目即破 G1 的 1:1）"
+        )
+
+    ok = (
+        "速测题" in mdx
+        and "1:1" in mdx
+        and any(str(arg).endswith("dailyQuiz.ts") for arg in staged)
+        and "articleId: 'g9-fixture'" in quiz_text
+        and "速测题" in body
+        and "1:1" in body
+        and "冲突" in body
+        and "保留双方条目" in body
+    )
+    if ok:
+        print(
+            "[G9][P0-3] PR 路径速测题自洽通过：create_draft_pr 注入占位并把 dailyQuiz.ts 纳入提交"
+            f"（结果 {result!r}）；模板与 PR 正文均点名「补全速测题」且说明 G1 强制 1:1；"
+            "PR 正文含 dailyQuiz.ts 冲突化解指引（保留双方条目）"
+        )
+
+
+def validate_g9_draft_url_dedupe_before_write(errors: list) -> None:
+    """G9[E1]：``--draft-url`` 的判重必须**前置到写盘之前**（不得先产出再判重）。
+
+    同一 URL 连续两次执行 ⇒ 只产出 **1 个** ``.mdx`` + **1 条**速测题占位，第二次打印
+    「已存在，未重复生成」并指向已存在文件；否则重复文章可借 G1 的对称性恒绿直接上线。
+    """
+    if not hasattr(ch, "run_draft_url"):
+        errors.append("[G9][E1] curate_harvester 缺少 run_draft_url()")
+        return
+
+    url = "https://example.test/g9-dedupe-fixture"
+    candidate = {**_G9_FIXTURE_CANDIDATE, "slug": "g9-dedupe", "source_url": url}
+    original_build = ch._build_draft_candidate
+    original_articles = ch.ARTICLES_DIR
+    original_ledger = ch.LEDGER_FILE
+    original_quiz = ch.QUIZ_FILE
+    code1 = code2 = None
+    printed1 = printed2 = ""
+    count1 = count2 = 0
+    quiz_text = ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            articles_dir = tmp_dir / "articles"
+            articles_dir.mkdir(parents=True, exist_ok=True)
+            ch.ARTICLES_DIR = str(articles_dir)
+            ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+            quiz_file = tmp_dir / "dailyQuiz.ts"
+            try:
+                quiz_file.write_text(_read_text(Path(original_quiz)), encoding="utf-8")
+            except OSError:
+                quiz_file.write_text("export const DAILY_QUIZZES = {};\n", encoding="utf-8")
+            ch.QUIZ_FILE = str(quiz_file)
+            # 零网络：直接替换候选构造（真实实现会 fetch_url）
+            ch._build_draft_candidate = lambda _url, _sources: dict(candidate)
+            buffer1 = io.StringIO()
+            with contextlib.redirect_stdout(buffer1):
+                code1 = ch.run_draft_url(url)
+            printed1 = buffer1.getvalue()
+            count1 = len(list(articles_dir.glob("*.mdx")))
+            buffer2 = io.StringIO()
+            with contextlib.redirect_stdout(buffer2):
+                code2 = ch.run_draft_url(url)
+            printed2 = buffer2.getvalue()
+            count2 = len(list(articles_dir.glob("*.mdx")))
+            quiz_text = quiz_file.read_text(encoding="utf-8")
+    finally:
+        ch._build_draft_candidate = original_build
+        ch.ARTICLES_DIR = original_articles
+        ch.LEDGER_FILE = original_ledger
+        ch.QUIZ_FILE = original_quiz
+
+    entries = quiz_text.count("articleId: 'g9-dedupe'")
+    if count1 != 1:
+        errors.append(f"[G9][E1] 首次执行应产出 1 个 .mdx，实际 {count1}（输出：{printed1[-200:]!r}）")
+    if count2 != 1:
+        errors.append(
+            f"[G9][E1] 同一 URL 二次执行后 .mdx 数应仍为 1，实际 {count2}"
+            "（判重仍在写盘之后 ⇒ 重复文章可直接上线）"
+        )
+    if entries != 1:
+        errors.append(f"[G9][E1] 速测题占位应只有 1 条，实际 {entries} 条（判重未前置 ⇒ 重复占位）")
+    if "已存在" not in printed2 or "未重复生成" not in printed2:
+        errors.append(
+            f"[G9][E1] 二次执行未打印明确的「已存在，未重复生成」语义：{printed2[-300:]!r}"
+        )
+    if ".mdx" not in printed2:
+        errors.append(f"[G9][E1] 二次执行未指向已存在的文件路径：{printed2[-300:]!r}")
+    if code2 != 0:
+        errors.append(f"[G9][E1] 二次执行（去重跳过）应 exit 0，实际 {code2}")
+
+    if count1 == 1 and count2 == 1 and entries == 1 and "未重复生成" in printed2 and code2 == 0:
+        print(
+            "[G9][E1] 判重前置通过：同一 URL 二次执行只产出 1 个 .mdx / 1 条速测题占位，"
+            f"第二次 exit={code2} 并打印「已存在，未重复生成」+ 既有文件路径"
+        )
+
+
+def validate_g9_remote_exists_is_backlog_not_failure(errors: list) -> None:
+    """[红卡] ``PR_RESULT_SKIPPED_REMOTE_EXISTS`` 属「等待人工解锁」而非故障：exit 0 + ``::warning::``。
+
+    实证缺陷：``run_create_pr`` 对该返回态**无任何分支处理** ⇒ 落入 ``failed += 1`` ⇒
+    ``_report_failure`` ⇒ ``::error::`` + exit 1。只要存在「候选 PR 已关闭但分支未删」
+    （现实已存在 ``candidate/contraception-oral-contraceptives``：PR #4 已关、#5 仍开）或
+    ``ls-remote`` 单次网络抖动，定时任务就**每天红灯**，且措辞是误导性的「真故障（等待人工介入）」。
+
+    断言（驱动真实 ``run_create_pr``，全部候选的 ls-remote 打桩返回非空）：
+
+    - exit **0**、输出**不含** ``::error::``（不得每天红灯）；
+    - 输出含 ``::warning::`` 且**点名两类原因**（待审 PR / 远端分支残留）与**解锁命令**
+      ``git push origin --delete candidate/<slug>``；
+    - 反空转：每个候选都被真实尝试（ls-remote 次数 == 候选数），且**零** ``git push``。
+    """
+    if not hasattr(ch, "run_create_pr") or not hasattr(ch, "PR_RESULT_SKIPPED_REMOTE_EXISTS"):
+        errors.append(
+            "[G9][红卡] curate_harvester 缺少 run_create_pr() / PR_RESULT_SKIPPED_REMOTE_EXISTS"
+        )
+        return
+
+    slugs = [f"g9-remote-{i}" for i in range(1, 4)]
+    candidates = [{**_G9_FIXTURE_CANDIDATE, "slug": slug} for slug in slugs]
+    branches = [f"candidate/{slug}" for slug in slugs]
+
+    # ① 全部候选远端分支均已残留 ⇒ 全部「等待人工」⇒ exit 0 + ::warning::
+    with _stubbed_create_draft_pr_env(
+        existing_open_pr=False, open_pr_branches=(), remote_exists_branches=branches
+    ) as recorded:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = ch.run_create_pr(candidates)
+    printed = buffer.getvalue()
+    ls_remote_calls = [cmd for cmd in recorded if cmd[:2] == ["git", "ls-remote"]]
+    pushes = [cmd for cmd in recorded if cmd[:2] == ["git", "push"]]
+
+    if code != 0:
+        errors.append(
+            f"[G9][红卡] 远端分支已存在属「等待人工解锁」（非故障），必须 exit 0，实际 exit={code}"
+            f"（输出尾部：{printed[-300:]!r}）"
+        )
+    if "::error::" in printed:
+        errors.append(
+            f"[G9][红卡] 远端分支已存在不得输出 ::error::（会让定时 Harvest 每天红灯）：{printed[-300:]!r}"
+        )
+    if "::warning::" not in printed:
+        errors.append(f"[G9][红卡] 未输出 ::warning::（Actions UI 不可见）：{printed[-300:]!r}")
+    if "git push origin --delete" not in printed:
+        errors.append(
+            f"[G9][红卡] 收尾文案未给出**解锁命令**（git push origin --delete）：{printed[-300:]!r}"
+        )
+    if not any(branch in printed for branch in branches):
+        errors.append(f"[G9][红卡] 收尾文案未点名被阻塞的分支（维护者无从解锁）：{printed[-300:]!r}")
+    if "远端" not in printed:
+        errors.append(f"[G9][红卡] 收尾文案未点名「远端分支残留」这一原因：{printed[-300:]!r}")
+    if "待审 PR" not in printed:
+        errors.append(
+            f"[G9][红卡] 收尾文案未点名「已有待审 PR」这一原因（两类成因须同时可辨）：{printed[-300:]!r}"
+        )
+    if len(ls_remote_calls) != len(branches):
+        errors.append(
+            f"[G9][红卡] 被远端守卫跳过后必须**继续尝试下一个候选**：ls-remote 调用 {len(ls_remote_calls)} 次，"
+            f"候选 {len(branches)} 个"
+        )
+    if pushes:
+        errors.append(f"[G9][红卡] 远端分支已存在时仍执行了 git push（会覆盖人工提交）：{pushes}")
+
+    # ② 混合批次：首个候选被远端守卫跳过 ⇒ 继续并在第二个候选上真实创建成功（exit 0）
+    with _stubbed_create_draft_pr_env(
+        existing_open_pr=False, open_pr_branches=(), remote_exists_branches=[branches[0]]
+    ) as recorded_mixed:
+        buffer_mixed = io.StringIO()
+        with contextlib.redirect_stdout(buffer_mixed):
+            code_mixed = ch.run_create_pr(candidates)
+    printed_mixed = buffer_mixed.getvalue()
+    created_push = [
+        cmd for cmd in recorded_mixed if cmd[:2] == ["git", "push"] and branches[1] in cmd
+    ]
+    if code_mixed != 0:
+        errors.append(
+            f"[G9][红卡] 首个候选被远端守卫跳过后应在第二个候选上成功创建并 exit 0，实际 {code_mixed}"
+            f"（输出尾部：{printed_mixed[-300:]!r}）"
+        )
+    if not created_push:
+        errors.append(
+            f"[G9][红卡] 首个候选被跳过后未继续创建第二个候选（未观测到 {branches[1]} 的 push）："
+            f"{[c for c in recorded_mixed if c[:2] == ['git', 'push']]}"
+        )
+
+    if (
+        code == 0
+        and "::error::" not in printed
+        and "::warning::" in printed
+        and "git push origin --delete" in printed
+        and any(branch in printed for branch in branches)
+        and "远端" in printed
+        and "待审 PR" in printed
+        and len(ls_remote_calls) == len(branches)
+        and not pushes
+        and code_mixed == 0
+        and created_push
+    ):
+        print(
+            "[G9][红卡] 远端残留 ⇒ 积压（非故障）通过：exit 0 + ::warning::、零 ::error::，"
+            f"文案点名「待审 PR / 远端分支残留」两类成因并给出解锁命令；{len(ls_remote_calls)} 个候选"
+            "全部被真实尝试（跳过后续继下一个）、零 git push；混合批次在第二个候选上真实创建成功"
+        )
+
+
+def validate_g9_placeholder_marker_covers_summary(errors: list) -> None:
+    """[黄卡-1] 占位标记表必须**覆盖模板 summary 的真实占位文本**，且全仓只有**一份**真值源。
+
+    实证缺陷：模板 summary 的占位文本是 ``【待维护者人工提炼】``，而标记表只收
+    ``待人工提炼`` / ``待人工补题`` / ``TODO(human)`` ⇒ 维护者改完三条要点却忘了 summary 时
+    ``curate:check`` **仍绿**，占位描述直达读者。测试端另存一份字面量副本更是必然漂移的温床。
+
+    断言：
+
+    - 真值源唯一：测试端 ``PLACEHOLDER_MARKERS`` == ``curate.PLACEHOLDER_MARKERS``；
+    - 标记表含 ``待维护者人工提炼``（覆盖模板 summary 占位文本）；
+    - 覆盖性（反空转）：``compose_mdx_content`` 的 summary 行必须命中标记表；
+    - 行为实测：含该占位 summary 的 .mdx 经 ``curate.cmd_check`` 判红；占位改写后判绿。
+    """
+    if not hasattr(curate, "PLACEHOLDER_MARKERS"):
+        errors.append("[G9][黄卡-1] curate.py 缺少 PLACEHOLDER_MARKERS（占位防呆无真值源）")
+        return
+    if not hasattr(ch, "compose_mdx_content"):
+        errors.append("[G9][黄卡-1] curate_harvester 缺少 compose_mdx_content()")
+        return
+
+    markers = tuple(curate.PLACEHOLDER_MARKERS)
+    if not markers:
+        errors.append("[G9][黄卡-1] curate.PLACEHOLDER_MARKERS 为空 ⇒ 占位防呆整体空转退化")
+        return
+    if tuple(PLACEHOLDER_MARKERS) != markers:
+        errors.append(
+            "[G9][黄卡-1] 测试端 PLACEHOLDER_MARKERS 与 curate.py 不一致（两份副本必然漂移）："
+            f"{tuple(PLACEHOLDER_MARKERS)} != {markers}"
+        )
+    if "待维护者人工提炼" not in markers:
+        errors.append(
+            f"[G9][黄卡-1] 标记表未收「待维护者人工提炼」——模板 summary 的占位文本正是它，"
+            f"缺失 ⇒ 维护者忘了 summary 时 curate:check 仍绿（占位描述直达读者）：{markers}"
+        )
+
+    # 覆盖性：模板 summary 行必须命中标记表（否则标记表与模板漂移，防呆空转）
+    mdx = ch.compose_mdx_content(dict(_G9_FIXTURE_CANDIDATE))
+    summary_match = re.search(r'^summary:\s*"(.*)"\s*$', mdx, re.MULTILINE)
+    summary = summary_match.group(1) if summary_match else ""
+    if not summary:
+        errors.append("[G9][黄卡-1] 无法从模板中解析 summary 行（覆盖性断言空转退化，失去判别力）")
+    elif not any(marker in summary for marker in markers):
+        errors.append(
+            f"[G9][黄卡-1] 模板 summary 占位文本未命中任何占位标记 ⇒ 占位摘要可直达读者：{summary[:80]!r}"
+        )
+
+    # 行为实测：把模板草稿放进临时 ARTICLES_DIR，走真实 curate.cmd_check
+    original_dir = curate.ARTICLES_DIR
+    code_dirty = None
+    code_clean = None
+    out_dirty = ""
+    out_clean = ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            articles = Path(tmp) / "articles"
+            articles.mkdir(parents=True, exist_ok=True)
+            curate.ARTICLES_DIR = str(articles)
+
+            (articles / "g9-placeholder.mdx").write_text(mdx, encoding="utf-8")
+            buffer_dirty = io.StringIO()
+            with contextlib.redirect_stdout(buffer_dirty):
+                try:
+                    curate.cmd_check(argparse.Namespace(allow_machine_draft=False))
+                    code_dirty = 0
+                except SystemExit as exc:
+                    code_dirty = exc.code
+            out_dirty = buffer_dirty.getvalue()
+
+            # 反向对照（反空转）：占位全部改写为人工内容 ⇒ 不得判红
+            (articles / "g9-placeholder.mdx").unlink()
+            clean_text = mdx.replace("【待维护者人工提炼】", "")
+            for marker in markers:
+                clean_text = clean_text.replace(marker, "人工已提炼")
+            (articles / "g9-clean.mdx").write_text(clean_text, encoding="utf-8")
+            buffer_clean = io.StringIO()
+            with contextlib.redirect_stdout(buffer_clean):
+                try:
+                    curate.cmd_check(argparse.Namespace(allow_machine_draft=False))
+                    code_clean = 0
+                except SystemExit as exc:
+                    code_clean = exc.code
+            out_clean = buffer_clean.getvalue()
+    finally:
+        curate.ARTICLES_DIR = original_dir
+
+    if code_dirty == 0:
+        errors.append(
+            f"[G9][黄卡-1] 含占位 summary（【待维护者人工提炼】）的草稿经 curate:check 竟判绿"
+            f"（占位描述会直达读者）：{out_dirty[-300:]!r}"
+        )
+    if code_dirty is not None and code_dirty != 1:
+        errors.append(f"[G9][黄卡-1] 占位草稿判红时退出码应为 1，实际 {code_dirty}")
+    if "❌" not in out_dirty:
+        errors.append(f"[G9][黄卡-1] 占位草稿判红未打印 ❌ 原因行：{out_dirty[-300:]!r}")
+    if code_clean != 0:
+        errors.append(
+            f"[G9][黄卡-1] 占位已人工改写后仍判红（门禁过严 / 误伤）：{out_clean[-300:]!r}"
+        )
+
+    if (
+        "待维护者人工提炼" in markers
+        and summary
+        and any(marker in summary for marker in markers)
+        and code_dirty == 1
+        and "❌" in out_dirty
+        and code_clean == 0
+    ):
+        print(
+            "[G9][黄卡-1] 占位标记单一真值源通过：测试端引用 curate.PLACEHOLDER_MARKERS（零副本漂移）；"
+            f"标记表{len(markers)} 项覆盖模板 summary 占位文本；含占位 summary 的草稿经 curate.cmd_check "
+            f"判红（exit 1），人工改写后判绿（反空转）"
+        )
+
+
+def validate_g9_quiz_restore_prints_warning(errors: list) -> None:
+    """[黄卡-2] 还原 ``dailyQuiz.ts`` 失败时**必须打印明确告警**（禁止 ``except OSError: pass`` 静默吞异常）。
+
+    实证缺陷：``create_draft_pr`` 的 ``finally`` 里 ``except OSError: pass`` ⇒ 还原失败静默，
+    速测题占位的改动留在工作区而无人知晓，批次内**后续候选**会因入口预检「工作区脏」直接判 ERROR
+    （现象是后续候选报错，根因却在上一候选，无从排查）。
+
+    断言：打桩令该文件的 ``write_text`` 抛 ``OSError`` ⇒ 输出含告警（⚠️ + 还原/速测题 + 工作区提示）。
+    """
+    if not hasattr(ch, "create_draft_pr"):
+        errors.append("[G9][黄卡-2] curate_harvester 缺少 create_draft_pr()")
+        return
+
+    original_path = ch.Path
+    # 必须继承**具体** flavour 类（WindowsPath / PosixPath）：直接继承 pathlib.Path 会因
+    # 缺失 ``_flavour`` 而在实例化时炸掉（pathlib.Path 本身不带 flavour）。
+    concrete_path_cls = type(original_path("."))
+
+    class _WriteFailPath(concrete_path_cls):  # type: ignore[misc, valid-type]
+        """仅在写入 ``dailyQuiz.ts`` 时抛 OSError，其余行为与 pathlib.Path 完全一致。"""
+
+        def write_text(self, *args, **kwargs):
+            if self.name == "dailyQuiz.ts":
+                raise OSError("simulated write failure")
+            return super().write_text(*args, **kwargs)
+
+    buffer = io.StringIO()
+    try:
+        ch.Path = _WriteFailPath
+        with _stubbed_create_draft_pr_env(existing_open_pr=False):
+            with contextlib.redirect_stdout(buffer):
+                ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+    finally:
+        ch.Path = original_path
+    printed = buffer.getvalue()
+
+    if "⚠️" not in printed:
+        errors.append(
+            f"[G9][黄卡-2] 还原 dailyQuiz.ts 失败时未打印告警（异常被静默吞掉）：{printed[-400:]!r}"
+        )
+    if "还原" not in printed:
+        errors.append(
+            f"[G9][黄卡-2] 告警未点名「还原」这一动作（维护者无从知晓备份未写回）：{printed[-400:]!r}"
+        )
+    if "dailyQuiz" not in printed:
+        errors.append(
+            f"[G9][黄卡-2] 告警未点名 dailyQuiz.ts 这一文件：{printed[-400:]!r}"
+        )
+    if "工作区" not in printed:
+        errors.append(
+            f"[G9][黄卡-2] 告警未提示「后续候选可能因工作区脏而报错」（根因不可见）：{printed[-400:]!r}"
+        )
+
+    if "⚠️" in printed and "还原" in printed and "dailyQuiz" in printed and "工作区" in printed:
+        print(
+            "[G9][黄卡-2] 还原失败告警通过：dailyQuiz.ts 写回抛 OSError 时打印明确告警"
+            "（点名还原动作 / 文件名 / 工作区脏会让后续候选报错），异常不再被静默吞掉"
+        )
+
+
+def validate_g9_ls_remote_retry_then_fail_closed(errors: list) -> None:
+    """[黄卡-3] ``git ls-remote`` 必须**重试 1 次**后再 fail-closed（单次网络抖动不得整批误跳过）。
+
+    实证缺陷：探测只做一次 ⇒ 单次抖动即按 fail-closed 判「远端已存在」⇒ 整批候选被误跳过
+    （且与红卡叠加时表现为每日红灯）。
+
+    断言：
+
+    - 首次失败、重试成功且分支**不存在** ⇒ 正常创建（不得误跳过）；
+    - 两次均失败 ⇒ 仍 fail-closed（返回 ``PR_RESULT_SKIPPED_REMOTE_EXISTS``）。
+    """
+    if not hasattr(ch, "create_draft_pr") or not hasattr(ch, "PR_RESULT_SKIPPED_REMOTE_EXISTS"):
+        errors.append(
+            "[G9][黄卡-3] curate_harvester 缺少 create_draft_pr() / PR_RESULT_SKIPPED_REMOTE_EXISTS"
+        )
+        return
+
+    branch = "candidate/g9-fixture"
+
+    # ① 首次抖动、重试成功（远端无该分支）⇒ 正常创建，ls-remote 共 2 次
+    result_recovered, calls_recovered, printed_recovered = _drive_create_draft_pr(
+        ls_remote_fail_times=1
+    )
+    ls_remote_recovered = [cmd for cmd in calls_recovered if cmd[:2] == ["git", "ls-remote"]]
+    pushes_recovered = [cmd for cmd in calls_recovered if cmd[:2] == ["git", "push"]]
+    if len(ls_remote_recovered) != 2:
+        errors.append(
+            f"[G9][黄卡-3] ls-remote 首次失败后应重试 1 次（共 2 次），实际 {len(ls_remote_recovered)} 次"
+            f"（单次抖动 ⇒ 整批误跳过）：{ls_remote_recovered}"
+        )
+    if result_recovered != ch.PR_RESULT_CREATED:
+        errors.append(
+            f"[G9][黄卡-3] 抖动后重试成功且远端无分支时应正常创建，实际 {result_recovered!r}"
+            f"（输出尾部：{printed_recovered[-300:]!r}）"
+        )
+    if not pushes_recovered:
+        errors.append(
+            f"[G9][黄卡-3] 重试成功后应继续正常推送，实际未观测到 git push：{calls_recovered}"
+        )
+
+    # ② 两次均失败 ⇒ fail-closed（跳过、不推送）
+    result_failed, calls_failed, printed_failed = _drive_create_draft_pr(ls_remote_fail_times=2)
+    ls_remote_failed = [cmd for cmd in calls_failed if cmd[:2] == ["git", "ls-remote"]]
+    pushes_failed = [cmd for cmd in calls_failed if cmd[:2] == ["git", "push"]]
+    if len(ls_remote_failed) != 2:
+        errors.append(
+            f"[G9][黄卡-3] ls-remote 失败两次的场景应只重试 1 次（共 2 次），实际 {len(ls_remote_failed)} 次"
+        )
+    if result_failed != ch.PR_RESULT_SKIPPED_REMOTE_EXISTS:
+        errors.append(
+            f"[G9][黄卡-3] ls-remote 连续失败应 fail-closed 返回 PR_RESULT_SKIPPED_REMOTE_EXISTS，"
+            f"实际 {result_failed!r}（输出尾部：{printed_failed[-300:]!r}）"
+        )
+    if pushes_failed:
+        errors.append(
+            f"[G9][黄卡-3] ls-remote 连续失败时不得推送（fail-closed 被反转）：{pushes_failed}"
+        )
+
+    if (
+        len(ls_remote_recovered) == 2
+        and result_recovered == ch.PR_RESULT_CREATED
+        and pushes_recovered
+        and len(ls_remote_failed) == 2
+        and result_failed == ch.PR_RESULT_SKIPPED_REMOTE_EXISTS
+        and not pushes_failed
+    ):
+        print(
+            "[G9][黄卡-3] ls-remote 重试通过：首次抖动后重试 1 次（共 2 次）⇒ 远端无分支则正常创建并推送"
+            "（不再被单次抖动整批误跳过）；连续失败仍 fail-closed ⇒ "
+            f"{result_failed!r}、零推送；守卫分支 {branch}"
         )
 
 
@@ -3108,6 +3897,17 @@ def run_gate() -> None:
     validate_g9_prefetch_exclude(errors)
     validate_g9_empty_pool_error(errors)
     validate_g9_workflow_selfcheck_wiring(errors)
+    # [P0 止血回合] 远端永不强制覆盖 / 机器不自证 / PR 路径自洽 / 判重前置
+    validate_g9_no_force_overwrite(errors)
+    validate_g9_no_machine_self_attestation(errors)
+    validate_g9_pr_path_quiz_placeholder(errors)
+    validate_g9_draft_url_dedupe_before_write(errors)
+    # [红卡 + 黄卡清理] 远端残留属「等待人工」不得判故障 / 占位标记单一真值源 /
+    # 还原失败必须告警 / ls-remote 重试 1 次后 fail-closed
+    validate_g9_remote_exists_is_backlog_not_failure(errors)
+    validate_g9_placeholder_marker_covers_summary(errors)
+    validate_g9_quiz_restore_prints_warning(errors)
+    validate_g9_ls_remote_retry_then_fail_closed(errors)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")

@@ -383,8 +383,12 @@ def compose_mdx_content(candidate: dict) -> str:
     # 机器只留占位，必须由维护者通读原文后改写。
     summary = "【待维护者人工提炼】本候选由流水线自动抓取，尚未撰写本站导读摘要，合并前必须通读原文并改写为精炼看点。"
 
-    evidence_tier = candidate.get("evidence_tier", "A")
-
+    # [P0-2 修复] 机器阶段**严禁**写入证据等级 / 复审人 / 最后核验日期三个字段：
+    #   · evidence_tier 曾硬编码 "A"（全站最高等级）——机器自评证据等级属「机器自证」，
+    #     且 harvest_candidates 从不产出该键 ⇒ 恒取 A。现一律**省略**该键，由
+    #     src/content.config.ts 的 schema default（'B'）兜底：**Schema 是唯一真值源**，此处不得写死任何值；
+    #   · 复审人与最后核验日期同理：机器填今天 / 填空串 ⇒ 页面向读者显示「已核验」，
+    #     实为未核验。二者一律省略，由人工核验后补写。
     mdx = f"""---
 title: "{candidate['title']}"
 pubDate: {today_str}
@@ -392,12 +396,9 @@ summary: "{summary}"
 category: "{candidate['category']}"
 tags:
 {tags_yaml}
-evidence_tier: "{evidence_tier}"
 source_url: "{candidate['source_url']}"
 source_name: "{candidate['source_name']}"
 author: "{candidate['source_name']}"
-reviewed_by: ""
-last_verified_at: {today_str}
 is_full_text: false
 ---
 
@@ -409,7 +410,11 @@ is_full_text: false
   2. 把下方三条占位要点改写为 3~4 条真正有医学增量的提炼干货，删除占位文字与本注释块；
   3. 确认零版权搬运：只保留人工提炼要点 + 原文直达链接（抓取来的原出处描述摘录仅存于 PR 描述，
      严禁搬入正文）；
-  4. 补写 frontmatter 的 summary 与 reviewed_by。
+  4. 补写 frontmatter 的 summary；证据等级 / 复审人 / 最后核验日期三类字段一律由人工核验后填写，
+     机器不得代填（禁止机器自证）；
+  5. 补全速测题占位：在 src/data/dailyQuiz.ts 中找到与本文件同名的条目（articleId 与本站文件名一致），
+     把题干 / 选项 / 正确项 / 解析四项写完整——G1 门禁强制文章↔速测题 1:1，占位未补全即判定
+     「文章缺少速测题」而必红，占位文字绝不可直接合并。
 本文件由 scripts/curate_harvester.py 自动生成，仅完成了外链探活与 Schema 结构校验。
 */}}
 
@@ -1178,6 +1183,27 @@ def _build_draft_candidate(url: str, sources: list) -> dict:
     }
 
 
+def _existing_article_path_for_url(url: str) -> str:
+    """返回 ``ARTICLES_DIR`` 中 ``source_url`` == ``url`` 的 .mdx 路径（无则返回空串）。
+
+    [E1] 供「判重前置」命中时打印**指向已存在文件**的路径，避免维护者以为工具坏了。
+    """
+    if not os.path.isdir(ARTICLES_DIR):
+        return ""
+    for name in sorted(os.listdir(ARTICLES_DIR)):
+        if not name.endswith(".mdx"):
+            continue
+        path = os.path.join(ARTICLES_DIR, name)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                m = re.search(r"source_url:\s*\"([^\"]+)\"", f.read())
+        except OSError:
+            continue
+        if m and m.group(1).strip() == url:
+            return path
+    return ""
+
+
 def _register_pending(url: str, source_id: str, http_status) -> None:
     """[D1] 把候选以 ``status="pending"`` 登记入台账（`iter_pending` 的首个生产消费路径）。"""
     ledger = load_ledger()
@@ -1215,6 +1241,18 @@ def run_draft_url(url: str) -> int:
 
     candidate = _build_draft_candidate(url, _load_sources())
     slug = candidate["slug"]
+
+    # [E1 修复] 判重必须**前置到写盘之前**。原实现先写 .mdx + 注入速测题占位、再由
+    # _register_pending 内部判重 ⇒ 同一 URL 二次执行产出**两个** .mdx 与**两条**占位
+    # （台账仅 1 条，第二次仍打印误导性的「跳过 pending 登记」），而 G1 因双份对称**恒绿**
+    # ⇒ 重复文章可直接上线。命中台账或既有文章即早退，不写任何文件。
+    if url in ledger_seen_urls(load_ledger()) or url in get_existing_article_urls():
+        exists_at = _existing_article_path_for_url(url) or f"（台账已登记，见 {LEDGER_FILE}）"
+        print(f"\n⏭️ 该 URL 已存在，未重复生成：{exists_at}")
+        print("   若确需重新生成：先删除上述 .mdx（并同步移除 dailyQuiz.ts 中同名条目），"
+              "或从台账移除该 URL 后重试。")
+        return 0
+
     target_path = os.path.join(ARTICLES_DIR, f"{slug}.mdx")
     if os.path.exists(target_path):
         slug = f"{slug}-{int(datetime.datetime.now().timestamp()) % 1000}"
@@ -1381,6 +1419,9 @@ def run_admit_source(source_id: str) -> int:
 # → 打印 ⏭️ → exit 0（连续多日零产出却全绿）。
 PR_RESULT_CREATED = "created"
 PR_RESULT_SKIPPED_DUPLICATE = "skipped_duplicate"
+# [P0-1] 远端**已残留**该候选分支（关闭/未创建的 PR 都会把分支留在远端，可能含人工提交）：
+# 此时**绝不**推送，返回本可区分结果，并打印可执行的解锁指引（git push origin --delete <branch>）。
+PR_RESULT_SKIPPED_REMOTE_EXISTS = "skipped_remote_exists"
 PR_RESULT_ERROR = "error"
 
 # [R3 修复] 本常量**仅**用于限制「发现」候选的开销（每次抓取多少个候选供选择），
@@ -1458,6 +1499,65 @@ def fetch_open_candidate_branches() -> "set | None":
     return branches
 
 
+# [黄卡-3] 远端探测次数 = 首次 + 重试 1 次：单次网络抖动不得让整批候选被误判「远端已存在」而跳过
+# （fail-closed 是正确语义，但**只在确认探测真的失败时**才成立；抖动不是失败）。
+LS_REMOTE_ATTEMPTS = 2
+
+
+def _remote_branch_exists(branch_name: str) -> bool:
+    """[P0-1] 探测远端是否已存在该分支（fail-closed：探测**确认**失败一律按「已存在」处理 ⇒ 不推送）。
+
+    背景（已实测）：关闭候选 PR **不会**删除远端分支；``--force-with-lease`` 在不带显式期望值时
+    基准取自 ``refs/remotes/origin/<branch>``，而本仓 refspec（含 CI 的 ``fetch-depth: 0``）保证
+    ``origin/<branch>`` 存在 ⇒ lease **恒成立** ⇒ 次日 force 推送会**静默覆盖**人工提交且不可恢复。
+    故本仓库对候选分支**永不**强制覆盖：不存在才正常 push，存在即跳过并给出解锁指引。
+
+    [黄卡-3] 单次抖动即整批误跳过（每个候选都判「远端已存在」）是**假故障**，故先重试 1 次；
+    重试后仍失败才 fail-closed（宁可不推，也不覆盖人工提交）。
+    """
+    cmd = ["git", "ls-remote", "--heads", "origin", branch_name]
+    last_stderr = ""
+    for attempt in range(1, LS_REMOTE_ATTEMPTS + 1):
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0:
+            return bool((res.stdout or "").strip())
+        last_stderr = (res.stderr or "").strip()[:160]
+        print(
+            f"  ⚠️ 远端分支探测第 {attempt}/{LS_REMOTE_ATTEMPTS} 次失败"
+            f"（git ls-remote 非零退出），重试中…：{last_stderr}"
+        )
+    print(
+        f"  ⚠️ 远端分支探测连续 {LS_REMOTE_ATTEMPTS} 次失败，按 fail-closed 视为「已存在」并跳过："
+        f"{last_stderr}"
+    )
+    return True
+
+
+def _delete_remote_branch(branch_name: str) -> None:
+    """[P0-1] best-effort 删除远端候选分支：失败仅告警，**绝不**抛出（不得让流程崩溃）。
+
+    用途：``gh pr create`` 失败时分支已推送到远端，若不清理，新的 ls-remote 守卫会把该候选
+    **永久阻塞**（每次都判「远端已存在」）。清理失败时打印人工可执行命令兜底。
+    """
+    try:
+        res = subprocess.run(
+            ["git", "push", "origin", "--delete", branch_name],
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  ⚠️ 清理远端分支 {branch_name} 时异常（请人工执行下方命令）：{exc}")
+        res = None
+    if res is not None and res.returncode == 0:
+        print(f"  ✓ 已清理远端残留分支：{branch_name}")
+        return
+    detail = "" if res is None else (res.stderr or "").strip()[:160]
+    print(
+        f"  ⚠️ 清理远端分支 {branch_name} 失败（该候选会被远端守卫跳过，"
+        f"请人工执行：git push origin --delete {branch_name}）：{detail}"
+    )
+
+
 def _branch_already_open(branch_name: str) -> bool:
     """[R3] 判定候选分支是否已有待审 PR：优先用一次性缓存，缺失时退回逐个 ``--head`` 检查。"""
     cached = _OPEN_CANDIDATE_BRANCHES
@@ -1495,6 +1595,11 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         ["git", "branch", "--show-current"], capture_output=True, text=True
     ).stdout.strip()
 
+    # [P0-3] 速测题占位注入会**改动** src/data/dailyQuiz.ts：未成功提交时（校验/暂存/提交任一失败）
+    # 该改动会被 `git checkout` 带回主工作区并污染后续候选 ⇒ 备份后按需逐字节还原。
+    quiz_backup = None
+    committed = False
+
     print(f"\n🚀 开始自动化 PR 流程: {branch_name}")
     try:
         # 防重复守卫：该候选分支若已有待审 PR，直接跳过，避免每日重复刷 PR。
@@ -1504,6 +1609,17 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
             print(f"  ⏭️ 分支 {branch_name} 已存在待审 PR，跳过本候选（尝试下一个）")
             _emit_step_output("branch", "")
             return DraftPrResult(PR_RESULT_SKIPPED_DUPLICATE, "")
+
+        # [P0-1] 远端分支存在性守卫（推送之前）：关闭候选 PR 不会删除远端分支，残留分支可能含
+        # 人工提交。此时**一律不推送**（本项目永不强制覆盖），改而给出可执行的解锁指引。
+        if _remote_branch_exists(branch_name):
+            print(f"  ⏭️ 远端分支 {branch_name} 已存在，跳过本候选（未推送、未覆盖任何提交）")
+            print(
+                f"::warning::远端分支 {branch_name} 已存在（可能含人工提交），已跳过且未推送。"
+                f"若要重新提案，请先删除：git push origin --delete {branch_name}"
+            )
+            _emit_step_output("branch", "")
+            return DraftPrResult(PR_RESULT_SKIPPED_REMOTE_EXISTS, "")
 
         # 创建分支
         subprocess.run(["git", "checkout", "-b", branch_name], check=True)
@@ -1519,28 +1635,46 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         # 本地人工流程的 D1 台账登记保留在 run_draft_url（未被本批改动）。
 
         # 验证合规性
-        chk = subprocess.run(["python", os.path.join(SCRIPT_DIR, "curate.py"), "check"], capture_output=True, text=True)
+        # [P0-2] --allow-machine-draft：草稿按设计含人工占位（要点/速测题/核验字段），
+        # 占位防呆只作用于**合并门禁**（pnpm curate:check），不拦截机器自检结构合法性。
+        chk = subprocess.run(
+            ["python", os.path.join(SCRIPT_DIR, "curate.py"), "check", "--allow-machine-draft"],
+            capture_output=True, text=True,
+        )
         if chk.returncode != 0:
             print(f"❌ 草稿结构校验失败:\n{chk.stdout}\n{chk.stderr}")
             raise RuntimeError("curate check failed")
 
+        # [P0-3 修复] 每日 PR 路径必须**同样**注入速测题占位：此前只有本地 run_draft_url 注入，
+        # ⇒ 候选分支内只有 .mdx 没有题，[G1]「文章缺少速测题」必红，而 PR 正文与模板都没点名速测题，
+        # 维护者做完所有可见指引仍无法变绿且不知缺什么。
+        try:
+            quiz_backup = Path(QUIZ_FILE).read_text(encoding="utf-8")
+        except OSError:
+            quiz_backup = None
+        if inject_quiz_placeholder(Path(QUIZ_FILE), slug):
+            print(f"  ✓ 已注入速测题占位（articleId='{slug}'）到：{QUIZ_FILE}")
+        else:
+            print(f"  ⏭️ 速测题占位已存在或无法注入（幂等，未改动）：{QUIZ_FILE}")
+
         # Git commit
-        # [C 修复] 只提交草稿文件，**不**提交 scripts/.curate-ledger.json：台账是机器状态，
+        # [C 修复] 只提交草稿文件与速测题占位，**不**提交 scripts/.curate-ledger.json：台账是机器状态，
         # master 侧每日运行也会写它 ⇒ 把它提交进候选分支必然与 master 冲突（PR #4 mergeable=CONFLICTING
-        # 即由此而来）。故候选分支只携带 .mdx。
-        subprocess.run(["git", "add", target_file], check=True)
+        # 即由此而来）。故候选分支只携带 .mdx 与 dailyQuiz.ts。
+        subprocess.run(["git", "add", target_file, QUIZ_FILE], check=True)
         commit_msg = f"feat(curate): 自动生成候选导读草稿《{candidate['title']}》"
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+        committed = True
 
         # Git push (带重试机制，防止网络抖动)
-        # --force-with-lease：候选分支为机器生成的临时草稿分支，上次运行若在 PR 创建前中断，
-        # 远端会残留陈旧分支导致常规 push non-fast-forward 永久卡死流水线
+        # [P0-1] 普通推送，无任何 --force*：远端分支已由上方 ls-remote 守卫确认**不存在**，
+        # 故不需要强制覆盖；若推送仍失败（non-fast-forward）说明守卫之外仍有残留 ⇒ 交给人工解锁。
         print(f"  ⬆️ 正在推送分支 {branch_name} 至远端 GitHub...")
         pushed = False
         for attempt in range(1, 4):
             try:
                 subprocess.run(
-                    ["git", "push", "--force-with-lease", "-u", "origin", branch_name],
+                    ["git", "push", "-u", "origin", branch_name],
                     check=True,
                 )
                 pushed = True
@@ -1568,7 +1702,12 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
 ### ✍️ 维护者人工审阅 Checklist（严禁机器自打勾，合并前必须由人核实）
 - [ ] **原文核实**：点击上述出处链接，确认内容与本篇主题完全匹配；
 - [ ] **人工撰写导读**：已在 Files changed 中填入 3~4 点人工提炼的核心要点，清除了占位提示；
+- [ ] **补全速测题占位**：`src/data/dailyQuiz.ts` 中本条（articleId `{slug}`）的占位条目已写全
+      **题干 / 选项 / 正确项 / 解析**四项——G1 门禁强制文章↔速测题 **1:1**，占位未补全即判定
+      「文章缺少速测题」而必红，占位文字绝不可直接合并；
 - [ ] **版权合规核验**：遵循 ADR-0002 双轨制（精炼导读 + 原文直达链接，无侵权搬运）；
+- [ ] **冲突化解**：若本 PR 显示与主分支冲突，`src/data/dailyQuiz.ts` 的冲突只需**保留双方条目**
+      （各条目按 articleId 独立），勿删他人条目；
 - [ ] **CI 门禁全绿**：Astro 编译与外链真实探测均 PASS。
 
 ### 📎 原出处描述摘录（仅作审阅参考，严禁搬运进文章正文）
@@ -1594,6 +1733,9 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
             _emit_step_output("branch", branch_name)
             return DraftPrResult(PR_RESULT_CREATED, branch_name)
         print(f"❌ gh pr create 失败: {res.stderr}")
+        # [P0-1] 分支此时**已推送**到远端但 PR 未建成 ⇒ 残留分支会让新的 ls-remote 守卫把该候选
+        # **永久阻塞**（此后每天都判「远端已存在」）。故 best-effort 删除（失败也不得让流程崩溃）。
+        _delete_remote_branch(branch_name)
         _emit_step_output("branch", "")
         return DraftPrResult(PR_RESULT_ERROR, "")
 
@@ -1604,6 +1746,19 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
     finally:
         # 无论成功失败，恢复原分支
         subprocess.run(["git", "checkout", current_branch], check=False)
+        # [P0-3] 未成功提交时，速测题占位的改动不会随 checkout 消失（会被带回主工作区），
+        # 必须按备份逐字节还原，否则批次内后续候选的入口预检会因工作区脏而直接判 ERROR。
+        if not committed and quiz_backup is not None:
+            try:
+                Path(QUIZ_FILE).write_text(quiz_backup, encoding="utf-8")
+            except OSError as exc:
+                # [黄卡-2] 此处**严禁**静默吞异常：还原失败 ⇒ 速测题占位的改动留在工作区而无人知晓，
+                # 批次内**后续候选**会因入口预检「工作区脏」直接判 ERROR——现象在后续候选、
+                # 根因却在本次还原失败，静默后无从排查（与「机器不得自证」同源：异常也必须可见）。
+                print(
+                    f"  ⚠️ 还原 {QUIZ_FILE} 失败（{exc}）：速测题占位改动仍留在工作区，"
+                    f"后续候选可能因工作区脏而直接判 ERROR。请人工核对并还原该文件后重跑本批次。"
+                )
         # [R2 修复] 清理可能残留的（未提交 / 未跟踪）草稿文件：恢复原分支后，若该 .mdx 仍留在
         # 工作区，会让批次内**后续候选**的入口预检 `git status --porcelain` 直接判 ERROR。
         # 成功路径下草稿已提交在候选分支、master 上不存在此文件，此清理为无害空操作。
@@ -1670,7 +1825,14 @@ def run_create_pr(candidates: list) -> int:
       - **积压**（发现到的候选**全部**已有待审 PR）⇒ ``exit 0`` + ``::warning::`` + 摘要；
       - **真故障**（创建过程出现 error）或**候选池为空** ⇒ ``exit 1`` + ``::error::``。
 
-    返回进程退出码：0 = 成功创建 1 个候选 PR 或「积压（等待人审）」；1 = 真故障 / 空池。
+    [红卡修复] ``PR_RESULT_SKIPPED_REMOTE_EXISTS``（远端分支已残留，可能含人工提交）与
+    ``PR_RESULT_SKIPPED_DUPLICATE`` 同属「**等待人工**」而非故障：两者都只计入各自的跳过计数、
+    **继续尝试下一个候选**，收尾走 ``_report_backlog``（exit 0 + ``::warning::``）。
+    此前该返回态**无分支处理** ⇒ 落入 ``failed`` ⇒ ``::error::`` + exit 1，且措辞是误导性的
+    「真故障（等待人工介入）」——只要存在「PR 已关闭但分支未删」（关闭 PR 不会删分支）或
+    ``ls-remote`` 抖动，定时任务就会**每天红灯**（R4 消灭过的「每天变红」被重新造回）。
+
+    返回进程退出码：0 = 成功创建 1 个候选 PR 或「积压（等待人审 / 等待解锁）」；1 = 真故障 / 空池。
     """
     global _OPEN_CANDIDATE_BRANCHES
     found = len(candidates)
@@ -1694,6 +1856,8 @@ def run_create_pr(candidates: list) -> int:
             return 0
 
         skipped = 0
+        remote_skipped = 0
+        remote_blocked: list = []
         failed = 0
         for index, candidate in enumerate(candidates, 1):
             result = create_draft_pr(candidate)
@@ -1703,16 +1867,31 @@ def run_create_pr(candidates: list) -> int:
             if result == PR_RESULT_SKIPPED_DUPLICATE:
                 skipped += 1
                 continue
+            # [红卡修复] 远端分支已残留 = 「等待人工解锁」（可能含人工提交，机器绝不覆盖），
+            # 与「已有待审 PR」同属等待人工，**不得**计入 failed（否则每天红灯 + 措辞误导）。
+            if result == PR_RESULT_SKIPPED_REMOTE_EXISTS:
+                remote_skipped += 1
+                remote_blocked.append(f"candidate/{candidate.get('slug', '')}")
+                continue
             failed += 1
             print(f"  ⚠️ 候选 {candidate.get('slug', '')} 创建失败，继续尝试下一个候选")
 
-        if failed == 0 and skipped:
-            # [R4] 未被创建且无任何失败 ⇒ 全部已有待审 PR ⇒ 积压（非故障）⇒ exit 0。
-            _report_backlog(f"{skipped} 个候选均已有待审 PR，等待人工审阅")
+        if failed == 0 and (skipped or remote_skipped):
+            # [红卡修复] 未被创建且无任何失败 ⇒ 全部在等人工（待审 PR 或 待解锁远端分支）
+            # ⇒ 积压（非故障）⇒ exit 0 + ::warning::，并给出**可执行**的解锁命令。
+            unlock = "；".join(f"git push origin --delete {b}" for b in remote_blocked)
+            detail = (
+                f"{total} 个候选均未能创建 PR：{skipped} 个已有待审 PR（等待人工审阅合并）、"
+                f"{remote_skipped} 个远端分支已残留（等待人工解锁，未推送、未覆盖任何提交）"
+            )
+            if unlock:
+                detail = f"{detail}，解锁命令：{unlock}"
+            _report_backlog(detail)
             return 0
         # [R4] 出现创建失败 ⇒ 真故障 ⇒ exit 1 + ::error::。
         _report_failure(
-            f"{total} 个候选均未能创建 PR（已有待审 PR 跳过 {skipped}，失败 {failed}），等待人工介入"
+            f"{total} 个候选均未能创建 PR（已有待审 PR 跳过 {skipped}，"
+            f"远端分支残留跳过 {remote_skipped}，失败 {failed}），等待人工介入"
         )
         return 1
     finally:
