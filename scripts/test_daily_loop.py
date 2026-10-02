@@ -9,7 +9,7 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
 （修正记录见 Spec §3.1.3）。当日指纹 = ((day-1) mod A, (day-1) mod G)，
 其重复周期 = lcm(A, G)；当前 lcm(26, 28) = 364 天（约一年）。
 
-本文件当前实现 G1 / G2 / G3 / G4 / G5 / G6 / G8 断言：
+本文件当前实现 G1 / G2 / G3 / G4 / G5 / G6 / G7 / G8 / G9 断言：
     G3（池规模 -> lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）
     G2（三池非空 + lcm(文章池, 词条池) > 文章池，证明词条池真参与周期，含反向用例）
     G1（文章 slug 集合 <-> DAILY_QUIZZES 键集合 双向 1:1，含反向夹具用例）
@@ -26,6 +26,9 @@ test_daily_loop.py — 每日循环不变量门禁 (Daily Loop Invariant Gate)
     G7（速测题占位注入幂等：在 tempfile 副本上两次注入须 True/False 且 sha256 不变、
         注入文本含 articleId 锚点且花括号配平；含反向用例证明「非幂等坏实现」可被判红；
         以及 --admit-source 只读性：sources.json sha256 前后不变（No-Auto-Approve））
+    G9（草稿模板真实 MDX 编译：compose_mdx_content 输出经 node + 本项目 MDX 引擎真实编译须通过、
+        且不含 `<!--`、无抓取文本 raw_desc 泄漏；含反向用例证明 `<!--` 与 JSX 注释内 `*/` 抓取文本
+        均可判红；候选分支不带台账（git add 仅暂存 .mdx）；跳过/零进展语义可区分且 ::warning:: 可见）
 
 范式：与 scripts/test_tools.py 一致 —— errors: list[str] 收集错误，结尾统一 sys.exit(1)。
 约束：零第三方依赖（仅标准库）；路径操作统一 pathlib.Path；
@@ -37,6 +40,7 @@ import datetime
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -2261,9 +2265,780 @@ def validate_test_graph_wiring(errors: list) -> None:
     print("[G7] test:graph 接线通过：test_source_discovery.py 紧接 test_daily_loop.py 之后已挂载")
 
 
+# ---------------------------------------------------------------------------
+# G9：草稿模板真实 MDX 编译 + 候选 PR 语义（B/C/D/E① 缺陷修复）
+# ---------------------------------------------------------------------------
+# 缺陷（均已实测确诊，见编排者物证）：
+#   B  草稿模板用 HTML 注释 `<!-- -->` ⇒ MDX 非法，机器生成的草稿天生 pnpm build 必红；
+#   C  候选 PR 提交了 scripts/.curate-ledger.json ⇒ 与 master 侧台账必然冲突（CONFLICTING）；
+#   D  防重复守卫把「跳过」当成功返回 True ⇒ 每日取同一榜首候选 → 打印 ⏭️ → exit 0（绿灯假死）。
+
+# 夹具候选：raw_desc 含 `<`、`{`、`}`、`` ` ``（外部抓取文本不可控），用于钉死
+# 「抓取文本不得进 MDX / JSX 注释」这一约束。
+_G9_FIXTURE_CANDIDATE = {
+    "title": "G9 夹具：口服避孕药权威实况",
+    "summary": "夹具摘要（严禁沿用来源描述）",
+    "raw_desc": "抓取文本可能含 <b>标签</b>、{花括号}、`反引号`——严禁进入 MDX/JSX 注释",
+    "category": "contraception",
+    "tags": ["安全避孕", "避孕科普"],
+    "source_url": "https://example.test/g9-fixture",
+    "source_name": "WHO 夹具信源",
+    "slug": "g9-fixture",
+    "source_id": "who-facts-sheets",
+    "evidence_tier": "A",
+}
+
+# node 编译探针：读入 .mdx，用指定 MDX 编译器真实编译，输出 JSON 结果（零网络）。
+_MDX_COMPILE_PROBE = r"""
+import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+
+const modUrl = process.argv[2];
+const mode = process.argv[3];
+const mdxFile = process.argv[4];
+
+let source;
+try {
+  source = await readFile(mdxFile, 'utf8');
+} catch (err) {
+  process.stdout.write(JSON.stringify({ ok: false, error: 'read-failed: ' + String(err) }));
+  process.exit(0);
+}
+
+let fn;
+try {
+  const mod = await import(modUrl);
+  fn = mode === 'mdx-js' ? mod.compile : mod.mdxToJs;
+  if (typeof fn !== 'function') {
+    process.stdout.write(JSON.stringify({ ok: false, error: 'compiler-export-missing: ' + mode }));
+    process.exit(0);
+  }
+} catch (err) {
+  process.stdout.write(JSON.stringify({ ok: false, error: 'import-failed: ' + String((err && err.message) || err) }));
+  process.exit(0);
+}
+
+try {
+  await fn(source);
+  process.stdout.write(JSON.stringify({ ok: true }));
+} catch (err) {
+  process.stdout.write(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
+}
+"""
+
+
+def _package_entry(pkg_dir: Path):
+    """读取 package.json 的 exports['.'] / module / main，返回入口文件 Path（找不到返回 None）。"""
+    pkg_json = pkg_dir / "package.json"
+    if not pkg_json.is_file():
+        return None
+    try:
+        meta = json.loads(_read_text(pkg_json))
+    except (OSError, json.JSONDecodeError):
+        return None
+    entry = None
+    exports = meta.get("exports")
+    if isinstance(exports, dict):
+        dot = exports.get(".")
+        if isinstance(dot, str):
+            entry = dot
+        elif isinstance(dot, dict):
+            entry = dot.get("import") or dot.get("default")
+    if not isinstance(entry, str):
+        entry = meta.get("module") or meta.get("main")
+    if not isinstance(entry, str):
+        return None
+    entry_path = pkg_dir / entry
+    return entry_path.resolve() if entry_path.is_file() else None
+
+
+def _resolve_mdx_compiler() -> tuple:
+    """定位可用 MDX 编译器，返回 (mode, module_file_url)；不可用返回 (None, "")。
+
+    优先任务书指定的 ``@mdx-js/mdx``；本仓库实为 Astro 新工具链，``@mdx-js/mdx`` 未安装，
+    退回 ``satteri``（Astro 本项目 MDX 引擎，node_modules 已有，零新增依赖）——其 parser 与
+    CI 构建报错**逐字同源**（``mdx-jsx:unexpected-character``），故仍是真实 MDX 编译。
+    """
+    node_modules = ROOT_DIR / "node_modules"
+    search = (
+        ("mdx-js", "@mdx-js/mdx/package.json",
+         ".pnpm/@mdx-js+mdx@*/node_modules/@mdx-js/mdx/package.json"),
+        ("satteri", "satteri/package.json",
+         ".pnpm/satteri@*/node_modules/satteri/package.json"),
+    )
+    for mode, *patterns in search:
+        for pattern in patterns:
+            for pkg_json in sorted(node_modules.glob(pattern)):
+                entry = _package_entry(pkg_json.parent)
+                if entry is not None:
+                    return mode, entry.as_uri()
+    return None, ""
+
+
+def _run_mdx_compile(mdx_text: str) -> tuple:
+    """用 node 对给定 MDX 文本做真实编译，返回 ``(ok, detail)``（零网络）。
+
+    - ``ok`` 为 True/False 时，``detail`` 分别为空串 / 编译错误信息；
+    - 编译器或 node 不可用时返回 ``(None, 原因)``，调用方据此**记明确错误**（不静默跳过）。
+    """
+    mode, mod_url = _resolve_mdx_compiler()
+    if mode is None:
+        return None, "未找到可用的 MDX 编译器（@mdx-js/mdx 与 satteri 均不在 node_modules）"
+    node = shutil.which("node")
+    if node is None:
+        return None, "PATH 中未找到 node 可执行文件"
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        harness = tmp_dir / "mdx_compile_probe.mjs"
+        harness.write_text(_MDX_COMPILE_PROBE, encoding="utf-8")
+        target = tmp_dir / "candidate.mdx"
+        target.write_text(mdx_text, encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                [node, str(harness), mod_url, mode, str(target)],
+                capture_output=True, text=True, encoding="utf-8", timeout=90,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return None, f"node 编译探针执行失败：{exc}"
+        if proc.returncode != 0:
+            return None, f"node 编译探针非零退出（exit={proc.returncode}）：{proc.stderr.strip()[-400:]}"
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            return None, f"node 编译探针输出非 JSON：{proc.stdout.strip()[-300:]}"
+    return bool(payload.get("ok")), str(payload.get("error") or "")
+
+
+class _FakeCompleted:
+    """subprocess.CompletedProcess 的极简替身（仅暴露 returncode/stdout/stderr）。"""
+
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def _make_pr_subprocess_stub(
+    recorded: list,
+    existing_open_pr: bool,
+    *,
+    open_pr_branches=(),
+    prefetch_ok: bool = True,
+    push_fail_slugs=(),
+    gh_create_fail: bool = False,
+    status_dirty_fn=None,
+):
+    """构造记录型 ``subprocess.run`` 替身：模拟 git/gh，零真实进程、零网络。
+
+    - ``existing_open_pr``：**逐个候选** ``gh pr list --head`` 的返回（True ⇒ 已有 open PR）；
+    - ``open_pr_branches``：**一次性** ``gh pr list --state open`` 预取返回的分支名集合；
+    - ``prefetch_ok``：预取是否成功（False ⇒ 返回非零，触发逐候选 ``--head`` 回退）；
+    - ``push_fail_slugs``：命中这些子串的分支 ``git push`` 返回非零（模拟 push 阶段失败）；
+    - ``gh_create_fail``：``gh pr create`` 返回非零（模拟创建失败）；
+    - ``status_dirty_fn``：可选回调，返回 True 时 ``git status --porcelain`` 报脏（模拟失败候选污染工作区）。
+    遵守 ``check=True`` 语义：非零退出码时抛 ``CalledProcessError``（否则 push 重试/失败逻辑无法触发）。
+    """
+    occupied = {str(b) for b in (open_pr_branches or ())}
+
+    def _complete(returncode, stdout="", stderr="", check=False, cmd=None):
+        result = _FakeCompleted(returncode, stdout, stderr)
+        if check and returncode != 0:
+            raise subprocess.CalledProcessError(returncode, cmd or [], stdout, stderr)
+        return result
+
+    def fake_run(cmd, *args, **kwargs):
+        recorded.append(list(cmd))
+        check = bool(kwargs.get("check", False))
+        head = list(cmd[:3])
+        if head[:2] == ["git", "status"]:
+            dirty = bool(status_dirty_fn()) if callable(status_dirty_fn) else False
+            return _complete(0, " M some-dirty-file\n" if dirty else "", check=check, cmd=cmd)
+        if head == ["git", "branch", "--show-current"]:
+            return _complete(0, "master\n", check=check, cmd=cmd)
+        if head[:3] == ["gh", "pr", "list"]:
+            if "--head" in cmd:
+                return _complete(
+                    0, '[{"number": 1}]' if existing_open_pr else "[]", check=check, cmd=cmd
+                )
+            if not prefetch_ok:
+                return _complete(1, "", "gh: network error", check=check, cmd=cmd)
+            payload = [{"headRefName": b} for b in sorted(occupied)]
+            return _complete(0, json.dumps(payload), check=check, cmd=cmd)
+        if head[:3] == ["gh", "pr", "create"]:
+            if gh_create_fail:
+                return _complete(1, "", "gh: pr create failed", check=check, cmd=cmd)
+            return _complete(0, "https://github.com/example/repo/pull/1\n", check=check, cmd=cmd)
+        if head[:2] == ["git", "push"]:
+            branch = cmd[-1]
+            if any(s in branch for s in push_fail_slugs):
+                return _complete(1, "", "! [rejected] non-fast-forward", check=check, cmd=cmd)
+            return _complete(0, "", check=check, cmd=cmd)
+        return _complete(0, "", check=check, cmd=cmd)
+
+    return fake_run
+
+
+@contextlib.contextmanager
+def _stubbed_create_draft_pr_env(existing_open_pr: bool, **stub_kwargs):
+    """在临时 ARTICLES_DIR/LEDGER_FILE + 记录型 subprocess 替身下运行候选 PR 逻辑。
+
+    零真实 git/gh/subprocess、零网络、零 src/ 改动；退出时逐项还原，避免污染真实环境。
+    ``stub_kwargs`` 透传给 ``_make_pr_subprocess_stub``（预取分支 / 失败注入等）。
+    """
+    recorded: list = []
+    original_run = subprocess.run
+    original_articles = ch.ARTICLES_DIR
+    original_ledger = ch.LEDGER_FILE
+    original_cache = getattr(ch, "_OPEN_CANDIDATE_BRANCHES", None)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        articles_dir = tmp_dir / "articles"
+        articles_dir.mkdir(parents=True, exist_ok=True)
+        ch.ARTICLES_DIR = str(articles_dir)
+        ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+        if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
+            ch._OPEN_CANDIDATE_BRANCHES = None
+        subprocess.run = _make_pr_subprocess_stub(recorded, existing_open_pr, **stub_kwargs)
+        try:
+            yield recorded
+        finally:
+            subprocess.run = original_run
+            ch.ARTICLES_DIR = original_articles
+            ch.LEDGER_FILE = original_ledger
+            if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
+                ch._OPEN_CANDIDATE_BRANCHES = original_cache
+
+
+def validate_g9_compose_template_mdx(errors: list) -> None:
+    """G9 主断言①[B]：compose_mdx_content 输出必须是**可编译的真实 MDX**。
+
+    - 廉价断言：输出不含 HTML 注释 `<!--`（MDX 不接受，pnpm build 必红）；
+    - 廉价断言：抓取文本 raw_desc 不得出现在 MDX（外部文本不可控，应移入 PR 正文）；
+    - 真实编译：用 node + 本项目 MDX 引擎对输出做真实编译（与 CI 报错同源）。
+    """
+    if not hasattr(ch, "compose_mdx_content"):
+        errors.append("[G9] curate_harvester 缺少 compose_mdx_content()")
+        return
+
+    mdx = ch.compose_mdx_content(dict(_G9_FIXTURE_CANDIDATE))
+
+    if "<!--" in mdx:
+        errors.append(
+            "[G9] 草稿模板含 HTML 注释 `<!--`（MDX 不接受，机器生成的草稿天生 pnpm build 必红）"
+        )
+    # [R5 修复] 非空守卫：若夹具 raw_desc 为空，下方「不得进 MDX」断言会**空转退化**（永真/永假皆不可信）。
+    raw_desc = _G9_FIXTURE_CANDIDATE.get("raw_desc")
+    if not raw_desc:
+        errors.append(
+            "[G9][R5] 夹具 raw_desc 不得为空——否则「raw_desc 不得进 MDX」守卫空转退化，失去判别力"
+        )
+    elif raw_desc in mdx:
+        errors.append(
+            "[G9] 抓取文本 raw_desc 泄漏进 MDX 草稿（外部文本不可控：含 `*/` 会提前闭合 JSX 注释、"
+            "炸掉构建；应移入 PR 正文）"
+        )
+
+    ok, detail = _run_mdx_compile(mdx)
+    if ok is None:
+        errors.append(f"[G9] 无法执行真实 MDX 编译门禁：{detail}")
+        return
+    if not ok:
+        errors.append(f"[G9] 草稿模板真实 MDX 编译失败（机器生成的草稿 pnpm build 会红）：{detail}")
+        return
+    print(
+        "[G9] 草稿模板真实 MDX 编译通过（node + 本项目 MDX 引擎），"
+        "且不含 `<!--`、无 raw_desc 泄漏"
+    )
+
+
+def validate_g9_reverse_bad_templates(errors: list) -> None:
+    """G9 反向用例（MUST）：证明 MDX 编译门禁对三类模板的真实判别力。
+
+    - 含 `<!--` 的模板 ⇒ 必须编译失败（即 B 缺陷形态，可判红）；
+    - JSX 注释内含 `*/` 的抓取文本 ⇒ 必须编译失败（提前闭合注释，外部文本的真实隐患）；
+    - 合法 JSX 注释模板 ⇒ 必须编译通过（正向对照，防门禁过严）。
+    """
+    bad_html = '---\ntitle: "x"\n---\n\n## H\n\n<!-- 坏注释 -->\n'
+    ok_html, detail_html = _run_mdx_compile(bad_html)
+
+    bad_star = '---\ntitle: "x"\n---\n\n## H\n\n{/* 抓取：a */ tail */}\n'
+    ok_star, detail_star = _run_mdx_compile(bad_star)
+
+    good_jsx = '---\ntitle: "x"\n---\n\n## H\n\n{/* 合法静态注释 */}\n\n正文。\n'
+    ok_good, detail_good = _run_mdx_compile(good_jsx)
+
+    if ok_html is not False:
+        errors.append(
+            "[G9] 反向用例失效：含 `<!--` 的 MDX 应编译失败（判红可判别 B 缺陷形态），"
+            f"实际 {ok_html!r}（{detail_html}）"
+        )
+    if ok_star is not False:
+        errors.append(
+            "[G9] 反向用例失效：JSX 注释内含 `*/` 的抓取文本应编译失败（提前闭合注释），"
+            f"实际 {ok_star!r}（{detail_star}）"
+        )
+    if ok_good is not True:
+        errors.append(
+            f"[G9] 正向对照失效：合法 JSX 注释模板应编译通过，实际 {ok_good!r}（{detail_good}）"
+        )
+    if ok_html is False and ok_star is False and ok_good is True:
+        print(
+            "[G9] 反向用例通过：`<!--` 判红；JSX 注释内 `*/` 抓取文本判红；合法 JSX 注释模板通过"
+        )
+
+
+def _run_create_draft_pr_stubbed(candidate: dict, existing_open_pr: bool) -> tuple:
+    """在临时环境 + 记录型 subprocess 替身下运行真实 create_draft_pr，返回 (结果, 记录命令)。"""
+    with _stubbed_create_draft_pr_env(existing_open_pr) as recorded:
+        result = ch.create_draft_pr(candidate)
+    return result, recorded
+
+
+def validate_g9_create_draft_pr_contract(errors: list) -> None:
+    """G9 主断言②[C/D]：候选分支不得携带台账，且返回值语义可区分。
+
+    - [C] git add 只暂存草稿 .mdx，绝不暂存 scripts/.curate-ledger.json（否则必与 master 冲突）；
+    - [D] 「已有待审 PR ⇒ 跳过」必须返回**可区分**的结果常量，禁止再用布尔 True 当成功。
+    全程记录型 subprocess 替身 + 临时 ARTICLES_DIR/LEDGER_FILE：零真实 git/gh、零网络、零 src/ 改动。
+    """
+    required = ("create_draft_pr", "PR_RESULT_CREATED", "PR_RESULT_SKIPPED_DUPLICATE")
+    missing = [name for name in required if not hasattr(ch, name)]
+    if missing:
+        errors.append(f"[G9] curate_harvester 缺少候选 PR 语义所需成员：{missing}")
+        return
+
+    if ch.PR_RESULT_CREATED == ch.PR_RESULT_SKIPPED_DUPLICATE:
+        errors.append("[G9][D] PR_RESULT_CREATED 与 PR_RESULT_SKIPPED_DUPLICATE 必须不同")
+
+    # [C] 无待审 PR ⇒ 走完整创建路径：断言 git add 只暂存 .mdx、不含台账
+    created_result, created_cmds = _run_create_draft_pr_stubbed(
+        dict(_G9_FIXTURE_CANDIDATE), existing_open_pr=False
+    )
+    if created_result != ch.PR_RESULT_CREATED:
+        errors.append(
+            f"[G9][C] 正常路径 create_draft_pr 应返回 PR_RESULT_CREATED，实际 {created_result!r}"
+        )
+    staged = [arg for cmd in created_cmds if cmd[:2] == ["git", "add"] for arg in cmd[2:]]
+    if any("curate-ledger" in arg for arg in staged):
+        errors.append(
+            f"[G9][C] 候选分支携带机器状态台账（git add 含 .curate-ledger.json）：{staged}"
+            "—— 与 master 侧台账必然冲突（PR 必 CONFLICTING）"
+        )
+    if not any(arg.endswith(".mdx") for arg in staged):
+        errors.append(f"[G9][C] create_draft_pr 未把草稿 .mdx 纳入 git add：{staged}")
+
+    # [R5 修复] 断言 raw_desc 确实**进入 PR 正文**（证明「移出 MDX」是移入 PR 描述，而非被丢弃）。
+    pr_create = next((cmd for cmd in created_cmds if cmd[:3] == ["gh", "pr", "create"]), None)
+    raw_desc = _G9_FIXTURE_CANDIDATE.get("raw_desc")
+    if pr_create is None:
+        errors.append("[G9][R5] 未捕获 gh pr create 调用，无法断言 raw_desc 进入 PR 正文")
+    elif not raw_desc:
+        errors.append("[G9][R5] 夹具 raw_desc 为空，PR 正文字断言会空转退化")
+    else:
+        try:
+            body = pr_create[pr_create.index("--body") + 1]
+        except (ValueError, IndexError):
+            body = ""
+        if raw_desc not in body:
+            errors.append(
+                "[G9][R5] raw_desc 未出现在 gh pr create 的 --body 中——"
+                "「移出 MDX」必须改为「移入 PR 正文」，不得被静默丢弃"
+            )
+
+    # [D] 已有待审 PR ⇒ 必须返回可区分的「跳过」结果（不得是布尔 True）
+    skip_result, _ = _run_create_draft_pr_stubbed(
+        dict(_G9_FIXTURE_CANDIDATE), existing_open_pr=True
+    )
+    if isinstance(skip_result, bool) or skip_result != ch.PR_RESULT_SKIPPED_DUPLICATE:
+        errors.append(
+            "[G9][D] 已有待审 PR 时应返回可区分的 PR_RESULT_SKIPPED_DUPLICATE（非布尔成功），"
+            f"实际 {skip_result!r}（用 True 当成功 ⇒ 跳过被判成功 ⇒ 连续多日零产出却全绿）"
+        )
+
+    print(
+        f"[G9] create_draft_pr 契约通过：git add 仅暂存 {[a for a in staged if a.endswith('.mdx')]}；"
+        f"跳过返回 {skip_result!r}、成功返回 {created_result!r}（语义可区分）"
+    )
+
+
+def validate_g9_zero_progress_visible(errors: list) -> None:
+    """G9 主断言③[D/R4]：「积压」与「真故障」的日志与退出码必须**明确区分**。
+
+    - 积压（全部候选均已有待审 PR）⇒ **exit 0** + `::warning::本日零进展：…均已有待审 PR…`，
+      且**不得**出现 `::error::`（定时 Harvest 不得因积压每天变红）；
+    - 真故障（创建 PR 出现 error）⇒ **exit 1** + `::error::`，措辞点名「故障」；
+    - 混合批次（前两个跳过、第三个成功）⇒ 成功创建一个即停止，且不再尝试后续候选。
+    """
+    if not hasattr(ch, "run_create_pr"):
+        errors.append(
+            "[G9][D] curate_harvester 缺少 run_create_pr()（--create-pr 批次/零进展逻辑未实现）"
+        )
+        return
+
+    candidates = [{**_G9_FIXTURE_CANDIDATE, "slug": f"g9-batch-{i}"} for i in range(1, 6)]
+    occupied = [f"candidate/g9-batch-{i}" for i in range(1, 6)]
+
+    # ① 积压：一次预取即全部占用（真实 create_draft_pr + 记录型 subprocess 替身）⇒ exit 0 + ::warning::
+    with _stubbed_create_draft_pr_env(existing_open_pr=True, open_pr_branches=occupied):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code_backlog = ch.run_create_pr(candidates)
+    printed_backlog = buffer.getvalue()
+    if code_backlog != 0:
+        errors.append(
+            f"[G9][R4] 积压（全部候选均已有待审 PR）必须 exit 0（不得每日变红），实际 exit={code_backlog}"
+        )
+    if "本日零进展" not in printed_backlog:
+        errors.append(f"[G9][R4] 积压未打印「本日零进展」标记行：{printed_backlog[-300:]!r}")
+    if "::warning::本日零进展" not in printed_backlog:
+        errors.append(
+            f"[G9][R4] 积压未输出 ::warning::（Actions UI 不可见）：{printed_backlog[-300:]!r}"
+        )
+    if "均已有待审 PR" not in printed_backlog:
+        errors.append(f"[G9][R4] 积压原因未点名「均已有待审 PR」：{printed_backlog[-300:]!r}")
+    if "::error::" in printed_backlog:
+        errors.append("[G9][R4] 积压不得使用 ::error::（须与真故障区分，否则每天变红）")
+
+    # ② 真故障：全部候选创建失败（gh pr create 非零）⇒ exit 1 + ::error::
+    with _stubbed_create_draft_pr_env(existing_open_pr=False, gh_create_fail=True):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code_fail = ch.run_create_pr(candidates)
+    printed_fail = buffer.getvalue()
+    if code_fail == 0:
+        errors.append(f"[G9][R4] 真故障（创建 PR 全失败）必须 exit 1，实际 exit={code_fail}")
+    if "::error::" not in printed_fail:
+        errors.append(f"[G9][R4] 真故障未输出 ::error::：{printed_fail[-300:]!r}")
+    if "故障" not in printed_fail:
+        errors.append(f"[G9][R4] 真故障措辞未点名「故障」（与积压不可混同）：{printed_fail[-300:]!r}")
+
+    # ③ 混合批次：替身控制 create_draft_pr 返回值，断言「成功一个即停」且跳过中间候选
+    if not all(hasattr(ch, name) for name in ("PR_RESULT_CREATED", "PR_RESULT_SKIPPED_DUPLICATE")):
+        print("[G9][D] 跳过混合批次断言：返回常量暂缺")
+        return
+    calls: list = []
+
+    def fake_create(candidate):
+        calls.append(candidate["slug"])
+        if len(calls) < 3:
+            return ch.PR_RESULT_SKIPPED_DUPLICATE
+        return ch.PR_RESULT_CREATED
+
+    original_create = ch.create_draft_pr
+    ch.create_draft_pr = fake_create
+    buffer = io.StringIO()
+    try:
+        with _stubbed_create_draft_pr_env(existing_open_pr=False):
+            with contextlib.redirect_stdout(buffer):
+                code_mixed = ch.run_create_pr(candidates)
+    finally:
+        ch.create_draft_pr = original_create
+    if code_mixed != 0:
+        errors.append(f"[G9][R4] 混合批次成功创建 1 个应返回 0，实际 exit={code_mixed}")
+    if calls != ["g9-batch-1", "g9-batch-2", "g9-batch-3"]:
+        errors.append(f"[G9][R4] 混合批次应在第 3 个候选成功即停止，实际调用序列 {calls}")
+
+    if (
+        code_backlog == 0
+        and code_fail != 0
+        and "::warning::本日零进展" in printed_backlog
+        and "::error::" in printed_fail
+        and calls == ["g9-batch-1", "g9-batch-2", "g9-batch-3"]
+    ):
+        print(
+            "[G9][R4] 收尾语义通过：积压 ⇒ exit 0 + ::warning::；真故障 ⇒ exit 1 + ::error::（措辞分明）；"
+            "混合批次成功一个即停"
+        )
+
+
+def validate_g9_branch_output_wiring(errors: list) -> None:
+    """G9[R1]：``create_draft_pr`` 必须把新建分支名交给上层（``$GITHUB_OUTPUT`` + 返回值 ``.branch``）。
+
+    成功 ⇒ 写 ``branch=candidate/<slug>`` 且 ``.branch`` 同值；
+    跳过 ⇒ ``$GITHUB_OUTPUT`` 写**空** ``branch=`` 且 ``.branch`` 为空串（下游不得误以为有分支）。
+    """
+    if not hasattr(ch, "create_draft_pr") or not hasattr(ch, "_emit_step_output"):
+        errors.append("[G9][R1] curate_harvester 缺少 create_draft_pr / _emit_step_output")
+        return
+    original_output = os.environ.get("GITHUB_OUTPUT")
+    ok_text = skip_text = ""
+    ok_branch = skip_branch = None
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            out_ok = tmp_dir / "out_ok.txt"
+            out_skip = tmp_dir / "out_skip.txt"
+            os.environ["GITHUB_OUTPUT"] = str(out_ok)
+            with _stubbed_create_draft_pr_env(existing_open_pr=False):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    res_ok = ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+            ok_text = out_ok.read_text(encoding="utf-8") if out_ok.exists() else ""
+            ok_branch = getattr(res_ok, "branch", None)
+            os.environ["GITHUB_OUTPUT"] = str(out_skip)
+            with _stubbed_create_draft_pr_env(existing_open_pr=True):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    res_skip = ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+            skip_text = out_skip.read_text(encoding="utf-8") if out_skip.exists() else ""
+            skip_branch = getattr(res_skip, "branch", None)
+    finally:
+        if original_output is None:
+            os.environ.pop("GITHUB_OUTPUT", None)
+        else:
+            os.environ["GITHUB_OUTPUT"] = original_output
+
+    expected = "candidate/g9-fixture"
+    if f"branch={expected}" not in ok_text:
+        errors.append(
+            f"[G9][R1] 成功创建后未把分支名写入 $GITHUB_OUTPUT（期望 branch={expected}）：{ok_text!r}"
+        )
+    if ok_branch != expected:
+        errors.append(f"[G9][R1] create_draft_pr 未通过返回值提供分支名 .branch：{ok_branch!r}")
+    if skip_text.strip() != "branch=":
+        errors.append(
+            f"[G9][R1] 跳过时 $GITHUB_OUTPUT 必须写空 branch=（不得误报有分支）：{skip_text!r}"
+        )
+    if skip_branch not in ("", None):
+        errors.append(f"[G9][R1] 跳过时 .branch 应为空串，实际 {skip_branch!r}")
+    if "candidate/" in (skip_text or ""):
+        errors.append("[G9][R1] 跳过路径不得让下游误以为有分支（$GITHUB_OUTPUT 出现 candidate/）")
+    if f"branch={expected}" in ok_text and ok_branch == expected and skip_text.strip() == "branch=":
+        print(
+            f"[G9][R1] 分支输出接线通过：成功 ⇒ $GITHUB_OUTPUT branch={expected} 且 .branch 同值；"
+            "跳过 ⇒ 空 branch=（不误报）"
+        )
+
+
+def validate_g9_failed_candidate_isolated(errors: list) -> None:
+    """G9[R2]：一次失败的候选**不得**让后续候选因工作区脏而失败。
+
+    - 断言 ``create_draft_pr`` **不再写入台账**（方案 A：移除已不持久化的台账写入）；
+    - 首个候选在 push 阶段失败 ⇒ 第二个候选仍能被尝试并创建成功（工作区未被污染）；
+    - 失败候选残留的未跟踪草稿 ``.mdx`` 已清理（否则拖垮后续候选入口预检）。
+    """
+    if not hasattr(ch, "run_create_pr"):
+        errors.append("[G9][R2] curate_harvester 缺少 run_create_pr()")
+        return
+    candidates = [
+        {**_G9_FIXTURE_CANDIDATE, "slug": "g9-fail-first"},
+        {**_G9_FIXTURE_CANDIDATE, "slug": "g9-ok-second"},
+    ]
+    recorded: list = []
+    ledger_calls: list = []
+    original_run = subprocess.run
+    original_save = ch.save_ledger
+    original_articles = ch.ARTICLES_DIR
+    original_ledger = ch.LEDGER_FILE
+    original_cache = getattr(ch, "_OPEN_CANDIDATE_BRANCHES", None)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        articles_dir = tmp_dir / "articles"
+        articles_dir.mkdir(parents=True, exist_ok=True)
+        ch.ARTICLES_DIR = str(articles_dir)
+        ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+        state = {"ledger_dirty": False}
+
+        def _save_probe(ledger):
+            ledger_calls.append(1)
+            state["ledger_dirty"] = True
+
+        def _status_dirty():
+            # 台账被写坏 或 残留未跟踪草稿 ⇒ git status 报脏（模拟真实污染）
+            return state["ledger_dirty"] or any(articles_dir.glob("*.mdx"))
+
+        if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
+            ch._OPEN_CANDIDATE_BRANCHES = None
+        ch.save_ledger = _save_probe
+        subprocess.run = _make_pr_subprocess_stub(
+            recorded, False, push_fail_slugs=("g9-fail-first",), status_dirty_fn=_status_dirty
+        )
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                code = ch.run_create_pr(candidates)
+        finally:
+            subprocess.run = original_run
+            ch.save_ledger = original_save
+            ch.ARTICLES_DIR = original_articles
+            ch.LEDGER_FILE = original_ledger
+            if hasattr(ch, "_OPEN_CANDIDATE_BRANCHES"):
+                ch._OPEN_CANDIDATE_BRANCHES = original_cache
+        printed = buffer.getvalue()
+        leftover = sorted(p.name for p in articles_dir.glob("*.mdx"))
+    attempted = [c[-1] for c in recorded if c[:3] == ["git", "checkout", "-b"]]
+
+    if ledger_calls:
+        errors.append(
+            "[G9][R2] create_draft_pr 仍写入台账（save_ledger 被调用）——"
+            "候选分支已不提交台账，该写入无价值且污染工作区，应移除（方案 A）"
+        )
+    if "candidate/g9-ok-second" not in attempted:
+        errors.append(
+            f"[G9][R2] 首个候选 push 失败后，第二个候选未被尝试（工作区被污染）：attempted={attempted}"
+        )
+    if code != 0:
+        errors.append(
+            f"[G9][R2] 首个候选失败不应拖垮后续：第二个候选应创建成功 ⇒ exit 0，"
+            f"实际 {code}；输出尾部：{printed[-200:]!r}"
+        )
+    if leftover:
+        errors.append(f"[G9][R2] 失败候选残留未跟踪草稿未清理：{leftover}")
+    if not ledger_calls and "candidate/g9-ok-second" in attempted and code == 0 and not leftover:
+        print(
+            "[G9][R2] 失败候选隔离通过：create_draft_pr 不再写台账；首个候选 push 失败后"
+            "第二个候选仍成功创建（exit 0）、无残留草稿"
+        )
+
+
+def validate_g9_prefetch_exclude(errors: list) -> None:
+    """G9[R3]：``--create-pr`` 用**一次** ``gh`` 调用预取 open 候选分支并预排除被占用者；失败则回退。
+
+    - ``PR_CANDIDATE_BATCH`` 已提高（仅限制发现开销，不再作为零进展判据）；
+    - 预取成功 ⇒ 只对「首个未被占用」候选创建，且**不**逐个候选调用 ``gh pr list --head``；
+    - 预取失败 ⇒ 打印告警并退回逐个候选 ``--head`` 检查（不崩，积压走 exit 0）。
+    """
+    batch = getattr(ch, "PR_CANDIDATE_BATCH", 0)
+    if not isinstance(batch, int) or batch < 10:
+        errors.append(f"[G9][R3] PR_CANDIDATE_BATCH 应提高（>=10，仅限制发现开销），实际 {batch!r}")
+    if not hasattr(ch, "fetch_open_candidate_branches"):
+        errors.append("[G9][R3] curate_harvester 缺少 fetch_open_candidate_branches()")
+        return
+
+    candidates = [{**_G9_FIXTURE_CANDIDATE, "slug": f"g9-r3-{i}"} for i in range(1, 4)]
+    occupied = ["candidate/g9-r3-1", "candidate/g9-r3-2"]
+
+    with _stubbed_create_draft_pr_env(existing_open_pr=True, open_pr_branches=occupied) as rec1:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = ch.run_create_pr(candidates)
+    prefetch_calls = [c for c in rec1 if c[:3] == ["gh", "pr", "list"] and "--head" not in c]
+    # 仅「逐个候选 `gh pr list --head`」才算逐候选检查；`gh pr create --head` 不算。
+    head_calls = [c for c in rec1 if c[:3] == ["gh", "pr", "list"] and "--head" in c]
+    created_branch = [c[-1] for c in rec1 if c[:3] == ["git", "checkout", "-b"]]
+
+    if len(prefetch_calls) != 1:
+        errors.append(
+            f"[G9][R3] 应**恰好一次** `gh pr list --state open` 预取候选分支，实际 {len(prefetch_calls)} 次"
+        )
+    if head_calls:
+        errors.append(
+            f"[G9][R3] 预取成功后不应再逐个候选 --head 检查，实际 {len(head_calls)} 次：{head_calls[:1]}"
+        )
+    if created_branch != ["candidate/g9-r3-3"]:
+        errors.append(
+            f"[G9][R3] 应跳过被占用的前 2 个候选、只创建首个未被占用者（g9-r3-3），实际 {created_branch}"
+        )
+    if code != 0:
+        errors.append(f"[G9][R3] 预排除后被占用前置候选不应阻断创建 ⇒ exit 0，实际 {code}")
+
+    # 回退：预取失败 ⇒ 逐个候选 --head 检查（不崩）
+    with _stubbed_create_draft_pr_env(existing_open_pr=True, prefetch_ok=False) as rec2:
+        buffer2 = io.StringIO()
+        with contextlib.redirect_stdout(buffer2):
+            code2 = ch.run_create_pr(candidates)
+    printed2 = buffer2.getvalue()
+    head_calls2 = [c for c in rec2 if c[:3] == ["gh", "pr", "list"] and "--head" in c]
+    if not head_calls2:
+        errors.append("[G9][R3] 预取失败时应退回逐个候选 --head 检查，实际 0 次")
+    if "退回" not in printed2:
+        errors.append("[G9][R3] 预取失败应打印明确告警（含「退回」字样），不直接崩溃")
+    if code2 != 0:
+        errors.append(
+            f"[G9][R3] 预取失败回退：全部候选已有待审 PR ⇒ 积压 exit 0，实际 exit={code2}"
+        )
+    if (
+        len(prefetch_calls) == 1
+        and not head_calls
+        and created_branch == ["candidate/g9-r3-3"]
+        and code == 0
+        and head_calls2
+        and "退回" in printed2
+        and code2 == 0
+    ):
+        print(
+            "[G9][R3] 预过滤通过：单次预取即排除 2 个被占用候选、只创建首个未被占用者；"
+            "预取失败退回逐个 --head 检查（不崩，积压 exit 0）"
+        )
+
+
+def validate_g9_empty_pool_error(errors: list) -> None:
+    """G9[R4]：候选池为空 ⇒ 真故障 ⇒ ``main()`` exit 1 + ``::error::``（不得静默 exit 0 假绿）。"""
+    if not hasattr(ch, "main"):
+        errors.append("[G9][R4] curate_harvester 缺少 main()")
+        return
+    original_harvest = ch.harvest_candidates
+    original_argv = list(sys.argv)
+    buffer = io.StringIO()
+    code = 0
+    ch.harvest_candidates = lambda **kwargs: []
+    sys.argv = ["curate_harvester.py", "--create-pr"]
+    try:
+        with contextlib.redirect_stdout(buffer):
+            try:
+                ch.main()
+            except SystemExit as exc:
+                code = exc.code if isinstance(exc.code, int) else 1
+    finally:
+        ch.harvest_candidates = original_harvest
+        sys.argv = original_argv
+    printed = buffer.getvalue()
+    if code != 1:
+        errors.append(f"[G9][R4] 候选池为空必须 exit 1（真故障），实际 exit={code}")
+    if "::error::" not in printed:
+        errors.append(f"[G9][R4] 候选池为空未输出 ::error::：{printed[-200:]!r}")
+    if "故障" not in printed:
+        errors.append(f"[G9][R4] 候选池为空措辞未点名「故障」：{printed[-200:]!r}")
+    if code == 1 and "::error::" in printed and "故障" in printed:
+        print("[G9][R4] 空池收尾通过：exit 1 + ::error::（真故障，不得静默假绿）")
+
+
+def validate_g9_workflow_selfcheck_wiring(errors: list) -> None:
+    """G9[R1]：工作流自检步骤必须**检出候选分支**再编译草稿，且措辞不得假绿。
+
+    - create-pr 步骤须有 ``id``，并把 ``branch`` 通过 ``outputs`` 暴露；
+    - 自检步骤须读取 ``steps.<id>.outputs.branch``、非空时 ``git fetch``+``checkout`` 该分支、
+      断言草稿文件确实存在；
+    - 无分支时须写明「本次未创建新分支，跳过草稿构建自检」，且**删除**「对当前分支草稿编译」的假绿陈述。
+    """
+    workflow = ROOT_DIR / ".github" / "workflows" / "harvest-candidates.yml"
+    if not workflow.is_file():
+        errors.append(f"[G9][R1] 工作流文件缺失：{workflow}")
+        return
+    text = _read_text(workflow)
+    if "id: create_pr" not in text:
+        errors.append("[G9][R1] create-pr 步骤缺少 id: create_pr，outputs 无法接线")
+    if "steps.create_pr.outputs.branch" not in text:
+        errors.append("[G9][R1] 自检步骤未读取 steps.create_pr.outputs.branch")
+    if "git fetch origin" not in text:
+        errors.append("[G9][R1] 自检步骤未 git fetch 候选分支")
+    if "git checkout" not in text:
+        errors.append("[G9][R1] 自检步骤未 git checkout 候选分支")
+    if "test -f" not in text and "! -f" not in text:
+        errors.append("[G9][R1] 自检步骤未断言草稿文件确实存在（test -f / [ ! -f ]）")
+    if "本次未创建新分支，跳过草稿构建自检" not in text:
+        errors.append("[G9][R1] 无分支时未写明「本次未创建新分支，跳过草稿构建自检」")
+    if "已对当前分支的草稿做真实 MDX 编译" in text:
+        errors.append("[G9][R1] 残留假绿陈述：「已对当前分支的草稿做真实 MDX 编译」（实际编译的是 master）")
+    if "candidate/" not in text:
+        errors.append("[G9][R1] 自检步骤未从 branch 推导 slug（candidate/ 前缀）")
+    if (
+        "id: create_pr" in text
+        and "steps.create_pr.outputs.branch" in text
+        and "git fetch origin" in text
+        and "git checkout" in text
+        and "test -f" in text
+        and "本次未创建新分支，跳过草稿构建自检" in text
+        and "已对当前分支的草稿做真实 MDX 编译" not in text
+        and "candidate/" in text
+    ):
+        print(
+            "[G9][R1] 工作流自检接线通过：id/outputs 已接、按 branch 检出、断言草稿存在、"
+            "无分支如实跳过且无假绿陈述"
+        )
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
-    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）。")
+    print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）以及 G9（草稿模板经 node + 本项目 MDX 引擎真实编译须通过、且不含 `<!--` / 无 raw_desc 泄漏；候选分支不带台账；跳过-成功返回值语义可区分且零进展 ::warning:: 可见；R1~R5 收口：候选分支名经 $GITHUB_OUTPUT 与返回值交给上层且工作流自检在候选分支上、失败候选不污染后续、--create-pr 一次性预取预排除被占用候选、积压 exit 0 与真故障 exit 1 措辞分明、raw_desc 进 PR 正文且泄漏守卫不空转）。")
 
     errors: list = []
 
@@ -2322,13 +3097,25 @@ def run_gate() -> None:
     validate_g8a_tz_consistency(errors, probe)
     validate_g8b_pick_fresh_behavior(errors, probe)
 
+    # [G9] 草稿模板真实 MDX 编译（B）+ 候选分支不带台账（C）+ 跳过/零进展语义（D）
+    validate_g9_compose_template_mdx(errors)
+    validate_g9_reverse_bad_templates(errors)
+    validate_g9_create_draft_pr_contract(errors)
+    validate_g9_zero_progress_visible(errors)
+    # [G9/R1~R5 收口] 分支输出接线 / 失败候选隔离 / 预取预排除 / 空池真故障 / 工作流自检接线
+    validate_g9_branch_output_wiring(errors)
+    validate_g9_failed_candidate_isolated(errors)
+    validate_g9_prefetch_exclude(errors)
+    validate_g9_empty_pool_error(errors)
+    validate_g9_workflow_selfcheck_wiring(errors)
+
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")
         for err in errors:
             print(f"   - {err}")
         sys.exit(1)
 
-    print("[PASS] G1、G2、G3、G4、G5、G6、G7 与 G8 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；信源 schema 合法（含 admitted⇒license 非空 fail-closed 反向用例）且 --pool 零副作用（台账 sha256 前后一致）与空池两类成因分别可执行报错；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；速测题占位注入幂等（tempfile 副本二次注入 sha256 不变 + 反向坏实现可判红）且 --admit-source 只读不写 sources.json（No-Auto-Approve）；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过。")
+    print("[PASS] G1、G2、G3、G4、G5、G6、G7、G8 与 G9 全绿：文章<->速测题 1:1；三池非空且词条池真参与周期；首页当日组合周期 lcm(文章池, 词条池) >= 90 天且两池不退化；信源 schema 合法（含 admitted⇒license 非空 fail-closed 反向用例）且 --pool 零副作用（台账 sha256 前后一致）与空池两类成因分别可执行报错；候选池台账 v2 迁移幂等、真实台账字段完备且 v2 下 harvest_candidates 零 TypeError；今日上新窗口（第7天命中/第8天不命中）成立且仅作附加展示、轮换索引零扰动；速测题占位注入幂等（tempfile 副本二次注入 sha256 不变 + 反向坏实现可判红）且 --admit-source 只读不写 sources.json（No-Auto-Approve）；rotation.ts 真实行为（指纹/索引/lcm）经 node 原生载入断言且 beijingDayNumber 时区无关；计数口径与站点一致；反向用例与边界自检均通过；G9：草稿模板经 node + 本项目 MDX 引擎真实编译通过且不含 `<!--`/无 raw_desc 泄漏（含反向用例可判红）、候选分支不带台账（git add 仅暂存 .mdx）、跳过-成功返回值语义可区分且零进展 ::warning:: 可见。R1~R5 收口：create_draft_pr 成功即把分支名写 $GITHUB_OUTPUT 并经返回值 ``.branch`` 交给上层、工作流自检在候选分支上检出后编译且无假绿陈述；失败的候选不再写台账、不残留草稿拖垮后续；--create-pr 用单次 gh 调用预排除被占用候选（失败退回首逐 --head 检查）；积压（均已有待审 PR）exit 0 + ::warning::，真故障 / 空池 exit 1 + ::error:: 措辞分明；raw_desc 进入 PR 正文且泄漏守卫带非空防呆。")
 
 
 if __name__ == "__main__":

@@ -50,11 +50,68 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # [R1 修复] 该步把新建候选分支名写入 $GITHUB_OUTPUT（branch=...；无分支时为空），
+      # 供下一步自检 checkout 到**草稿分支**后再编译。
       - name: 执行自动化扫描与待审 PR 发起
+        id: create_pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python scripts/curate_harvester.py --limit 1 --create-pr
+
+      # [E①/R1 修复] PR 上的检查因 triggering_actor 为 bot 被挂 action_required（first_time_contributors
+      # 策略、PR 非 fork）⇒ 门禁一次都没跑。本步在**候选分支**上自跑机器可验证子集，把事实钉进运行摘要。
+      #
+      # R1：create_draft_pr 的 finally 会把 HEAD 切回 master，被提交的草稿随之从工作区消失
+      # （成功创建后 `git checkout -b` 前读到的 current_branch = master）。故**必须**先按上一步输出的
+      # branch 检出候选分支、并断言草稿文件确实存在，`pnpm build` 才真的编译草稿；否则只能如实跳过。
+      #
+      # continue-on-error：草稿按设计不完整（内容类门禁必红），故**不得**让 Harvest 运行变红。
+      - name: 机器可验证门禁自检（不阻塞 Harvest）
+        if: always()
+        continue-on-error: true
+        run: |
+          BRANCH="${{ steps.create_pr.outputs.branch }}"
+          echo "### 🔧 Pipeline B 机器可验证门禁自检" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          run_gate () {
+            name="$1"
+            shift
+            if "$@" > /tmp/gate_self_check.log 2>&1; then
+              echo "- ✅ \`$name\` PASS" >> "$GITHUB_STEP_SUMMARY"
+            else
+              code="$?"
+              echo "- ❌ \`$name\` FAIL（exit=$code，日志尾部如下）" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              tail -n 25 /tmp/gate_self_check.log >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          if [ -z "$BRANCH" ]; then
+            echo "> 本次未创建新分支，跳过草稿构建自检（无候选分支可检出、无草稿可编译）。" >> "$GITHUB_STEP_SUMMARY"
+            echo "> 未对任何草稿执行 \`pnpm check\`/\`pnpm build\`；本次结论以「是否创建候选 PR」为准。" >> "$GITHUB_STEP_SUMMARY"
+            echo "> 内容类门禁（文章↔速测题 1:1、要点撰写、外链全量巡检）属人工职责，草稿合并前必红。" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          SLUG="${BRANCH#candidate/}"
+          echo "在候选分支 \`$BRANCH\` 上运行机器可验证子集（仅为把事实钉进摘要，不影响 Harvest 结论）：" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          if [ ! -f "src/content/articles/${SLUG}.mdx" ]; then
+            echo "**断言失败**：候选分支 \`$BRANCH\` 上不存在草稿文件 \`src/content/articles/${SLUG}.mdx\`。" >> "$GITHUB_STEP_SUMMARY"
+            echo "自检未打在草稿上，**不**执行 \`pnpm check\`/\`pnpm build\`（避免误报已编译草稿）。" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::候选分支 $BRANCH 缺少草稿文件 src/content/articles/${SLUG}.mdx，跳过草稿构建自检" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "- 已检出候选分支并确认草稿存在：\`src/content/articles/${SLUG}.mdx\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          run_gate "pnpm check" pnpm check
+          run_gate "pnpm build" pnpm build
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> B 新增的草稿模板 MDX 编译门禁（G9）属 test:graph 的一部分，本步不重复跑 test:graph；但 \`pnpm build\` 已对候选分支 \`$BRANCH\` 上检出的草稿做真实 MDX 编译，等价覆盖。" >> "$GITHUB_STEP_SUMMARY"
+          echo "> 内容类门禁（文章↔速测题 1:1、要点撰写、外链全量巡检）属人工职责，草稿合并前必红，故不在此步阻塞。" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 写入工作流执行摘要
         if: always()

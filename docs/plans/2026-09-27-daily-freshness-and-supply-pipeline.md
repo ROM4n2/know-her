@@ -483,6 +483,21 @@
 - **实测**：`pnpm curate:admit guokr` ⇒ 5 候选全部「⚠️ 疑似重定向到首页（非真实许可页）」+ `落地 https://www.guokr.com/` + `len=100153`，草案 `license_url` 为空；`plannedparenthood` ⇒ 5 候选全部 `HTTP 404`，草案为空；`sources.json` 零改动。
 - **已知局限（未修，非阻断）**：① **软 404 漏检**——站点把不存在路径重定向到「非站点根的统一友好页」时会误判为 `real`；② `_url_key` 未归一化默认端口（`:443`/`:80`）与 userinfo；③ **发现链路（anchor/sitemap/feed）仍全走 `fetch_url`，未接入重定向检测** ⇒ 配置的 `discovery.url` 若被重定向到首页，只会在 feed 解析失败时以「XML 解析失败」的**误导性告警**暴露（真实根因被掩盖）；④ `LICENSE_PATH_CANDIDATES` 为美国站点口径，对 PP/guokr 真实条款页覆盖不足。
 
+#### 附录：Pipeline B 停摆排查与修复（2026-10-02，计划外故障排查）
+
+**现象**：`Harvest Daily Candidates` 连续 4 天（9/29–10/2）`success`（17s）却**零产出**。
+
+| # | 缺陷 | 物证 | 修法 |
+|---|---|---|---|
+| 1 | **草稿模板 MDX 语法非法** ⇒ 机器生成的草稿 `pnpm build` **必然红** | CI 实录 `mdx:19:1 Unexpected character '!'`；根因是 `compose_mdx_content` 用 HTML 注释 `<!-- -->`（MDX 不接受） | 静态提示改 `{/* */}`；**抓取文本 `raw_desc` 移出 MDX 改入 PR 正文**（外部文本放进 JSX 注释会被当 JS/JSX 解析）；新增 **G9 门禁**：对模板产物做**真实 MDX 编译**（node + 仓库既有 `satteri`，零新增依赖） |
+| 2 | **候选 PR 携带机器状态台账** ⇒ 与 master **必然冲突** | PR #4 `mergeable: CONFLICTING`（其台账 v1，master 已 v2） | `git add` 只暂存 `.mdx`；并移除 `create_draft_pr` 中不再持久化的台账写入 + `finally` 清理残留草稿 |
+| 3 | **「跳过」被当成成功** ⇒ 绿灯假死 | 守卫发现有 open PR 即 `return True`，而 `harvest_candidates(limit=1)` 永远取同一榜首候选 | 返回值改为可区分常量（`created`/`skipped_duplicate`/`error`）；`--create-pr` 前**单次**预取 open 候选分支并预排除被占用者，取首个未占用者；**积压 ⇒ exit 0 + `::warning::`**，真故障/空池 ⇒ exit 1 + `::error::`（措辞分明） |
+| 4 | **审批闸门靠人工手点** ⇒ PR 检查从未跑过 | bot 作为 `triggering_actor` ⇒ `action_required`；对照已合并的 #2 其 actor 是人工。仓库策略为默认值、PR 非 fork ⇒ **改设置无用** | 工作流内自跑机器可验证子集（`pnpm check` + `pnpm build`）并写入 `$GITHUB_STEP_SUMMARY`；**必须按 `steps.create_pr.outputs.branch` 检出候选分支后再构建**（否则编译的是 master，属假绿——此为本批唯一 RED，已由独立评审判出并修复） |
+
+**已执行的 GitHub 侧操作**：关闭 PR #4（附原因）并删除分支 `candidate/contraception-oral-contraceptives`，解开死锁；当前零 open PR、零候选分支。该候选将随后续流水线基于最新 master 重新生成。
+
+**残留风险（已知，未修）**：① 台账在 CI 中**不再持久化** ⇒ 跨运行去重完全依赖「已合并文章 `source_url`」+「open-PR 守卫」；**PR 被「关闭（拒绝）而非合并」的候选无持久记忆，可能被反复提起**。② E① 自检为 `continue-on-error` 非阻断，草稿被破坏时 Harvest 仍绿（仅摘要记录）。③ G9 对 `satteri` 的 pnpm 路径有硬耦合：上游换引擎会**响亮变红**（非静默），需同步更新 `_resolve_mdx_compiler`。④ 模板 frontmatter 未转义引号（`title`/`source_name` 含 `"` 会破坏 YAML）——**既有问题**，本批未处理。
+
 #### F1 修复后对两个新信源的重新判定（**直接改变 Task-10 决策依据**）
 
 用修复后的判定重新核查 `discovery.url`：

@@ -360,7 +360,21 @@ def generate_slug(category: str, source_id: str, candidate_url: str) -> str:
     return f"{category}-{clean_part[:30]}"
 
 
+# [B 修复] 草稿模板必须产出「MDX 合法」正文：MDX 不接受 HTML 注释 `<!-- -->`（构建报
+# `Unexpected character '!' ... use {/* text */}`），故所有**静态**提示一律用 JSX 注释 `{/* ... */}`。
+#
+# 抓取来的文本（candidate['raw_desc']）**严禁**放进 MDX（包含 JSX 注释），理由有二：
+#   ① 外部文本不可控：一旦含 `*/`，会**提前闭合** `{/* ... */}` 注释，余下内容随即被当作 JSX/JS
+#      解析（真机实测：`{/* grab: a */ tail */}` 报 “Unexpected end of file in expression”），
+#      整篇构建崩溃；静态文案可安全放入注释，抓取文本不行。
+#   ② ADR-0002 双轨制：只允许「精炼导读 + 原文直达链接」，原出处描述摘录仅作审阅参考，
+#      不得进入文章正文。
+#   因此第三段「原出处描述摘录」块从 MDX 中移除，改由候选 PR 正文（gh pr create --body）承载。
 def compose_mdx_content(candidate: dict) -> str:
+    """把候选合成为 MDX 草稿正文（输出必须能被 `pnpm build` 的 MDX 编译器接受）。
+
+    [B 修复] 输出不得含 HTML 注释 `<!--`；抓取文本 raw_desc 一律不进正文（见上方说明）。
+    """
     today_str = datetime.date.today().strftime("%Y-%m-%d")
     tags_yaml = "\n".join([f"  - {t}" for t in candidate["tags"]])
     
@@ -387,20 +401,21 @@ last_verified_at: {today_str}
 is_full_text: false
 ---
 
-<!--
+{{/*
 机器生成的候选草稿：正文要点尚未撰写，禁止直接合并。
 
 合并前必须依次完成（PR Checklist 严禁机器自勾选，必须由人核实）：
   1. 跳转 source_url 通读原文，核实主题与本条完全匹配、无张冠李戴；
-  2. 把下方三条占位要点改写为 3~4 条真正有医学增量的提炼干货，删除占位文字与本节注释；
-  3. 确认零版权搬运：只保留人工提炼要点 + 原文直达链接，删除文末【原出处描述摘录】注释块；
+  2. 把下方三条占位要点改写为 3~4 条真正有医学增量的提炼干货，删除占位文字与本注释块；
+  3. 确认零版权搬运：只保留人工提炼要点 + 原文直达链接（抓取来的原出处描述摘录仅存于 PR 描述，
+     严禁搬入正文）；
   4. 补写 frontmatter 的 summary 与 reviewed_by。
 本文件由 scripts/curate_harvester.py 自动生成，仅完成了外链探活与 Schema 结构校验。
--->
+*/}}
 
 ## 核心要点导读
 
-<!-- 以下 3 条为占位符，必须由维护者通读原文后重写，切勿保留原样合并 -->
+{{/* 以下 3 条为占位符，必须由维护者通读原文后重写，切勿保留原样合并 */}}
 1. **核心机制与客观认知**：（待人工提炼）
 2. **日常自我关注与防范**：（待人工提炼）
 3. **常见误区与就医时机**：（待人工提炼）
@@ -408,11 +423,6 @@ is_full_text: false
 ## 原出处直达
 
 本导读为策展精炼版。完整数据、分型细节与官方建议请点击下方按钮直达**{candidate['source_name']}**原文页面。
-
-<!--
-【原出处描述摘录】（仅作审阅参考，合并前必须删除本节）
-{candidate.get('raw_desc', '')}
--->
 """
     return mdx
 
@@ -1366,7 +1376,110 @@ def run_admit_source(source_id: str) -> int:
     return 0
 
 
-def create_draft_pr(candidate: dict) -> bool:
+# [D 修复] create_draft_pr 的三种结果必须**可区分**：禁止再用布尔 True 同时表示
+# 「创建成功」与「因已有待审 PR 跳过」——否则 main() 会把「跳过」当成功 ⇒ 每日取同一榜首候选
+# → 打印 ⏭️ → exit 0（连续多日零产出却全绿）。
+PR_RESULT_CREATED = "created"
+PR_RESULT_SKIPPED_DUPLICATE = "skipped_duplicate"
+PR_RESULT_ERROR = "error"
+
+# [R3 修复] 本常量**仅**用于限制「发现」候选的开销（每次抓取多少个候选供选择），
+# 不再是判定「本日零进展」的依据——零进展已由 run_create_pr 的「一次性预排除已被占用的候选」
+# 逻辑判定（见 fetch_open_candidate_branches / run_create_pr）。故适当提高上限，避免
+# 积压 >= 5 时候选批被已有待审 PR 全部占满而复现零进展死锁。
+PR_CANDIDATE_BATCH = 10
+
+
+class DraftPrResult(str):
+    """[R1 修复] ``create_draft_pr`` 的返回值：``==`` PR_RESULT_* 常量，并额外携带分支名。
+
+    继承 ``str`` 以**保持既有契约**（``result == PR_RESULT_CREATED`` 等断言不变、布尔误用仍可判红），
+    同时通过 ``.branch`` 把新建分支名**返回**给上层（``run_create_pr`` / 工作流），
+    使「本地无 ``$GITHUB_OUTPUT``」时上游仍能拿到分支名。``branch`` 为空串表示未创建分支。
+    """
+
+    branch: str
+
+    def __new__(cls, result: str, branch: str = ""):
+        obj = super().__new__(cls, result)
+        obj.branch = branch
+        return obj
+
+
+def _emit_step_output(key: str, value: str) -> None:
+    """[R1 修复] 把 ``key=value`` 追加写入 ``$GITHUB_OUTPUT``（指向可写文件时）。
+
+    本地运行无该环境变量（或不可写）时**静默跳过**：分支名仍由 ``create_draft_pr`` 的
+    ``DraftPrResult.branch`` 返回给上层，两条通道互补。
+    """
+    path = os.environ.get("GITHUB_OUTPUT")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{key}={value}\n")
+    except OSError:
+        pass
+
+
+# [R3 修复] ``--create-pr`` 一次性取回的 open 候选 PR 分支缓存：
+#   ``set`` = 已取回（权威，create_draft_pr 据此跳过被占用候选，**不再逐个候选打 API**）；
+#   ``None`` = 未取回（取回失败，退回逐个候选的 ``gh pr list --head`` 检查，即现状逻辑）。
+_OPEN_CANDIDATE_BRANCHES: "set | None" = None
+
+
+def fetch_open_candidate_branches() -> "set | None":
+    """[R3 修复] **一次** ``gh pr list`` 取回全部 open 候选 PR 的分支名（仅 ``candidate/`` 前缀）。
+
+    成功返回分支名集合（含空集）；网络/权限/解析失败返回 ``None``（调用方据此退回逐个候选检查，
+    不直接崩溃）。单次调用取代「对每个候选各打一次 ``--head``」的 O(N) 开销。
+    """
+    res = subprocess.run(
+        ["gh", "pr", "list", "--state", "open", "--json", "headRefName"],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        print(
+            "  ⚠️ 一次性取回 open PR 列表失败，退回逐个候选 --head 检查："
+            f"{(res.stderr or '').strip()[:160]}"
+        )
+        return None
+    try:
+        payload = json.loads(res.stdout or "[]")
+    except json.JSONDecodeError:
+        print("  ⚠️ open PR 列表输出非 JSON，退回逐个候选 --head 检查")
+        return None
+    branches: set = set()
+    for item in payload if isinstance(payload, list) else []:
+        name = (item or {}).get("headRefName") if isinstance(item, dict) else None
+        if isinstance(name, str) and name.startswith("candidate/"):
+            branches.add(name)
+    return branches
+
+
+def _branch_already_open(branch_name: str) -> bool:
+    """[R3] 判定候选分支是否已有待审 PR：优先用一次性缓存，缺失时退回逐个 ``--head`` 检查。"""
+    cached = _OPEN_CANDIDATE_BRANCHES
+    if cached is not None:
+        return branch_name in cached
+    dup = subprocess.run(
+        ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
+        capture_output=True,
+        text=True,
+    )
+    return dup.returncode == 0 and dup.stdout.strip() not in ("", "[]")
+
+
+def create_draft_pr(candidate: dict) -> "DraftPrResult":
+    """为单个候选创建 Draft PR，返回**可区分**的 ``DraftPrResult``。
+
+    ``==`` ``PR_RESULT_CREATED`` / ``PR_RESULT_SKIPPED_DUPLICATE`` / ``PR_RESULT_ERROR``；
+    调用方（``run_create_pr``）据其继续尝试下一个候选或判定「本日零进展」。
+
+    [R1 修复] 成功创建分支后：把 ``branch=<branch_name>`` 写入 ``$GITHUB_OUTPUT``（缺失即静默跳过），
+    并通过返回值的 ``.branch`` 把分支名交回上层；跳过 / 失败时 ``branch`` 为**空串**（下游不得误以为有分支）。
+    """
     slug = candidate["slug"]
     branch_name = f"candidate/{slug}"
     target_file = os.path.join(ARTICLES_DIR, f"{slug}.mdx")
@@ -1375,7 +1488,8 @@ def create_draft_pr(candidate: dict) -> bool:
     st = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
     if st.stdout.strip():
         print("❌ 当前 Git 工作区存在未提交变更，请先保存后再发起 Draft PR")
-        return False
+        _emit_step_output("branch", "")
+        return DraftPrResult(PR_RESULT_ERROR, "")
 
     current_branch = subprocess.run(
         ["git", "branch", "--show-current"], capture_output=True, text=True
@@ -1383,15 +1497,13 @@ def create_draft_pr(candidate: dict) -> bool:
 
     print(f"\n🚀 开始自动化 PR 流程: {branch_name}")
     try:
-        # 防重复守卫：该候选分支若已有待审 PR，直接跳过，避免每日重复刷 PR
-        dup = subprocess.run(
-            ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
-            capture_output=True,
-            text=True,
-        )
-        if dup.returncode == 0 and dup.stdout.strip() not in ("", "[]"):
-            print(f"  ⏭️ 分支 {branch_name} 已存在待审 PR，跳过本次候选生成")
-            return True
+        # 防重复守卫：该候选分支若已有待审 PR，直接跳过，避免每日重复刷 PR。
+        # [R3] 优先用一次性取回的缓存（无逐候选 API）；缓存缺失时退回 --head 检查。
+        if _branch_already_open(branch_name):
+            # [D 修复] 跳过必须是**可区分**的结果（不再是当成功的 True）：调用方据此继续尝试下一候选。
+            print(f"  ⏭️ 分支 {branch_name} 已存在待审 PR，跳过本候选（尝试下一个）")
+            _emit_step_output("branch", "")
+            return DraftPrResult(PR_RESULT_SKIPPED_DUPLICATE, "")
 
         # 创建分支
         subprocess.run(["git", "checkout", "-b", branch_name], check=True)
@@ -1402,22 +1514,9 @@ def create_draft_pr(candidate: dict) -> bool:
             f.write(mdx_content)
         print(f"  ✓ 已生成草稿文件: {target_file}")
 
-        # 更新台账（v2 对象口径；单写者纪律：仅经 load_ledger / save_ledger）
-        ledger = load_ledger()
-        if candidate["source_url"] not in ledger_seen_urls(ledger):
-            today = datetime.date.today().isoformat()
-            ledger.setdefault("processed_urls", []).append(
-                {
-                    "url": candidate["source_url"],
-                    "status": "published",
-                    "source_id": candidate.get("source_id", ""),
-                    "first_seen": today,
-                    "last_probed": today,
-                    "http_status": 200,
-                }
-            )
-        save_ledger(ledger)
-        print(f"  ✓ 已更新台账: {LEDGER_FILE}")
+        # [R2 修复] 此处**不再**写入台账（方案 A）：候选分支已不提交台账（C 修复）⇒ CI 中该写入
+        # 不持久化、纯属无用写入；且在 push/pr 失败时会污染工作区、拖垮后续候选的入口预检。
+        # 本地人工流程的 D1 台账登记保留在 run_draft_url（未被本批改动）。
 
         # 验证合规性
         chk = subprocess.run(["python", os.path.join(SCRIPT_DIR, "curate.py"), "check"], capture_output=True, text=True)
@@ -1426,7 +1525,10 @@ def create_draft_pr(candidate: dict) -> bool:
             raise RuntimeError("curate check failed")
 
         # Git commit
-        subprocess.run(["git", "add", target_file, LEDGER_FILE], check=True)
+        # [C 修复] 只提交草稿文件，**不**提交 scripts/.curate-ledger.json：台账是机器状态，
+        # master 侧每日运行也会写它 ⇒ 把它提交进候选分支必然与 master 冲突（PR #4 mergeable=CONFLICTING
+        # 即由此而来）。故候选分支只携带 .mdx。
+        subprocess.run(["git", "add", target_file], check=True)
         commit_msg = f"feat(curate): 自动生成候选导读草稿《{candidate['title']}》"
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
 
@@ -1468,10 +1570,13 @@ def create_draft_pr(candidate: dict) -> bool:
 - [ ] **人工撰写导读**：已在 Files changed 中填入 3~4 点人工提炼的核心要点，清除了占位提示；
 - [ ] **版权合规核验**：遵循 ADR-0002 双轨制（精炼导读 + 原文直达链接，无侵权搬运）；
 - [ ] **CI 门禁全绿**：Astro 编译与外链真实探测均 PASS。
+
+### 📎 原出处描述摘录（仅作审阅参考，严禁搬运进文章正文）
+{candidate.get('raw_desc', '') or '（来源页未提供 description）'}
 """
 
         # gh pr create
-        print(f"  📋 正在创建 GitHub Draft PR...")
+        print("  📋 正在创建 GitHub Draft PR...")
         pr_cmd = [
             "gh", "pr", "create",
             "--draft",
@@ -1485,17 +1590,133 @@ def create_draft_pr(candidate: dict) -> bool:
         if res.returncode == 0:
             pr_url = res.stdout.strip()
             print(f"  🎉 Draft PR 创建成功: {pr_url}")
-            return True
-        else:
-            print(f"❌ gh pr create 失败: {res.stderr}")
-            return False
+            # [R1] 分支确已提交并推送成功：把分支名交给上层（$GITHUB_OUTPUT + 返回值）。
+            _emit_step_output("branch", branch_name)
+            return DraftPrResult(PR_RESULT_CREATED, branch_name)
+        print(f"❌ gh pr create 失败: {res.stderr}")
+        _emit_step_output("branch", "")
+        return DraftPrResult(PR_RESULT_ERROR, "")
 
     except Exception as e:
         print(f"❌ 流程异常: {e}")
-        return False
+        _emit_step_output("branch", "")
+        return DraftPrResult(PR_RESULT_ERROR, "")
     finally:
         # 无论成功失败，恢复原分支
         subprocess.run(["git", "checkout", current_branch], check=False)
+        # [R2 修复] 清理可能残留的（未提交 / 未跟踪）草稿文件：恢复原分支后，若该 .mdx 仍留在
+        # 工作区，会让批次内**后续候选**的入口预检 `git status --porcelain` 直接判 ERROR。
+        # 成功路径下草稿已提交在候选分支、master 上不存在此文件，此清理为无害空操作。
+        if os.path.exists(target_file):
+            try:
+                os.remove(target_file)
+            except OSError:
+                pass
+
+
+def _append_step_summary(markdown: str) -> None:
+    """把结论追加写入 $GITHUB_STEP_SUMMARY（环境变量缺失时静默跳过，等价于本地运行）。"""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    try:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(markdown)
+    except OSError:
+        pass
+
+
+def _report_backlog(reason: str) -> None:
+    """[R4 修复] 上报**积压**（候选全部已有待审 PR，即「轮到人审了」）：非故障。
+
+    打印 ``::warning::`` + 运行摘要，措辞明确点名「积压 / 等待人工审阅」，**不**含「故障」字样；
+    调用方应据此 ``exit 0``——定时 Harvest **不得**因积压而每天变红。
+    """
+    message = f"本日零进展：{reason}"
+    print(f"\n⏸️ {message}")
+    print(f"::warning::{message}")
+    _append_step_summary(
+        f"### ⏸️ {message}\n\n"
+        "- 结论：**积压**（非故障）——本轮发现的候选均已有待审 PR，请人工审阅并合并后即可恢复产出。\n"
+        "- 定时 Harvest 不会因此次积压变红（exit 0）。\n"
+    )
+
+
+def _report_failure(reason: str) -> None:
+    """[R4 修复] 上报**真故障**（创建 PR 过程出现 error / 候选池为空）：``::error::`` + 摘要。
+
+    措辞明确点名「故障」，调用方据此 ``exit 1``（与「积压」严格区分，人工一眼可辨）。
+    """
+    message = f"本日零进展（故障）：{reason}"
+    print(f"\n❌ {message}")
+    print(f"::error::{message}")
+    _append_step_summary(
+        f"### ❌ {message}\n\n"
+        "- 结论：**故障**（非积压）——创建候选 PR 的流程出现错误，需人工排查流水线。\n"
+    )
+
+
+def run_create_pr(candidates: list) -> int:
+    """``--create-pr`` 批次执行路径：逐个尝试候选，成功创建一个 Draft PR 即停止。
+
+    [D 修复]
+      - 「创建成功」（``PR_RESULT_CREATED``）与「因已有待审 PR 跳过」（``PR_RESULT_SKIPPED_DUPLICATE``）
+        是**可区分**的两种结果；遇到跳过时**继续尝试下一个候选**，避免每日取同一榜首候选而永久跳过。
+
+    [R3 修复] 开始处**一次** ``gh pr list`` 取回所有 open 候选分支并预先排除被占用的候选，
+    再按顺序取首个未被占用者创建；取回失败则退回逐个候选 ``--head`` 检查（不崩）。
+
+    [R4 修复] 收尾分两类：
+      - **积压**（发现到的候选**全部**已有待审 PR）⇒ ``exit 0`` + ``::warning::`` + 摘要；
+      - **真故障**（创建过程出现 error）或**候选池为空** ⇒ ``exit 1`` + ``::error::``。
+
+    返回进程退出码：0 = 成功创建 1 个候选 PR 或「积压（等待人审）」；1 = 真故障 / 空池。
+    """
+    global _OPEN_CANDIDATE_BRANCHES
+    found = len(candidates)
+    _OPEN_CANDIDATE_BRANCHES = fetch_open_candidate_branches()
+    try:
+        if _OPEN_CANDIDATE_BRANCHES is not None:
+            remaining = [
+                c for c in candidates if f"candidate/{c['slug']}" not in _OPEN_CANDIDATE_BRANCHES
+            ]
+            excluded = found - len(remaining)
+            if excluded:
+                print(
+                    f"\n  ⏭️ [R3] 单次 gh 调用预排除 {excluded}/{found} 个候选：其候选分支已有待审 PR"
+                )
+            candidates = remaining
+
+        total = len(candidates)
+        if total == 0:
+            # [R4] 全部候选均已被占用 ⇒ 积压（非故障）⇒ exit 0。
+            _report_backlog(f"{found} 个候选均已有待审 PR，等待人工审阅")
+            return 0
+
+        skipped = 0
+        failed = 0
+        for index, candidate in enumerate(candidates, 1):
+            result = create_draft_pr(candidate)
+            if result == PR_RESULT_CREATED:
+                print(f"\n✅ 本日已创建候选 PR（候选 {index}/{total}，成功创建一个即停止）")
+                return 0
+            if result == PR_RESULT_SKIPPED_DUPLICATE:
+                skipped += 1
+                continue
+            failed += 1
+            print(f"  ⚠️ 候选 {candidate.get('slug', '')} 创建失败，继续尝试下一个候选")
+
+        if failed == 0 and skipped:
+            # [R4] 未被创建且无任何失败 ⇒ 全部已有待审 PR ⇒ 积压（非故障）⇒ exit 0。
+            _report_backlog(f"{skipped} 个候选均已有待审 PR，等待人工审阅")
+            return 0
+        # [R4] 出现创建失败 ⇒ 真故障 ⇒ exit 1 + ::error::。
+        _report_failure(
+            f"{total} 个候选均未能创建 PR（已有待审 PR 跳过 {skipped}，失败 {failed}），等待人工介入"
+        )
+        return 1
+    finally:
+        _OPEN_CANDIDATE_BRANCHES = None
 
 
 def main():
@@ -1533,8 +1754,18 @@ def main():
         sys.exit(run_admit_source(args.admit_source))
 
     harvest_limit = args.limit if args.limit is not None else 1
+    # [D/R3 修复] --create-pr 需要候选批次：若只取 1 个候选，遇「已有待审 PR」即无候选可退；
+    # 现改为取 PR_CANDIDATE_BATCH（=10）个候选，再由 run_create_pr 用一次性 gh 调用预排除已被
+    # 占用的候选后取首个未被占用者。本上限**仅**限制发现开销，不再作为「零进展」的判据。
+    if args.create_pr:
+        harvest_limit = max(harvest_limit, PR_CANDIDATE_BATCH)
+
     candidates = harvest_candidates(limit=harvest_limit, source_id=args.source_id)
     if not candidates:
+        if args.create_pr:
+            # [R4 修复] 候选池为空属**真故障**（非积压）：显式 ::error:: + 摘要，exit 1。
+            _report_failure("候选池为空（未发现任何新候选，或全部候选均已在台账 / 已发布）")
+            sys.exit(1)
         print("\n✨ 今日无新增待收录候选或全部候选均已在台账中。")
         return
 
@@ -1561,10 +1792,8 @@ def main():
             print(f"💾 已保存草稿: {target_path}")
 
     if args.create_pr:
-        for c in candidates:
-            success = create_draft_pr(c)
-            if not success:
-                sys.exit(1)
+        # [D 修复] 逐个尝试候选直到成功创建一个（避免一次刷多个 PR）；全被跳过 ⇒ 显式报「本日零进展」。
+        sys.exit(run_create_pr(candidates))
 
 
 if __name__ == "__main__":
