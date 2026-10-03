@@ -3825,6 +3825,461 @@ def validate_g9_workflow_selfcheck_wiring(errors: list) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# [P1 批次] 三条 P1 的可判红断言（详见各 validate_p1_* 的 docstring）
+# ---------------------------------------------------------------------------
+
+# 台账夹具：同一个 URL 以 pending 身份登记（= 维护者起草中或已放弃）。
+_P1_PENDING_URL = "https://example.test/p1-pending-topic"
+_P1_PUBLISHED_URL = "https://example.test/p1-published-topic"
+_P1_REJECTED_URL = "https://example.test/p1-rejected-topic"
+
+
+def _p1_pending_ledger() -> dict:
+    """构造含 pending / published / rejected 三态的台账夹具（纯内存，不触碰真实台账）。"""
+    return {
+        "version": 2,
+        "last_updated": "2026-09-27T00:00:00+00:00",
+        "processed_urls": [
+            {
+                "url": _P1_PENDING_URL,
+                "status": "pending",
+                "source_id": "p1-fixture",
+                "first_seen": "2026-09-27",
+                "last_probed": "2026-09-27",
+                "http_status": 200,
+            },
+            {
+                "url": _P1_PUBLISHED_URL,
+                "status": "published",
+                "source_id": "p1-fixture",
+                "first_seen": "2026-09-20",
+                "last_probed": "2026-09-26",
+                "http_status": 200,
+            },
+            {
+                "url": _P1_REJECTED_URL,
+                "status": "rejected",
+                "source_id": "p1-fixture",
+                "first_seen": "2026-09-18",
+                "last_probed": "2026-09-25",
+                "http_status": 200,
+            },
+        ],
+    }
+
+
+def _p1_drive_collect_pool(ledger: dict, discovered: list) -> tuple:
+    """在**全打桩**环境驱动一次 ``collect_pool_candidates``，返回 ``(pool, save_ledger_calls)``。
+
+    零真实网络（``discover_candidates`` 打桩）、零真实台账写盘（``load_ledger`` 返回夹具、
+    ``save_ledger`` 只记账）、``finally`` 逐项还原。
+    """
+    original_ledger = ch.LEDGER_FILE
+    original_sources = ch.SOURCES_FILE
+    original_articles = ch.ARTICLES_DIR
+    original_load = ch.load_ledger
+    original_save = ch.save_ledger
+    original_discover = ch.discover_candidates
+    original_existing = ch.get_existing_article_urls
+    saved_calls: list = []
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            sources_file = tmp_dir / "sources.json"
+            sources_file.write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "p1-fixture",
+                            "name": "P1 夹具信源",
+                            "base_url": "https://example.test",
+                            "default_category": "body",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            articles_dir = tmp_dir / "articles"
+            articles_dir.mkdir(parents=True, exist_ok=True)
+
+            def fake_discover(_src, seen_urls):
+                return [(url, f"标题-{url}") for url in discovered if url not in seen_urls]
+
+            ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+            ch.SOURCES_FILE = str(sources_file)
+            ch.ARTICLES_DIR = str(articles_dir)
+            ch.load_ledger = lambda: ledger
+            ch.save_ledger = lambda data: saved_calls.append(data)
+            ch.discover_candidates = fake_discover
+            ch.get_existing_article_urls = lambda: set()
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                pool = ch.collect_pool_candidates()
+    finally:
+        ch.LEDGER_FILE = original_ledger
+        ch.SOURCES_FILE = original_sources
+        ch.ARTICLES_DIR = original_articles
+        ch.load_ledger = original_load
+        ch.save_ledger = original_save
+        ch.discover_candidates = original_discover
+        ch.get_existing_article_urls = original_existing
+    return pool, saved_calls
+
+
+def validate_p1_pending_visible_in_pool(errors: list) -> None:
+    """[P1-1] 台账 ``pending`` **必须在 ``--pool`` 里仍可见**，但仍被 ``harvest_candidates`` 排除。
+
+    实证缺陷：``ledger_seen_urls`` 三种状态全收，且 ``collect_pool_candidates``（人的视图）与
+    ``harvest_candidates``（机器的视图）**都**用它 ⇒ 维护者登记过一个 pending 后，即便决定这个
+    选题不好、不做了，该 URL 也**永久**不再出现在 ``--pool`` 里，只能手工编辑
+    ``scripts/.curate-ledger.json`` 恢复（而该文件的存在从未在输出中告知）。
+
+    断言（两个消费方口径必须分离，且意图显式）：
+      - ``ledger_seen_urls(ledger, exclude_pending=True)``（--pool 口径）**不含** pending URL；
+      - ``ledger_seen_urls(ledger, exclude_pending=False)``（harvest 口径）**含** pending URL；
+      - ``collect_pool_candidates`` 在 pending 台账下**仍返回** pending 候选；
+      - ``--pool`` 仍零副作用（本路径不得出现任何 ``save_ledger`` 调用）。
+    """
+    if not hasattr(ch, "ledger_seen_urls"):
+        errors.append("[P1-1] curate_harvester 缺少 ledger_seen_urls()")
+        return
+
+    import inspect as _inspect
+
+    try:
+        params = _inspect.signature(ch.ledger_seen_urls).parameters
+    except (TypeError, ValueError):
+        params = {}
+    if "exclude_pending" not in params:
+        errors.append(
+            "[P1-1] ledger_seen_urls 必须提供显式参数 exclude_pending（两个消费方口径分离，"
+            "不得靠调用方隐式约定）"
+        )
+        return
+
+    ledger = _p1_pending_ledger()
+    human_view = ch.ledger_seen_urls(ledger, exclude_pending=True)
+    machine_view = ch.ledger_seen_urls(ledger, exclude_pending=False)
+
+    if _P1_PENDING_URL in human_view:
+        errors.append(
+            "[P1-1] --pool 口径（exclude_pending=True）仍把 pending 计入已见 ⇒ "
+            "维护者起草中/已放弃的选题会永久从候选池消失"
+        )
+    if _P1_PENDING_URL not in machine_view:
+        errors.append(
+            "[P1-1] harvest 口径（exclude_pending=False）必须仍把 pending 计入已见 ⇒ "
+            "会对「正在起草中」的选题重复开 PR"
+        )
+    if _P1_PUBLISHED_URL not in human_view or _P1_REJECTED_URL not in human_view:
+        errors.append(
+            "[P1-1] exclude_pending=True 只能排除 pending，published / rejected 必须仍计入已见："
+            f"{sorted(human_view)}"
+        )
+
+    # 行为级：--pool 实际候选收集路径仍返回 pending 候选，且零副作用。
+    pool, saved_calls = _p1_drive_collect_pool(ledger, [_P1_PENDING_URL])
+    pool_urls = [c.get("url") for c in pool]
+    if _P1_PENDING_URL not in pool_urls:
+        errors.append(
+            f"[P1-1] --pool 候选收集未返回 pending 候选（维护者再也看不到自己登记的选题）："
+            f"实际返回 {pool_urls}"
+        )
+    if saved_calls:
+        errors.append(f"[P1-1] --pool 出现台账写副作用（严禁 save_ledger）：{len(saved_calls)} 次")
+
+    if (
+        _P1_PENDING_URL not in human_view
+        and _P1_PENDING_URL in machine_view
+        and _P1_PENDING_URL in pool_urls
+        and not saved_calls
+    ):
+        print(
+            "[P1-1] pending 可见性分口径通过：--pool 口径排除 pending（候选仍可见，pool_urls="
+            f"{pool_urls}），harvest 口径保留 pending（不重复开 PR）；--pool 零 save_ledger 调用"
+        )
+
+
+# 四种注入失败场景的 dailyQuiz.ts 内容（缺 DAILY_QUIZZES / 花括号不配平 / 无对象起始花括号）。
+_P1_QUIZ_NO_MARKER = "export interface QuizItem {\n  articleId: string;\n}\n"
+_P1_QUIZ_UNBALANCED = (
+    "export const DAILY_QUIZZES: Record<string, QuizItem> = {\n"
+    "  'existing-slug': {\n"
+    "    articleId: 'existing-slug',\n"
+)
+_P1_QUIZ_NO_OPEN_BRACE = "export const DAILY_QUIZZES: string = 'oops-no-brace';\n"
+
+
+def _p1_drive_run_draft_url(quiz_text, make_quiz: bool = True) -> tuple:
+    """在 tempfile 沙箱内驱动一次 ``run_draft_url``，返回 ``(exit_code, printed)``。
+
+    零真实网络（``_build_draft_candidate`` 打桩）、零真实台账/文章/速测题改动，``finally`` 还原。
+    """
+    original_build = ch._build_draft_candidate
+    original_articles = ch.ARTICLES_DIR
+    original_ledger = ch.LEDGER_FILE
+    original_quiz = ch.QUIZ_FILE
+    candidate = {**_G9_FIXTURE_CANDIDATE, "slug": "p1-inject", "source_url": "https://example.test/p1"}
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            articles_dir = tmp_dir / "articles"
+            articles_dir.mkdir(parents=True, exist_ok=True)
+            quiz_file = tmp_dir / "dailyQuiz.ts"
+            if make_quiz:
+                quiz_file.write_text(
+                    _read_text(Path(original_quiz)) if quiz_text is None else quiz_text,
+                    encoding="utf-8",
+                )
+            ch.ARTICLES_DIR = str(articles_dir)
+            ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+            ch.QUIZ_FILE = str(quiz_file)
+            ch._build_draft_candidate = lambda _url, _sources: dict(candidate)
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                code = ch.run_draft_url(candidate["source_url"])
+            printed = buffer.getvalue()
+    finally:
+        ch._build_draft_candidate = original_build
+        ch.ARTICLES_DIR = original_articles
+        ch.LEDGER_FILE = original_ledger
+        ch.QUIZ_FILE = original_quiz
+    return code, printed
+
+
+def validate_p1_inject_result_distinguishable(errors: list) -> None:
+    """[P1-2] 占位注入的**多种失败**不得统一报成「已存在」，且失败时命令不得 exit 0。
+
+    实证缺陷：``inject_quiz_placeholder`` 的四条失败路径（文件不可读 / 花括号不配平 / 缺
+    ``DAILY_QUIZZES`` / ``open_index == -1``）**全部**返回 ``False`` 并汇流到同一句
+    「⏭️ 已存在」；随后照常打印「✅ 草稿骨架已生成」并 exit 0 ⇒ 维护者以为占位就位，实际
+    文件里没有，G1 必红且无从追溯。
+
+    断言：
+      - 共享入口返回**可区分**结果（``(ok, reason)``，reason ∈ injected / already_present /
+        failed:<原因>），且既有 ``inject_quiz_placeholder(...) -> bool`` 签名与语义不变；
+      - ``run_draft_url`` 在**每一种**失败下都打印 ❌（而非 ⏭️）且退出码非零；
+      - ``run_draft_url`` 在「已存在」路径下仍打印 ⏭️ 且 exit 0。
+    """
+    if not hasattr(ch, "ensure_quiz_placeholder"):
+        errors.append(
+            "[P1-2] curate_harvester 缺少共享入口 ensure_quiz_placeholder()"
+            "（禁止用 False 同时表达「已存在」与「失败」）"
+        )
+        return
+
+    if not hasattr(ch, "inject_quiz_placeholder"):
+        errors.append("[P1-2] curate_harvester 缺少既有 inject_quiz_placeholder()（G7 依赖）")
+        return
+
+    # 共享入口的可区分性（tempfile 副本，零真实 src/ 改动）
+    outcomes: dict = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        injected = tmp_dir / "injected.ts"
+        injected.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+        outcomes["injected"] = ch.ensure_quiz_placeholder(injected, "p1-shared")
+        outcomes["already_present"] = ch.ensure_quiz_placeholder(injected, "p1-shared")
+
+        missing_marker = tmp_dir / "no-marker.ts"
+        missing_marker.write_text(_P1_QUIZ_NO_MARKER, encoding="utf-8")
+        outcomes["missing_marker"] = ch.ensure_quiz_placeholder(missing_marker, "p1-shared")
+
+        unbalanced = tmp_dir / "unbalanced.ts"
+        unbalanced.write_text(_P1_QUIZ_UNBALANCED, encoding="utf-8")
+        outcomes["unbalanced"] = ch.ensure_quiz_placeholder(unbalanced, "p1-shared")
+
+        no_open_brace = tmp_dir / "no-open-brace.ts"
+        no_open_brace.write_text(_P1_QUIZ_NO_OPEN_BRACE, encoding="utf-8")
+        outcomes["no_open_brace"] = ch.ensure_quiz_placeholder(no_open_brace, "p1-shared")
+
+        unreadable = tmp_dir / "missing-dir" / "none.ts"
+        unreadable.parent.mkdir(parents=True, exist_ok=True)
+        outcomes["unreadable"] = ch.ensure_quiz_placeholder(unreadable, "p1-shared")
+
+    if outcomes["injected"] != (True, "injected"):
+        errors.append(
+            f"[P1-2] 首次注入应返回 (True, 'injected')，实际 {outcomes['injected']!r}"
+        )
+    if outcomes["already_present"] != (False, "already_present"):
+        errors.append(
+            "[P1-2] 二次注入应返回 (False, 'already_present')，实际 "
+            f"{outcomes['already_present']!r}（「已存在」必须是可区分的结果）"
+        )
+    failure_keys = ("missing_marker", "unbalanced", "no_open_brace", "unreadable")
+    for key in failure_keys:
+        outcome = outcomes[key]
+        ok, reason = outcome if isinstance(outcome, tuple) and len(outcome) == 2 else (outcome, "")
+        if ok is not False or not str(reason).startswith("failed:"):
+            errors.append(
+                f"[P1-2] 注入失败场景 {key} 应返回 (False, 'failed:<原因>')，实际 {outcome!r}"
+                "（失败与「已存在」被混为一谈 ⇒ 调用方无从区分）"
+            )
+    distinct_reasons = {outcomes[key][1] for key in failure_keys if isinstance(outcomes[key], tuple)}
+    if len(distinct_reasons) < len(failure_keys):
+        errors.append(
+            f"[P1-2] 四种失败路径的 reason 必须可区分（便于人工定位），实际 {sorted(distinct_reasons)}"
+        )
+
+    # 既有 bool 入口语义不变（G7 依赖）：成功 True / 已存在 False。
+    with tempfile.TemporaryDirectory() as tmp:
+        legacy_path = Path(tmp) / "dailyQuiz.ts"
+        legacy_path.write_text(_G7_QUIZ_SEED, encoding="utf-8")
+        legacy_first = ch.inject_quiz_placeholder(legacy_path, "p1-legacy")
+        legacy_second = ch.inject_quiz_placeholder(legacy_path, "p1-legacy")
+    if legacy_first is not True or legacy_second is not False:
+        errors.append(
+            "[P1-2] 既有 inject_quiz_placeholder(...) -> bool 的语义不得改变（G7 依赖），实际 "
+            f"{legacy_first!r} / {legacy_second!r}"
+        )
+
+    # 行为级：四种失败路径下 run_draft_url 必须 ❌ + 非零退出（而不是 ⏭️ + exit 0）。
+    failure_cases = (
+        ("unreadable", None, False),
+        ("missing_marker", _P1_QUIZ_NO_MARKER, True),
+        ("unbalanced", _P1_QUIZ_UNBALANCED, True),
+        ("no_open_brace", _P1_QUIZ_NO_OPEN_BRACE, True),
+    )
+    for name, quiz_text, make_quiz in failure_cases:
+        code, printed = _p1_drive_run_draft_url(quiz_text, make_quiz=make_quiz)
+        if code == 0:
+            errors.append(
+                f"[P1-2] 注入失败场景 {name} 下 run_draft_url 必须返回非零退出码，实际 exit=0"
+                "（命令打 ✅ 却 exit 0 ⇒ 维护者以为占位就位，G1 必红且无从追溯）"
+            )
+        if "❌" not in printed:
+            errors.append(
+                f"[P1-2] 注入失败场景 {name} 未打印 ❌（失败被报成「已存在」）：{printed[-300:]!r}"
+            )
+        if "⏭️ 速测题占位已存在" in printed:
+            errors.append(
+                f"[P1-2] 注入失败场景 {name} 竟打印「⏭️ 速测题占位已存在」（失败与已存在混流）："
+                f"{printed[-300:]!r}"
+            )
+
+    # 「已存在」路径仍应 ⏭️ + exit 0（预置同 slug 占位，使注入判定为 already_present）。
+    already_seed = (
+        "export const DAILY_QUIZZES: Record<string, QuizItem> = {\n"
+        "  'p1-inject': {\n"
+        "    articleId: 'p1-inject',\n"
+        "    question: '【待人工补题】请通读原文后填写速测题干',\n"
+        "  },\n"
+        "};\n"
+    )
+    already_code, already_printed = _p1_drive_run_draft_url(already_seed, make_quiz=True)
+    if "⏭️ 速测题占位已存在" not in already_printed:
+        errors.append(
+            "[P1-2] 「已存在」路径必须仍打印 ⏭️ 速测题占位已存在："
+            f"{already_printed[-300:]!r}"
+        )
+    if already_code != 0:
+        errors.append(f"[P1-2] 「已存在」路径应 exit 0，实际 exit={already_code}")
+
+    if (
+        outcomes["injected"] == (True, "injected")
+        and outcomes["already_present"] == (False, "already_present")
+        and all(
+            outcomes[key][0] is False and str(outcomes[key][1]).startswith("failed:")
+            for key in failure_keys
+        )
+        and "⏭️ 速测题占位已存在" in already_printed
+        and already_code == 0
+    ):
+        print(
+            "[P1-2] 注入结果可区分通过：共享入口返回 (ok, reason)，reason ∈ injected / "
+            "already_present / failed:<原因>；四种失败路径各自 ❌ + 非零退出，「已存在」仍 ⏭️ + exit 0；"
+            "既有 inject_quiz_placeholder(...) -> bool 语义不变"
+        )
+
+
+def validate_p1_pool_table_has_url(errors: list) -> None:
+    """[P1-8] ``curate:pool`` 表格必须输出**完整 URL** 并给出可直接复制的取用指引。
+
+    实证缺陷：``_print_pool_table`` 只打印「标题 | 来源 | 推定分类 | 首次发现」四列，**无 URL**；
+    而候选 dict 里确实有 ``url``。``curate:draft`` 的入参就是 URL ⇒ 维护者只能把标题复制去
+    搜索引擎重找原文页。另：「首次发现」列显示的其实是**本次运行内的序号**，列头误导。
+
+    断言：URL 作为最后一列完整打印；列头改为「发现序」；表尾给出与序号对应的可复制取用命令。
+    """
+    if not hasattr(ch, "_print_pool_table"):
+        errors.append("[P1-8] curate_harvester 缺少 _print_pool_table()")
+        return
+
+    ranked = [
+        {
+            "title": f"P1 夹具标题 {index}",
+            "category": "body",
+            "source_name": "P1 夹具信源",
+            "url": f"https://example.test/p1-topic-{index}",
+            "first_seen": index,
+        }
+        for index in (1, 2, 3)
+    ]
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        ch._print_pool_table(ranked, {"body": 3}, 0)
+    printed = buffer.getvalue()
+
+    if "URL" not in printed:
+        errors.append(
+            f"[P1-8] 候选池表格未输出 URL 列（维护者只能把标题复制去搜索引擎重找原文页）：{printed[:400]!r}"
+        )
+    for candidate in ranked:
+        if candidate["url"] not in printed:
+            errors.append(
+                f"[P1-8] 候选池表格缺少第 {candidate['first_seen']} 条的完整 URL "
+                f"{candidate['url']}：{printed[:600]!r}"
+            )
+
+    header_line = next((line for line in printed.splitlines() if "|" in line), "")
+    if "首次发现" in header_line:
+        errors.append(
+            f"[P1-8] 表头仍写「首次发现」，该列实为本次运行内的发现序号，列头误导：{header_line!r}"
+        )
+    if "发现序" not in header_line:
+        errors.append(f"[P1-8] 表头缺少如实命名的「发现序」列：{header_line!r}")
+
+    # URL 必须是最后一列：每条数据行的 URL 之后不得再有列。
+    for line in printed.splitlines():
+        if "https://example.test/p1-topic-" not in line:
+            continue
+        tail = line.split("https://example.test/p1-topic-", 1)[1]
+        if "|" in tail:
+            errors.append(
+                f"[P1-8] URL 必须是表格最后一列（长 URL 换行会破坏前几列可扫读性）：{line!r}"
+            )
+
+    # 表尾取用指引：可直接复制粘贴，且与序号对应。
+    if "pnpm curate:draft" not in printed:
+        errors.append(
+            f"[P1-8] 候选池表尾缺少可直接复制粘贴的取用指引（pnpm curate:draft）：{printed[-500:]!r}"
+        )
+    for index, candidate in enumerate(ranked, start=1):
+        expected = f'pnpm curate:draft "{candidate["url"]}"'
+        if expected not in printed:
+            errors.append(
+                f"[P1-8] 表尾取用指引缺少与序号对应的可复制命令 {expected!r}：{printed[-500:]!r}"
+            )
+        if f"第 {index} 条" not in printed:
+            errors.append(
+                f"[P1-8] 表尾取用指引未与表格序号对应（维护者需能说「取第 {index} 条」）："
+                f"{printed[-500:]!r}"
+            )
+
+    if (
+        "URL" in printed
+        and "发现序" in printed
+        and all(c["url"] in printed for c in ranked)
+        and 'pnpm curate:draft "https://example.test/p1-topic-1"' in printed
+    ):
+        print(
+            f"[P1-8] 候选池表格输出 URL 通过：URL 作为最后一列完整打印、表头如实命名为「发现序」、"
+            f"表尾给出与序号对应的可复制取用命令（{len(ranked)} 条夹具）"
+        )
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
     print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）以及 G9（草稿模板经 node + 本项目 MDX 引擎真实编译须通过、且不含 `<!--` / 无 raw_desc 泄漏；候选分支不带台账；跳过-成功返回值语义可区分且零进展 ::warning:: 可见；R1~R5 收口：候选分支名经 $GITHUB_OUTPUT 与返回值交给上层且工作流自检在候选分支上、失败候选不污染后续、--create-pr 一次性预取预排除被占用候选、积压 exit 0 与真故障 exit 1 措辞分明、raw_desc 进 PR 正文且泄漏守卫不空转）。")
@@ -3908,6 +4363,11 @@ def run_gate() -> None:
     validate_g9_placeholder_marker_covers_summary(errors)
     validate_g9_quiz_restore_prints_warning(errors)
     validate_g9_ls_remote_retry_then_fail_closed(errors)
+
+    # [P1 批次] 三条 P1：pending 可见性分口径 / 注入结果可区分 / 候选池表格输出 URL
+    validate_p1_pending_visible_in_pool(errors)
+    validate_p1_inject_result_distinguishable(errors)
+    validate_p1_pool_table_has_url(errors)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")

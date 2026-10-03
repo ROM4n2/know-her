@@ -170,7 +170,7 @@
 
 | 命令 | 行为 |
 |---|---|
-| `pnpm curate:pool [--source <id>] [--limit N]` | 输出候选池表格（标题 / 来源 / 推定分类 / 首次发现 / 最近探活），**按分类缺口优先排序**（四分类当前篇数升序，同分类按首次发现升序） |
+| `pnpm curate:pool [--source <id>] [--limit N]` | 输出候选池表格（标题 / 来源 / 推定分类 / **发现序**（本次运行内的发现序号，非日期）/ **URL**（`curate:draft` 的入参，置于末列并完整打印）），表尾给出与序号对应的可复制取用命令 `第 N 条 ➜ pnpm curate:draft "<URL>"`，**按分类缺口优先排序**（四分类当前篇数升序，同分类按首次发现升序）；台账 `pending` 条目**不**计入已见（人的视图：维护者仍能看到起草中/已放弃的选题），而 `harvest_candidates`（机器的视图）仍排除 `pending` |
 | `pnpm curate:draft <url>` | 生成 MDX 骨架（复用现有 `compose_mdx_content`）+ **同时向 `dailyQuiz.ts` 追加速测题占位条目**（含 `// TODO` 仅作为人工补题锚点，不进入站点渲染） |
 | `pnpm curate:admit <source-id>` | 对单一信源执行准入核验：可达性 + 许可页抓取证据 → 输出待人工确认的 `admission` 草案（**不自动写入**，人工填 `license` 后才生效） |
 

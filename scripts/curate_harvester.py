@@ -131,18 +131,29 @@ def iter_pending(ledger: dict, source_id: str | None = None) -> list[dict]:
     return pending
 
 
-def ledger_seen_urls(ledger: dict) -> set:
-    """收集台账中所有已见 URL（published / rejected / pending）供去重使用。
+def ledger_seen_urls(ledger: dict, exclude_pending: bool = False) -> set:
+    """收集台账中已见 URL 供去重使用；``exclude_pending`` 显式区分两个消费方的口径。
 
     [C1 阻断项] 兼容对象数组（v2）与字符串数组（历史遗留）：禁止直接 ``set(entries)``，
     否则对象条目因 dict 不可哈希抛 ``TypeError``。
+
+    [P1-1 口径分离] 两种口径**必须显式传参**表达，不得靠调用方隐式约定：
+
+    - ``exclude_pending=False``（**机器的视图**，``harvest_candidates`` 用）：pending 也算已见
+      ⇒ 对「正在起草中」的选题不会重复开 PR；
+    - ``exclude_pending=True``（**人的视图**，``--pool`` 用）：pending **不算**已见
+      ⇒ 维护者仍能在候选池里看到自己在起草或已放弃的选题（否则该 URL 永久消失，
+      只能手工编辑 ``scripts/.curate-ledger.json`` 恢复，而该文件的存在从未在输出中告知）。
     """
     urls: set = set()
     for entry in (ledger or {}).get("processed_urls") or []:
         if isinstance(entry, dict):
             url = entry.get("url")
-            if url:
-                urls.add(url)
+            if not url:
+                continue
+            if exclude_pending and entry.get("status") == "pending":
+                continue
+            urls.add(url)
         elif isinstance(entry, str):
             urls.add(entry)
     return urls
@@ -755,7 +766,8 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
 
     ledger = load_ledger()
     # [C1] v2 台账为对象数组，必须以对象口径取 URL（禁止 set(对象数组) 触发 dict 不可哈希）
-    seen_ledger_urls = ledger_seen_urls(ledger)
+    # [P1-1] 机器的视图：pending 也计入已见 ⇒ 不对「正在起草中」的选题重复开 PR。
+    seen_ledger_urls = ledger_seen_urls(ledger, exclude_pending=False)
     existing_urls = get_existing_article_urls()
     all_seen_urls = seen_ledger_urls | existing_urls
 
@@ -892,9 +904,13 @@ def count_articles_by_category() -> dict:
 def collect_pool_candidates(source_id: str | None = None) -> list[dict]:
     """实时发现候选（``--pool`` 的数据源）：``discover_candidates`` 本次发现 − 台账已收录 URL。
 
-    [Task-7 语义钉死] 数据源**不是**「台账里 ``status == "pending"`` 的条目」——当前没有任何
-    代码写入 ``pending``，那样实现会永远输出空表。零副作用：仅经 ``load_ledger()`` 只读读取台账，
-    **严禁调用 save_ledger()**。
+    [Task-7 语义钉死] 数据源**不是**「台账里 ``status == "pending"`` 的条目」——那样实现会
+    永远输出空表（``pending`` 只登记「已发现」，不携带标题/分类，无从渲染成表格行）。
+    零副作用：仅经 ``load_ledger()`` 只读读取台账，**严禁调用 save_ledger()**。
+
+    [P1-1] 本函数是**人的视图**：``exclude_pending=True`` ⇒ pending **不**计入已见，
+    维护者起草中或已放弃的选题仍会出现在候选池里（否则一旦登记 pending，该 URL 就永久消失）。
+    对照：``harvest_candidates``（机器的视图）用 ``exclude_pending=False``，仍排除 pending。
     """
     if not os.path.exists(SOURCES_FILE):
         print(f"❌ 找不到数据源配置文件: {SOURCES_FILE}")
@@ -904,7 +920,7 @@ def collect_pool_candidates(source_id: str | None = None) -> list[dict]:
         sources = json.load(f)
 
     ledger = load_ledger()
-    seen_urls = ledger_seen_urls(ledger) | get_existing_article_urls()
+    seen_urls = ledger_seen_urls(ledger, exclude_pending=True) | get_existing_article_urls()
 
     pool: list = []
     seq = 0
@@ -930,18 +946,30 @@ def collect_pool_candidates(source_id: str | None = None) -> list[dict]:
 
 
 def _print_pool_table(ranked: list, category_counts: dict, limit: int) -> None:
-    """打印候选池表格（标题 / 来源 / 推定分类 / 首次发现）与表尾缺口汇总。"""
+    """打印候选池表格（标题 / 来源 / 推定分类 / 发现序 / URL）与表尾缺口汇总 + 取用指引。
+
+    [P1-8] URL 作为**最后一列**且打印**完整值**（``curate:draft`` 的入参就是 URL；缺了它
+    维护者只能把标题复制去搜索引擎重找原文页）。放在末列是为了让长 URL 的终端换行不破坏
+    前几列的可扫读性。「发现序」是**本次运行内**的发现序号（``first_seen`` 字段），不是日期，
+    故列头如实命名。
+    """
     shown = ranked[:limit] if limit and limit > 0 else ranked
     print("")
-    print("标题 | 来源 | 推定分类 | 首次发现")
+    print("标题 | 来源 | 推定分类 | 发现序 | URL")
     print("-" * 88)
     for candidate in shown:
         print(
             f"{candidate.get('title', '')} | {candidate.get('source_name', '')} | "
-            f"{candidate.get('category', '')} | {candidate.get('first_seen', '')}"
+            f"{candidate.get('category', '')} | {candidate.get('first_seen', '')} | "
+            f"{candidate.get('url', '')}"
         )
     print("-" * 88)
     print(f"候选总数：{len(ranked)} 条（本次输出 {len(shown)} 条，--limit={limit}）")
+    # [P1-8] 表尾给出可直接复制粘贴的取用命令，并与表格序号一一对应（人能说「取第 3 条」）。
+    if shown:
+        print("取用（复制粘贴即可起草，按上表行序对应）：")
+        for index, candidate in enumerate(shown, start=1):
+            print(f'  第 {index} 条 ➜ pnpm curate:draft "{candidate.get("url", "")}"')
     print("各分类缺口现状（当前篇数升序，缺口大者优先）：")
     for category in sorted(CATEGORIES, key=lambda name: (category_counts.get(name, 0), name)):
         print(f"  - {category}: 已发布 {category_counts.get(category, 0)} 篇")
@@ -1119,39 +1147,54 @@ def _quiz_placeholder_entry(slug: str) -> str:
     )
 
 
+def ensure_quiz_placeholder(quiz_path: Path, slug: str) -> tuple:
+    """占位注入的**共享入口**（``run_draft_url`` 与 ``create_draft_pr`` 都用它）。
+
+    返回 ``(ok, reason)``，``reason`` ∈ ``injected`` / ``already_present`` /
+    ``failed:<原因>``。**禁止**用 ``False`` 同时表达「已存在」与「失败」：四条失败路径
+    （文件不可读 / 花括号不配平 / 缺 ``DAILY_QUIZZES`` / ``open_index == -1``）此前全部汇流
+    到同一句「⏭️ 已存在」，随后照常打印「✅ 草稿骨架已生成」并 exit 0 ⇒ 维护者以为占位就位，
+    实际文件里没有，G1 必红且无从追溯。
+    """
+    quiz_path = Path(quiz_path)
+    try:
+        text = quiz_path.read_text(encoding="utf-8")
+    except OSError:
+        return False, "failed:unreadable_file"
+
+    if _quiz_has_slug(text, slug):
+        return False, "already_present"
+
+    marker = text.find("DAILY_QUIZZES")
+    if marker == -1:
+        return False, "failed:missing_daily_quizzes"
+
+    open_index = text.find("{", marker)
+    if open_index == -1:
+        return False, "failed:no_object_open_brace"
+
+    close_index = _find_object_close(text, open_index)
+    if close_index == -1:
+        return False, "failed:unbalanced_braces"
+
+    entry = _quiz_placeholder_entry(slug)
+    quiz_path.write_text(text[:close_index] + entry + text[close_index:], encoding="utf-8")
+    return True, "injected"
+
+
 def inject_quiz_placeholder(quiz_path: Path, slug: str) -> bool:
     """在 ``DAILY_QUIZZES`` 对象**末尾**插入一条速测题占位条目（幂等）。
+
+    **既有签名与语义不变**（G7 等断言依赖）：``True`` = 本次真实插入；``False`` = 「已存在」
+    **或**注入失败（不区分二者）。需要区分时请用共享入口 :func:`ensure_quiz_placeholder`。
 
     - 已存在同 slug 顶层键 ⇒ 直接返回 ``False`` 且**不改动文件**（幂等，sha256 不变）；
     - 成功插入 ⇒ 返回 ``True``；
     - 找不到 ``DAILY_QUIZZES`` / 花括号不配平 / 不可读 ⇒ 返回 ``False``（不写盘）；
     - 插入条目花括号配平、语法合法（否则 ``pnpm check`` 会红）。
     """
-    quiz_path = Path(quiz_path)
-    try:
-        text = quiz_path.read_text(encoding="utf-8")
-    except OSError:
-        print(f"❌ 无法读取速测题文件：{quiz_path}")
-        return False
-
-    if _quiz_has_slug(text, slug):
-        return False
-
-    marker = text.find("DAILY_QUIZZES")
-    if marker == -1:
-        print(f"❌ 速测题文件缺少 DAILY_QUIZZES 对象：{quiz_path}")
-        return False
-    open_index = text.find("{", marker)
-    if open_index == -1:
-        return False
-    close_index = _find_object_close(text, open_index)
-    if close_index == -1:
-        print(f"❌ DAILY_QUIZZES 对象花括号不配平，拒绝注入：{quiz_path}")
-        return False
-
-    entry = _quiz_placeholder_entry(slug)
-    quiz_path.write_text(text[:close_index] + entry + text[close_index:], encoding="utf-8")
-    return True
+    ok, _reason = ensure_quiz_placeholder(quiz_path, slug)
+    return ok
 
 
 def _build_draft_candidate(url: str, sources: list) -> dict:
@@ -1228,7 +1271,7 @@ def _register_pending(url: str, source_id: str, http_status) -> None:
 def run_draft_url(url: str) -> int:
     """``--draft-url <url>`` 分支：生成 MDX 骨架 + 注入速测题占位 + 登记 pending 台账。
 
-    返回进程退出码：0 = 成功；2 = 参数缺失 / 非法 URL。
+    返回进程退出码：0 = 成功；2 = 参数缺失 / 非法 URL；1 = 速测题占位注入失败（[P1-2]）。
     本命令**不**自动提 PR（人工闸门）：仅在本地生成骨架与占位，并打印下一步人工动作。
     """
     url = (url or "").strip()
@@ -1267,15 +1310,26 @@ def run_draft_url(url: str) -> int:
         f.write(compose_mdx_content(candidate))
     print(f"  ✓ 已生成 MDX 骨架：{target_path}")
 
-    # 2) 注入速测题占位（幂等）
-    if inject_quiz_placeholder(Path(QUIZ_FILE), slug):
+    # 2) 注入速测题占位（幂等）。[P1-2] 三种结果必须可区分：只有 already_present 才打 ⏭️；
+    #    failed:* 必须打 ❌ 并**返回非零退出码**（禁止命令打 ✅ 却 exit 0）。
+    quiz_ok, quiz_reason = ensure_quiz_placeholder(Path(QUIZ_FILE), slug)
+    if quiz_reason == "injected":
         print(f"  ✓ 已注入速测题占位（articleId='{slug}'）到：{QUIZ_FILE}")
-    else:
+    elif quiz_reason == "already_present":
         print(f"  ⏭️ 速测题占位已存在（幂等，未改动）：{QUIZ_FILE}")
+    else:
+        print(f"  ❌ 速测题占位注入失败（{quiz_reason}）：{QUIZ_FILE}")
+        print("     未登记台账：草稿缺少速测题会被 [G1] 门禁判红。请先修复该文件后重新执行本命令。")
+        return 1
 
-    # 3) [D1] 登记 pending 台账，并展示 iter_pending 消费路径
+    # 3) [D1] 登记 pending 台账。[P1-1] 措辞如实说明**后果**（不再把 Python 函数名当成果展示，
+    #    也不再暗示一个不存在的「消费路径」）。
     _register_pending(candidate["source_url"], candidate["source_id"], candidate.get("http_status"))
-    print(f"  📌 当前台账 pending 队列：{len(iter_pending(load_ledger()))} 条（iter_pending 消费路径已激活）")
+    print(
+        f"  📌 已登记待审：共 {len(iter_pending(load_ledger()))} 条"
+        "（该 URL 已从自动发现中排除；重复执行本命令不会重复登记。"
+        f"若不再需要，请在 {LEDGER_FILE} 中移除该条目的 `pending` 状态）"
+    )
 
     # 4) 打印下一步人工动作指引
     print(
@@ -1652,10 +1706,18 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
             quiz_backup = Path(QUIZ_FILE).read_text(encoding="utf-8")
         except OSError:
             quiz_backup = None
-        if inject_quiz_placeholder(Path(QUIZ_FILE), slug):
+        quiz_ok, quiz_reason = ensure_quiz_placeholder(Path(QUIZ_FILE), slug)
+        if quiz_reason == "injected":
             print(f"  ✓ 已注入速测题占位（articleId='{slug}'）到：{QUIZ_FILE}")
+        elif quiz_reason == "already_present":
+            print(f"  ⏭️ 速测题占位已存在（幂等，未改动）：{QUIZ_FILE}")
         else:
-            print(f"  ⏭️ 速测题占位已存在或无法注入（幂等，未改动）：{QUIZ_FILE}")
+            # [P1-2] 注入失败必须让该候选以**故障**身份退出（PR_RESULT_ERROR ⇒ 批次 exit 1 +
+            # ::error::），不得静默继续提一个必然红在 [G1] 的 PR。
+            # 抛 RuntimeError ⇒ 落入既有 except 分支；finally 仍按 quiz_backup 逐字节还原、
+            # 仍删除残留草稿，且 gh pr create 失败分支里的 _delete_remote_branch 兜底不受影响。
+            print(f"  ❌ 速测题占位注入失败（{quiz_reason}）：{QUIZ_FILE}")
+            raise RuntimeError(f"quiz placeholder injection failed: {quiz_reason}")
 
         # Git commit
         # [C 修复] 只提交草稿文件与速测题占位，**不**提交 scripts/.curate-ledger.json：台账是机器状态，
