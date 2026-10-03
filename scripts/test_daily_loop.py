@@ -2444,6 +2444,8 @@ def _make_pr_subprocess_stub(
     status_dirty_fn=None,
     remote_exists_branches=(),
     ls_remote_fail_times: int = 0,
+    local_branch_exists_slugs=(),
+    kwarg_sink: list = None,
 ):
     """构造记录型 ``subprocess.run`` 替身：模拟 git/gh，零真实进程、零网络。
 
@@ -2457,10 +2459,15 @@ def _make_pr_subprocess_stub(
       （模拟「远端已残留该分支，可能含人工提交」；[P0-1] 的默认空集 = 远端不存在 ⇒ 正常推送）；
     - ``ls_remote_fail_times``：前 N 次 ``git ls-remote`` 返回**非零**（模拟网络抖动），
       用于断言「重试 1 次后再 fail-closed」（单次抖动不得让整批候选被误判「远端已存在」而跳过）。
+    - ``local_branch_exists_slugs``：命中这些子串的分支在**本地**已存在（``git rev-parse
+      --verify refs/heads/<branch>`` 返回 0 且非空输出）⇒ 模拟「本地重提案撞车」。
+    - ``kwarg_sink``：可选列表，每次调用把 ``kwargs`` 原样追加进去（供「每个子进程调用
+      是否都带 ``timeout=``」这类断言取证）。
     遵守 ``check=True`` 语义：非零退出码时抛 ``CalledProcessError``（否则 push 重试/失败逻辑无法触发）。
     """
     occupied = {str(b) for b in (open_pr_branches or ())}
     remote_occupied = {str(b) for b in (remote_exists_branches or ())}
+    local_occupied = {str(b) for b in (local_branch_exists_slugs or ())}
     ls_remote_state = {"calls": 0}
 
     def _complete(returncode, stdout="", stderr="", check=False, cmd=None):
@@ -2471,8 +2478,19 @@ def _make_pr_subprocess_stub(
 
     def fake_run(cmd, *args, **kwargs):
         recorded.append(list(cmd))
+        if kwarg_sink is not None:
+            kwarg_sink.append(dict(kwargs))
         check = bool(kwargs.get("check", False))
         head = list(cmd[:3])
+        if head[:2] == ["git", "rev-parse"]:
+            # 生产代码传入的是完整 ref（``refs/heads/<branch>``），而 ``local_branch_exists_slugs``
+            # 给的是裸分支名 ⇒ 此处剥掉 ``refs/heads/`` 前缀再比对，否则命中永远为假（假绿）。
+            branch = str(cmd[-1])
+            if branch.startswith("refs/heads/"):
+                branch = branch[len("refs/heads/") :]
+            if branch in local_occupied:
+                return _complete(0, "abc123\n", check=check, cmd=cmd)
+            return _complete(128, "", "fatal: Needed a single revision", check=check, cmd=cmd)
         if head[:2] == ["git", "status"]:
             dirty = bool(status_dirty_fn()) if callable(status_dirty_fn) else False
             return _complete(0, " M some-dirty-file\n" if dirty else "", check=check, cmd=cmd)
@@ -4835,6 +4853,832 @@ def validate_s2_content_gate_enforced(errors: list) -> None:
         )
 
 
+# ===========================================================================
+# [P1-9/P1-2/P1-4/P1-5/P1-6/P1-7/P1-8/P0-1b] 上一轮落地的修复**必须各有可判红的门禁断言**。
+#
+# 本段每条断言都是**行为级**的：驱动真实的生产函数（``harvest_candidates`` /
+# ``create_draft_pr`` / ``_report_backlog`` / ``run_admit_source``），只把
+# ``subprocess.run`` / ``fetch_url`` / ``discover_candidates`` 换成打桩，
+# 断言打在**真实输出与真实调用序列**上，而不是文本扫描生产源码。
+#
+# 为什么必须补这一段：上一轮在 ``curate_harvester.py`` 落地了 8 项修复（+129 行），
+# 却**一条门禁断言都没写**——实现没有测试守护，属于**不可提交的假绿**：
+# 下一个人重构掉任何一条都不会有任何测试变红。门禁的意义正是把行为钉死。
+# ===========================================================================
+
+
+def _stub_fetch_url(mapping: dict, default=(0, "")) -> callable:
+    """构造零网络的 ``fetch_url`` 替身：命中 ``mapping`` 返回给定 ``(status, html)``。
+
+    键为 URL；未命中返回 ``default``（默认 ``(0, "")`` = 连接失败，模拟出口故障）。
+    """
+
+    def _fetch(url, timeout=None):
+        return mapping.get(url, default)
+
+    return _fetch
+
+
+@contextlib.contextmanager
+def _stubbed_harvest_env(sources: list, fetch_map: dict, fetch_default=(0, "")):
+    """在临时信源清单 + 打桩网络下驱动 ``harvest_candidates``，退出时逐项还原。
+
+    只重定向 ``SOURCES_FILE``（读）与 ``fetch_url``（网络）与 ``discover_candidates``
+    （发现阶段，直接喂夹具候选列表，避开真实 anchor/sitemap 解析）。零真实网络。
+    """
+    original_sources = ch.SOURCES_FILE
+    original_fetch = ch.fetch_url
+    original_discover = ch.discover_candidates
+    original_ledger = ch.LEDGER_FILE
+    original_articles = ch.ARTICLES_DIR
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        sources_file = tmp_dir / "sources.json"
+        sources_file.write_text(json.dumps(sources, ensure_ascii=False), encoding="utf-8")
+        ch.SOURCES_FILE = str(sources_file)
+        ch.LEDGER_FILE = str(tmp_dir / ".curate-ledger.json")
+        ch.ARTICLES_DIR = str(tmp_dir / "articles")
+        ch.fetch_url = _stub_fetch_url(fetch_map, fetch_default)
+        ch.discover_candidates = lambda src, seen: [
+            (u, f"title-{i}") for i, u in enumerate(src.get("_candidates", []), 1)
+        ]
+        try:
+            yield
+        finally:
+            ch.SOURCES_FILE = original_sources
+            ch.fetch_url = original_fetch
+            ch.discover_candidates = original_discover
+            ch.LEDGER_FILE = original_ledger
+            ch.ARTICLES_DIR = original_articles
+
+
+def validate_p1_9_probe_failure_is_visible(errors: list) -> None:
+    """[P1-9] 探测失败**必须留痕**，且必须区分「内容耗尽」与「出口故障」。
+
+    实证缺陷：候选探测失败（HTTP 非 200 / 超时）此前是**静默 continue**——不打印任何一行。
+    当本轮所有候选都探测失败时，日志里**一行「发生过探测」都没有**，值班人看到收尾的
+    「候选池为空」只会以为内容已耗尽，进而去改 sources.json 的 link_pattern/keywords
+    （**治错了地方**），而真正的出口 / DNS 故障无人察觉。
+
+    行为断言（打桩网络，零真实请求）：
+    - 全部候选探测失败 ⇒ 输出点名「**出口/网络故障**」且明说「**不是**内容已耗尽」；
+    - 输出含「本轮共探测 N 条…失败 N 条」的留痕小结（可核算）；
+    - 逐条失败 URL 至少被点名一次（不得只给汇总、不指认具体条目）。
+    """
+    if not hasattr(ch, "harvest_candidates"):
+        errors.append("[P1-9] curate_harvester 缺少 harvest_candidates()")
+        return
+
+    urls = [f"https://p1.example.test/a/{i}" for i in range(1, 4)]
+    sources = [
+        {
+            "id": "p1-9-src",
+            "name": "探测失败源",
+            "base_url": "https://p1.example.test",
+            "admission": {"status": "admitted", "license": "CC-BY-4.0"},
+            "_candidates": urls,
+        }
+    ]
+
+    buffer = io.StringIO()
+    with _stubbed_harvest_env(sources, fetch_map={}, fetch_default=(0, "")):
+        with contextlib.redirect_stdout(buffer):
+            candidates = ch.harvest_candidates(limit=10)
+    printed = buffer.getvalue()
+
+    if candidates:
+        errors.append(f"[P1-9] 全部探测失败时不得产出候选，实际 {len(candidates)} 个")
+    if "出口" not in printed or "故障" not in printed:
+        errors.append(
+            f"[P1-9] 全部探测失败时必须点名「出口/网络故障」（否则值班人会误判为内容耗尽）：{printed[-400:]!r}"
+        )
+    if "不是「内容已耗尽」" not in printed:
+        errors.append(
+            f"[P1-9] 必须显式声明「不是内容已耗尽」以免误导排查方向：{printed[-400:]!r}"
+        )
+    if "探测" not in printed or "失败" not in printed:
+        errors.append(f"[P1-9] 探测失败必须留痕（含探测/失败计数的可核算小结）：{printed[-400:]!r}")
+    unnamed = [u for u in urls if u not in printed]
+    if unnamed:
+        errors.append(f"[P1-9] 探测失败的候选 URL 必须逐条点名（仅给汇总无法定位）：{unnamed}")
+
+    # 反空转：成功路径**不得**误报「出口故障」（否则真实内容耗尽时又制造噪音）。
+    ok_sources = [
+        {
+            "id": "p1-9-ok",
+            "name": "正常源",
+            "base_url": "https://ok.example.test",
+            "admission": {"status": "admitted", "license": "CC-BY-4.0"},
+            "_candidates": ["https://ok.example.test/a/1"],
+        }
+    ]
+    buffer_ok = io.StringIO()
+    with _stubbed_harvest_env(
+        ok_sources,
+        fetch_map={"https://ok.example.test/a/1": (200, "<html><title>OK</title></html>")},
+    ):
+        with contextlib.redirect_stdout(buffer_ok):
+            ok_candidates = ch.harvest_candidates(limit=10)
+    printed_ok = buffer_ok.getvalue()
+
+    if len(ok_candidates) != 1:
+        errors.append(f"[P1-9][反空转] 探测成功时必须产出 1 个候选，实际 {len(ok_candidates)}：{printed_ok[-300:]!r}")
+    if "出口" in printed_ok and "故障" in printed_ok:
+        errors.append(
+            f"[P1-9][反空转] 探测成功时不得输出「出口故障」（否则真实内容耗尽场景会被噪音淹没）："
+            f"{printed_ok[-300:]!r}"
+        )
+
+    if (
+        not candidates
+        and "出口" in printed
+        and "故障" in printed
+        and "不是「内容已耗尽」" in printed
+        and not unnamed
+        and len(ok_candidates) == 1
+        and not ("出口" in printed_ok and "故障" in printed_ok)
+    ):
+        print(
+            f"[P1-9] 探测失败留痕通过：{len(urls)} 个候选全部探测失败 ⇒ 逐条点名 + 点名"
+            "「出口/网络故障」并显式声明「不是内容已耗尽」；反空转：探测成功时产出 1 个候选、"
+            "零「出口故障」噪音"
+        )
+
+
+def validate_p1_2_probe_budget_truncation_visible(errors: list) -> None:
+    """[P1-2] 发现阶段探测次数**有上限**，耗尽时必须**打印截断量**且正常路径零影响。
+
+    实证缺陷：探测循环会在「成功数不足 ``limit``」时继续扫**全部**初筛命中项，而初筛命中数
+    **无上限**（实测当前 48 条；某信源改 sitemap 模式可达数千条）。每次探测最坏吃满 HTTP
+    超时 10s ⇒ 48×10s=480s 已吃掉 900s job 预算的一半，再叠加依赖安装与 pnpm check/build
+    即超预算 ⇒ job 被**硬杀** ⇒ 连「写入工作流执行摘要」都不执行（值班人**零留痕**）。
+
+    行为断言（打桩网络，零真实请求）：
+    - 超限（候选数 >> 上限）⇒ 实际探测次数**恰好等于** ``MAX_HARVEST_PROBES``（有界），
+      且输出**点名跳过探测的条数**（截断必须可见，不得静默丢弃）；
+    - **正常路径**（48 候选、取 1）⇒ 探测次数 == 1、不打印任何截断告警（上限不得误伤）。
+    """
+    if not hasattr(ch, "MAX_HARVEST_PROBES") or not hasattr(ch, "harvest_candidates"):
+        errors.append("[P1-2] curate_harvester 缺少 MAX_HARVEST_PROBES / harvest_candidates()")
+        return
+
+    cap = int(ch.MAX_HARVEST_PROBES)
+
+    # 场景 A：候选数远超上限 ⇒ 必须有界 + 截断可见
+    many = [f"https://bulk.example.test/a/{i}" for i in range(1, cap + 25)]
+    bulk_sources = [
+        {
+            "id": "p1-2-bulk",
+            "name": "膨胀源",
+            "base_url": "https://bulk.example.test",
+            "admission": {"status": "admitted", "license": "CC-BY-4.0"},
+            "_candidates": many,
+        }
+    ]
+    bulk_buffer = io.StringIO()
+    with _stubbed_harvest_env(bulk_sources, fetch_map={}, fetch_default=(0, "")):
+        with contextlib.redirect_stdout(bulk_buffer):
+            ch.harvest_candidates(limit=cap + 25)
+    bulk_printed = bulk_buffer.getvalue()
+
+    probe_marks = re.findall(r"本轮共探测 (\d+) 条候选", bulk_printed)
+    probed = int(probe_marks[-1]) if probe_marks else -1
+    if probed != cap:
+        errors.append(
+            f"[P1-2] 候选数 {len(many)} 远超上限时，真实探测次数必须**有界**为 MAX_HARVEST_PROBES"
+            f"（{cap}），实际探测 {probed} 次——无界探测会吃光 job 预算并被硬杀（连摘要都不写）"
+        )
+    if "跳过探测" not in bulk_printed:
+        errors.append(
+            f"[P1-2] 探测预算耗尽时必须**打印截断量**（静默丢弃会让「候选池为空」看起来像内容耗尽）："
+            f"{bulk_printed[-400:]!r}"
+        )
+    # 截断量必须与真实差额吻合（cap + 24 - cap = 24）
+    trunc = re.search(r"跳过探测 (\d+) 条", bulk_printed)
+    expected_skipped = len(many) - cap
+    if trunc is None:
+        errors.append("[P1-2] 未输出「跳过探测 N 条」的可核算截断量")
+    elif int(trunc.group(1)) != expected_skipped:
+        errors.append(
+            f"[P1-2] 截断量必须与真实差额吻合（期望 {expected_skipped}，实际 {trunc.group(1)}）——"
+            "报错的截断量会让值班人误判影响面"
+        )
+
+    # 场景 B：正常路径（48 候选取 1）⇒ 零影响、零截断告警。
+    # 关键：探测必须**成功**——正常路径下首个候选即命中、循环随即因 ``len(candidates) >= limit``
+    # 而 break，正因如此才有「48 候选 / 取 1 只需探测 1 次」这一事实。（若探测全失败，循环会
+    # 扫完 48 条，那是场景 A 的语义，不该拿来当「正常路径」。）
+    normal = [f"https://normal.example.test/a/{i}" for i in range(1, 49)]
+    normal_sources = [
+        {
+            "id": "p1-2-normal",
+            "name": "正常源",
+            "base_url": "https://normal.example.test",
+            "admission": {"status": "admitted", "license": "CC-BY-4.0"},
+            "_candidates": normal,
+        }
+    ]
+    normal_buffer = io.StringIO()
+    with _stubbed_harvest_env(
+        normal_sources,
+        fetch_map={u: (200, "<html><title>ok</title></html>") for u in normal},
+    ):
+        with contextlib.redirect_stdout(normal_buffer):
+            normal_candidates = ch.harvest_candidates(limit=1)
+    normal_printed = normal_buffer.getvalue()
+
+    normal_marks = re.findall(r"本轮共探测 (\d+) 条候选", normal_printed)
+    normal_probed = int(normal_marks[-1]) if normal_marks else -1
+    if len(normal_candidates) != 1:
+        errors.append(
+            f"[P1-2][反空转] 正常路径必须产出 1 个候选（否则「只探测 1 次」断言可空转）："
+            f"实际 {len(normal_candidates)}：{normal_printed[-300:]!r}"
+        )
+    if normal_probed != 1:
+        errors.append(
+            f"[P1-2] 正常路径（48 候选 / 取 1）必须只探测 1 次，实际 {normal_probed} 次"
+            f"（上限若误伤正常路径即属回归）：{normal_printed[-300:]!r}"
+        )
+    if "跳过探测" in normal_printed or "探测预算已达上限" in normal_printed:
+        errors.append(
+            f"[P1-2] 正常路径不得输出任何截断告警（上限须对正常路径零影响）：{normal_printed[-300:]!r}"
+        )
+
+    if (
+        probed == cap
+        and "跳过探测" in bulk_printed
+        and trunc is not None
+        and int(trunc.group(1)) == expected_skipped
+        and normal_probed == 1
+        and len(normal_candidates) == 1
+        and "跳过探测" not in normal_printed
+    ):
+        print(
+            f"[P1-2] 探测预算通过：{len(many)} 候选 ⇒ 探测有界为 {cap} 次并打印"
+            f"「跳过探测 {expected_skipped} 条」；正常路径（48 候选取 1）只探测 1 次、零截断告警"
+        )
+
+
+def validate_p1_4_every_subprocess_has_timeout(errors: list) -> None:
+    """[P1-4] **每一个**子进程调用都必须带 ``timeout=``，且 push 重试为指数退避。
+
+    实证缺陷：无 ``timeout=`` 的 ``git push`` 遇 TLS 黑洞会挂到操作系统级 TCP 超时
+    （Windows 可达数分钟），而 job 预算是 ``timeout-minutes: 15``（900s）——子进程挂死会把
+    整个 job 拖到硬杀，运行摘要 / 积压开单这些「唯一给人留痕」的步骤**全部落空**，
+    值班人看到的是一次没有任何解释的消失。
+
+    本断言**不抽查**：用 ``kwarg_sink`` 取证**每一次** ``subprocess.run`` 调用的 kwargs，
+    断言**逐个**都含非空 ``timeout``（漏一个即判红）。
+
+    退避形态（``PUSH_RETRY_BACKOFFS_SECONDS``）：必须是**指数**（2→4→8）而非固定 2s——
+    固定间隔在持续抖动下只是把同一次抖动重试三遍，2→4→8 让「瞬时抖动」与「持续故障」
+    在时间上可区分。
+    """
+    if not hasattr(ch, "PUSH_RETRY_BACKOFFS_SECONDS"):
+        errors.append("[P1-4] curate_harvester 缺少 PUSH_RETRY_BACKOFFS_SECONDS")
+        return
+
+    kwarg_sink: list = []
+    _result, calls, printed = _drive_create_draft_pr(kwarg_sink=kwarg_sink)
+
+    if not kwarg_sink:
+        errors.append(
+            "[P1-4][反空转] 未观测到任何子进程调用（断言会退化为永真）：请检查打桩体系"
+        )
+    missing_timeout = [
+        (idx, calls[idx][:3] if idx < len(calls) else "?")
+        for idx, kwargs in enumerate(kwarg_sink)
+        if not kwargs.get("timeout")
+    ]
+    if missing_timeout:
+        errors.append(
+            f"[P1-4] 每一个 subprocess.run 调用都必须显式带 timeout=（缺 timeout 的 git push 遇 TLS "
+            f"黑洞会挂到 OS 级超时，把 job 拖到硬杀 ⇒ 连摘要都不写）；缺失 {len(missing_timeout)}/{len(kwarg_sink)} 处："
+            f"{missing_timeout}"
+        )
+
+    backoffs = tuple(ch.PUSH_RETRY_BACKOFFS_SECONDS)
+    if len(backoffs) < 2:
+        errors.append(f"[P1-4] push 重试退避序列过短（无法区分抖动与持续故障）：{backoffs}")
+    else:
+        # 指数递增判定：每一档至少为上一档的 1.8 倍（容忍取整），且严格递增。
+        strict_inc = all(backoffs[i + 1] > backoffs[i] for i in range(len(backoffs) - 1))
+        growing = all(backoffs[i + 1] >= backoffs[i] * 1.8 for i in range(len(backoffs) - 1))
+        if not (strict_inc and growing):
+            errors.append(
+                f"[P1-4] push 重试必须为**指数**退避（固定间隔在持续抖动下只是把同一次抖动重试三遍）："
+                f"实际 {backoffs}"
+            )
+
+    # 反空转：push 成功路径必须真实观测到 push（否则「零 force / 退避」类断言会永真）。
+    if not any(cmd[:2] == ["git", "push"] for cmd in calls):
+        errors.append("[P1-4][反空转] 未观测到真实 git push 调用（超时取证无意义）")
+
+    if not missing_timeout and len(backoffs) >= 2 and any(
+        cmd[:2] == ["git", "push"] for cmd in calls
+    ):
+        print(
+            f"[P1-4] 子进程超时全覆盖通过：{len(kwarg_sink)} 次 subprocess.run 调用**逐个**带非空 "
+            f"timeout=（零遗漏）；push 重试为指数退避 {backoffs}；反空转：已观测到真实 git push"
+        )
+
+
+def validate_p1_5_local_branch_collision_skipped(errors: list) -> None:
+    """[P1-5] 本地重提案撞车必须**可区分地跳过**，不得让每日任务红灯。
+
+    实证缺陷：``git checkout -b <已存在的分支>`` 自身以 exit 128 退出。此前直接跑它 ⇒ 撞车时抛
+    ``CalledProcessError`` ⇒ 落入 except ⇒ 候选判 ``PR_RESULT_ERROR`` ⇒ ``_report_failure``
+    ⇒ ``::error::`` + exit 1：**一个本地残留分支就让每日定时任务红灯**，且文案是误导性的
+    「创建流程出现错误」（真实成因是本地撞车，与远端残留、与故障都无关）。
+
+    行为断言（打桩 ``git rev-parse --verify``，零真实 git）：
+    - 本地分支已存在 ⇒ 返回 ``PR_RESULT_SKIPPED_DUPLICATE``（**非** ERROR）；
+    - **零** ``git checkout -b``（旧实现正是靠它抛错）、零 ``git push``（不覆盖任何提交）；
+    - 输出点名成因并给出**可执行**的本地解锁命令 ``git branch -D <branch>``。
+    """
+    if not hasattr(ch, "_local_branch_exists"):
+        errors.append("[P1-5] curate_harvester 缺少 _local_branch_exists()（本地撞车检测未接线）")
+        return
+
+    branch = f"candidate/{_G9_FIXTURE_CANDIDATE['slug']}"
+    result, calls, printed = _drive_create_draft_pr(local_branch_exists_slugs=(branch,))
+
+    checkout_b = [cmd for cmd in calls if cmd[:3] == ["git", "checkout", "-b"]]
+    pushes = [cmd for cmd in calls if cmd[:2] == ["git", "push"]]
+    rev_parse = [cmd for cmd in calls if cmd[:2] == ["git", "rev-parse"]]
+
+    if result != ch.PR_RESULT_SKIPPED_DUPLICATE:
+        errors.append(
+            f"[P1-5] 本地分支已存在时应返回 PR_RESULT_SKIPPED_DUPLICATE（等待人工，跳过后续继续），"
+            f"实际 {result!r}——若为 ERROR 则一个本地残留分支就会让每日任务 ::error:: + exit 1"
+        )
+    if not rev_parse:
+        errors.append(
+            "[P1-5][反空转] 未观测到 git rev-parse --verify 探测（本地撞车检测未真实执行）"
+        )
+    if checkout_b:
+        errors.append(
+            f"[P1-5] 本地分支已存在时不得再执行 git checkout -b（旧实现靠它的 exit 128 抛错）：{checkout_b}"
+        )
+    if pushes:
+        errors.append(f"[P1-5] 本地分支已存在时不得推送（不得覆盖任何提交）：{pushes}")
+    if "git branch -D" not in printed:
+        errors.append(
+            f"[P1-5] 跳过提示必须给出**可执行**的本地解锁命令 git branch -D：{printed[-300:]!r}"
+        )
+    if branch not in printed:
+        errors.append(f"[P1-5] 跳过提示必须点名分支（维护者无从处置）：{printed[-300:]!r}")
+
+    # 反空转：本地不存在 ⇒ 正常创建成功（检测不得误伤正常路径）。
+    ok_result, ok_calls, _ok_printed = _drive_create_draft_pr()
+    if ok_result != ch.PR_RESULT_CREATED:
+        errors.append(
+            f"[P1-5][反空转] 本地分支不存在时必须正常创建（撞车检测不得误伤），实际 {ok_result!r}"
+        )
+    if not any(cmd[:3] == ["git", "checkout", "-b"] for cmd in ok_calls):
+        errors.append("[P1-5][反空转] 本地不存在时必须真实执行 git checkout -b")
+
+    if (
+        result == ch.PR_RESULT_SKIPPED_DUPLICATE
+        and rev_parse
+        and not checkout_b
+        and not pushes
+        and "git branch -D" in printed
+        and ok_result == ch.PR_RESULT_CREATED
+    ):
+        print(
+            "[P1-5] 本地撞车检测通过：本地分支已存在 ⇒ 探测到即返回 skipped_duplicate（非 ERROR，"
+            "exit 0 不红灯）、零 checkout -b、零 push，并给出 git branch -D 解锁指引；"
+            "反空转：本地不存在时正常创建成功"
+        )
+
+
+def validate_p1_6_verdict_label_and_deadend(errors: list) -> None:
+    """[P1-6] 准入探测须输出**人话标签**；许可页候选全 404 时不得指路到不存在的页面。
+
+    实证缺陷（其一）：准入草案无条件打印「请人工打开上述许可页」。当 5 个候选**全部** 404 /
+    落回首页时，「上述许可页」**一个都不存在** ⇒ 人工照做只是白跑一趟，且看不出
+    「机器没找到」与「条款不存在」的区别。
+    实证缺陷（其二）：``redirect_home``（落回站点首页 = 假阳性）此前会被显示成「可达」，
+    误导人工照着**首页**去核许可条款。
+
+    行为断言（打桩 probe_page，零真实网络）：
+    - ``_verdict_label`` 对每个已知枚举返回**非空人话**且不含内部枚举原样（可辨识度）；
+    - 全部候选不可达 ⇒ 输出含「一个都没探到真实许可页」且**不含**「请人工打开上述许可页」；
+    - 有真实候选 ⇒ 仍保留「请人工打开上述许可页」的正常指引（不得把正常路径也堵死）。
+    """
+    if not hasattr(ch, "_verdict_label") or not hasattr(ch, "run_admit_source"):
+        errors.append("[P1-6] curate_harvester 缺少 _verdict_label() / run_admit_source()")
+        return
+
+    # —— 断言①：人话标签 ——
+    verdicts = ["real", "redirect_home", "unreachable"]
+    label_problems = []
+    for verdict in verdicts:
+        label = ch._verdict_label(verdict)
+        if not isinstance(label, str) or not label.strip():
+            label_problems.append(f"{verdict} -> 空标签")
+        elif label == verdict:
+            label_problems.append(f"{verdict} -> 原样透出内部枚举（未人话化）")
+    unknown = ch._verdict_label("not-a-real-verdict")
+    if "未知判定" not in unknown:
+        label_problems.append("未知枚举必须显式标注「未知判定」（不得静默伪装成已知含义）")
+    if label_problems:
+        errors.append(f"[P1-6] 准入探测判定必须输出人话标签：{label_problems}")
+
+    # —— 断言②：死胡同（全部候选不可达）——
+    original_probe = ch.probe_page
+    deadend_source = {
+        "id": "p1-6-src",
+        "name": "全404源",
+        "base_url": "https://deadend.example.test",
+        "admission": {"status": "probing", "license": ""},
+    }
+    original_sources_file = ch.SOURCES_FILE
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            src_file = Path(tmp) / "sources.json"
+            src_file.write_text(
+                json.dumps([deadend_source], ensure_ascii=False), encoding="utf-8"
+            )
+            ch.SOURCES_FILE = str(src_file)
+            ch.probe_page = lambda url, base_url, root_length=0, timeout=10: {
+                "status": 404,
+                "verdict": "unreachable",
+                "final_url": url,
+                "content_length": 0,
+                "note": "",
+            }
+            dead_buffer = io.StringIO()
+            with contextlib.redirect_stdout(dead_buffer):
+                ch.run_admit_source("p1-6-src")
+            dead_printed = dead_buffer.getvalue()
+
+            # —— 断言③：正常路径（有真实候选）仍须保留原指引 ——
+            ch.probe_page = lambda url, base_url, root_length=0, timeout=10: {
+                "status": 200,
+                "verdict": "real",
+                "final_url": url,
+                "content_length": 1234,
+                "note": "",
+            }
+            ok_buffer = io.StringIO()
+            with contextlib.redirect_stdout(ok_buffer):
+                ch.run_admit_source("p1-6-src")
+            ok_printed = ok_buffer.getvalue()
+    finally:
+        ch.probe_page = original_probe
+        ch.SOURCES_FILE = original_sources_file
+
+    if "一个都没探到真实许可页" not in dead_printed:
+        errors.append(
+            f"[P1-6] 许可页候选全部不可达时必须明说「一个都没探到真实许可页」（否则维护者以为页面存在）："
+            f"{dead_printed[-400:]!r}"
+        )
+    if "请人工打开上述许可页" in dead_printed:
+        errors.append(
+            "[P1-6] 许可页候选全部不可达时不得仍指引「请人工打开上述许可页」"
+            "（无对象可打开，属死胡同指引）"
+        )
+    if "请人工打开上述许可页" not in ok_printed:
+        errors.append(
+            f"[P1-6] 有真实许可页候选时必须保留「请人工打开上述许可页」的正常指引（不得把正常路径也堵死）："
+            f"{ok_printed[-400:]!r}"
+        )
+
+    if (
+        not label_problems
+        and "一个都没探到真实许可页" in dead_printed
+        and "请人工打开上述许可页" not in dead_printed
+        and "请人工打开上述许可页" in ok_printed
+    ):
+        print(
+            "[P1-6] 准入探测输出通过：3 类判定均人话化（未知枚举显式标注）；许可页全 404 ⇒ "
+            "明说「一个都没探到真实许可页」且不再指引打开不存在的页面；有真实候选时原指引保留"
+        )
+
+
+def validate_p1_7_backlog_has_clickable_pr_link(errors: list) -> None:
+    """[P1-7] 积压摘要必须带**待审候选 PR 的可点链接**，且**绝不硬编码仓库名**。
+
+    实证缺陷：积压摘要只有一句「请人工审阅并合并后即可恢复产出」——**没有任何跳转路径**。
+    收到通知的人必须自己知道去哪个页面、点哪个标签才能找到那批 PR，积压通知若不含跳转路径
+    等于没通知。
+
+    可移植性红线：仓库名**不得硬编码**。脚本可能被 fork / 换仓库运行，硬编一个仓库名会让
+    链接指向**别人的仓库**，维护者点进去看到无关 PR，属主动误导。故链接只允许由
+    ``GITHUB_REPOSITORY`` 决定；未设该变量时**降级为纯文本指引**，绝不编造 URL。
+
+    行为断言（直接驱动 ``_report_backlog``，零网络）：
+    - 设了 ``GITHUB_REPOSITORY=acme/know-her`` ⇒ 输出含对应 pulls 链接（标签 daily-candidate）；
+    - 未设 ⇒ 输出**不含任何 http 链接**，但仍含纯文本的定位指引（可搜索路径）；
+    - 非法 ``GITHUB_REPOSITORY``（非 ``owner/repo``）⇒ 同样降级，不得拼接出畸形 URL。
+    """
+    if not hasattr(ch, "_report_backlog"):
+        errors.append("[P1-7] curate_harvester 缺少 _report_backlog()")
+        return
+
+    original_repo = os.environ.get("GITHUB_REPOSITORY")
+    original_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary_file = Path(tmp) / "summary.md"
+
+            def _drive(repo_value):
+                if repo_value is None:
+                    os.environ.pop("GITHUB_REPOSITORY", None)
+                else:
+                    os.environ["GITHUB_REPOSITORY"] = repo_value
+                os.environ["GITHUB_STEP_SUMMARY"] = str(summary_file)
+                if summary_file.is_file():
+                    summary_file.unlink()
+                buffer = io.StringIO()
+                with contextlib.redirect_stdout(buffer):
+                    ch._report_backlog("3 个候选均已有待审 PR", backlog_count=3)
+                printed = buffer.getvalue()
+                summary_text = (
+                    summary_file.read_text(encoding="utf-8") if summary_file.is_file() else ""
+                )
+                return printed, summary_text
+
+            printed_ok, summary_ok = _drive("acme/know-her")
+            printed_none, summary_none = _drive(None)
+            printed_bad, summary_bad = _drive("../../evil")
+
+        expected = "https://github.com/acme/know-her/pulls?q=is%3Apr+label%3Adaily-candidate"
+        if expected not in printed_ok:
+            errors.append(
+                f"[P1-7] 设了 GITHUB_REPOSITORY=acme/know-her 时积压摘要必须给出可点链接 {expected}："
+                f"{printed_ok[-400:]!r}"
+            )
+        if expected not in summary_ok:
+            errors.append(
+                f"[P1-7] 积压摘要（$GITHUB_STEP_SUMMARY）必须同样带待审 PR 链接：{summary_ok[-400:]!r}"
+            )
+        if "daily-candidate" not in printed_ok:
+            errors.append(f"[P1-7] 积压链接须指名 daily-candidate 标签（否则检索不到目标）：{printed_ok[-300:]!r}")
+
+        for label, text in (("未设", printed_none), ("非法值", printed_bad)):
+            if "http://" in text or "https://" in text:
+                errors.append(
+                    f"[P1-7] GITHUB_REPOSITORY {label}时**不得输出任何 URL**"
+                    f"（否则链接指向无关仓库，属主动误导）：{text[-300:]!r}"
+                )
+            if "daily-candidate" not in text:
+                errors.append(
+                    f"[P1-7] GITHUB_REPOSITORY {label}时降级为纯文本指引，仍须点名 daily-candidate 标签："
+                    f"{text[-300:]!r}"
+                )
+
+        if (
+            expected in printed_ok
+            and expected in summary_ok
+            and "daily-candidate" in printed_none
+            and not ("http" in printed_none)
+            and not ("http" in printed_bad)
+        ):
+            print(
+                "[P1-7] 积压 PR 链接通过：GITHUB_REPOSITORY=acme/know-her ⇒ 输出与 $GITHUB_STEP_SUMMARY "
+                "均带 daily-candidate 标签的可点链接；未设 / 非法值时降级为纯文本指引、零 URL"
+            )
+    finally:
+        if original_repo is None:
+            os.environ.pop("GITHUB_REPOSITORY", None)
+        else:
+            os.environ["GITHUB_REPOSITORY"] = original_repo
+        if original_summary is None:
+            os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        else:
+            os.environ["GITHUB_STEP_SUMMARY"] = original_summary
+
+
+def validate_p1_9_backlog_nudge_when_accumulated(errors: list) -> None:
+    """[P1-9b] 积压条数达阈值时必须给出**可执行出路**，否则积压会单调增长。
+
+    实证缺陷：只报「积压了」而不给下一步，积压会一直增长 ⇒ 选题池被待审 PR 占满 ⇒ 机器
+    **永久零产出**。此时人看一眼 green run 也不知道该做什么。出路必须**可复制粘贴执行**
+    （给出 ``gh pr close`` 命令），而不是「建议清理积压」这类无动作的祈使句。
+
+    行为断言（驱动 ``_report_backlog``）：
+    - ``backlog_count`` 达阈值 ⇒ 输出与摘要均含 ``gh pr close`` 可执行命令；
+    - 低于阈值 ⇒ **不**输出该提示（低价值噪音会让真信号被忽略）。
+    """
+    if not hasattr(ch, "BACKLOG_NUDGE_THRESHOLD") or not hasattr(ch, "_report_backlog"):
+        errors.append("[P1-9b] curate_harvester 缺少 BACKLOG_NUDGE_THRESHOLD / _report_backlog()")
+        return
+
+    threshold = int(ch.BACKLOG_NUDGE_THRESHOLD)
+    original_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    original_repo = os.environ.get("GITHUB_REPOSITORY")
+    try:
+        os.environ["GITHUB_REPOSITORY"] = "acme/know-her"
+
+        def _drive(count):
+            with tempfile.TemporaryDirectory() as tmp:
+                summary_file = Path(tmp) / "summary.md"
+                os.environ["GITHUB_STEP_SUMMARY"] = str(summary_file)
+                buffer = io.StringIO()
+                with contextlib.redirect_stdout(buffer):
+                    ch._report_backlog(f"{count} 个候选均已有待审 PR", backlog_count=count)
+                summary_text = (
+                    summary_file.read_text(encoding="utf-8") if summary_file.is_file() else ""
+                )
+                return buffer.getvalue(), summary_text
+
+        high_printed, high_summary = _drive(threshold)
+        low_printed, low_summary = _drive(threshold - 1)
+
+        if "gh pr close" not in high_printed:
+            errors.append(
+                f"[P1-9b] 积压达阈值（{threshold}）时必须给出**可执行的**出路命令 gh pr close"
+                f"（否则积压单调增长、机器永久零产出）：{high_printed[-400:]!r}"
+            )
+        if "gh pr close" not in high_summary:
+            errors.append(
+                f"[P1-9b] 积压出路提示必须写入 $GITHUB_STEP_SUMMARY（摘要才是值班人真正会看的地方）："
+                f"{high_summary[-400:]!r}"
+            )
+        if "gh pr close" in low_printed or "gh pr close" in low_summary:
+            errors.append(
+                "[P1-9b] 积压未达阈值时不得输出出路提示（低价值噪音会让真信号被忽略）："
+                f"{low_printed[-300:]!r}"
+            )
+
+        if (
+            "gh pr close" in high_printed
+            and "gh pr close" in high_summary
+            and "gh pr close" not in low_printed
+        ):
+            print(
+                f"[P1-9b] 积压出路提示通过：达阈值（{threshold} 条）⇒ 输出与摘要均含可执行 "
+                f"`gh pr close` 命令；低于阈值 ⇒ 零提示"
+            )
+    finally:
+        if original_summary is None:
+            os.environ.pop("GITHUB_STEP_SUMMARY", None)
+        else:
+            os.environ["GITHUB_STEP_SUMMARY"] = original_summary
+        if original_repo is None:
+            os.environ.pop("GITHUB_REPOSITORY", None)
+        else:
+            os.environ["GITHUB_REPOSITORY"] = original_repo
+
+
+def validate_p1_8_single_source_of_truth(errors: list) -> None:
+    """[P1-8] 三处「验收标准」必须引用**同一个常量**，且该常量真被引用。
+
+    实证缺陷：模板注释写「3~4 条」、PR Checklist 写「3~4 点」、本地指引写「3~5 条」——三处各写
+    各的。维护者按本地指引写 5 条、按 PR Checklist 自查时又以为超编，**两份「验收标准」互相
+    矛盾**，无从判定到底哪个算数。
+
+    本断言必须**行为级**且**反空转**：只断言「常量存在」是永真的，必须真去驱动
+    ``compose_mdx_content``（模板）与一次真实 PR 创建（PR Checklist），断言产出的**三处文本**
+    都与常量**同值**，且源码里除常量定义处外**零**硬编码字面量。
+    """
+    if not hasattr(ch, "DRAFT_KEYPOINT_RANGE"):
+        errors.append("[P1-8] curate_harvester 缺少 DRAFT_KEYPOINT_RANGE（验收标准无单一真值源）")
+        return
+
+    expected = ch.DRAFT_KEYPOINT_RANGE
+    if not isinstance(expected, str) or not expected.strip():
+        errors.append("[P1-8] DRAFT_KEYPOINT_RANGE 必须是非空字符串")
+        return
+    # 常量的**取值本身**也须钉死（否则把常量从「3~4 条」改成「3~5 条」，模板与 PR Checklist
+    # 两处会**同步跟着错**而全部断言照样绿——单一真值源只保证「一处错」，不保证「这处值对」）。
+    # 依据：模板预置 3 条占位要点 ⇒ 下限 3 条即达标；上限 4 条防注水。
+    if expected.strip() != "3~4 条":
+        errors.append(
+            f"[P1-8] DRAFT_KEYPOINT_RANGE 取值必须为 '3~4 条'（模板预置 3 条占位要点，下限 3 即达标，"
+            f"上限 4 防注水），实际 {expected.strip()!r}"
+        )
+
+    # 行为断言①：模板文本引用该常量
+    mdx = ch.compose_mdx_content(dict(_G9_FIXTURE_CANDIDATE))
+    if expected not in mdx:
+        errors.append(
+            f"[P1-8] 草稿模板的人工要点指引必须引用常量 {expected!r}：{mdx[:400]!r}"
+        )
+
+    # 行为断言②：PR Checklist 正文引用该常量（真实驱动一次 PR 创建并取 gh 实参）
+    recorded: list = []
+    original_run = subprocess.run
+    captured_body: list = []
+    stub = _make_pr_subprocess_stub(recorded, False)
+
+    def _capturing_run(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and cmd[:3] == ["gh", "pr", "create"]:
+            captured_body.append(cmd[cmd.index("--body") + 1])
+        return stub(cmd, *args, **kwargs)
+
+    try:
+        with _stubbed_create_draft_pr_env(existing_open_pr=False) as _rec:
+            subprocess.run = _capturing_run
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    ch.create_draft_pr(dict(_G9_FIXTURE_CANDIDATE))
+            finally:
+                subprocess.run = original_run
+    finally:
+        subprocess.run = original_run
+
+    if not captured_body:
+        errors.append("[P1-8][反空转] 未捕获到 gh pr create 的 --body 实参（PR Checklist 断言无法取证）")
+    elif expected not in captured_body[0]:
+        errors.append(
+            f"[P1-8] PR Checklist 的人工要点条数必须引用常量 {expected!r}，实际正文："
+            f"{captured_body[0][:600]!r}"
+        )
+
+    # 反空转：源码中不得存在与常量等值的**重复硬编码**（防止有人绕过常量再写一份字面量）。
+    # 只统计**非注释、非字符串字面量本身**的代码行：注释里复述该值（「此前模板写 3~4 条」）是
+    # 有价值的决策记录，不是重复真值源，计入会把好文档判红。
+    source_path = Path(__file__).resolve().parent / "curate_harvester.py"
+    source_lines = _read_text(source_path).splitlines()
+    code_hits = [
+        (idx, line.strip())
+        for idx, line in enumerate(source_lines, 1)
+        if expected in line
+        and not line.lstrip().startswith("#")
+        and not line.strip().startswith(f"DRAFT_KEYPOINT_RANGE")
+    ]
+    if code_hits:
+        errors.append(
+            f"[P1-8] 常量值 {expected!r} 在**代码行**中出现 {len(code_hits)} 次（>0 即说明有绕过常量的"
+            f"硬编码副本，三处验收标准必须只经由常量渲染）：{code_hits}"
+        )
+
+    if (
+        expected in mdx
+        and captured_body
+        and expected in captured_body[0]
+        and not code_hits
+    ):
+        print(
+            f"[P1-8] 要点条数单一真值源通过：模板与 PR Checklist 两处实测文本均渲染为常量 {expected!r}；"
+            "代码行中零硬编码副本"
+        )
+
+
+def validate_p0_1_remote_branch_cleaned_on_pr_failure(errors: list) -> None:
+    """[P0-1 固化] ``gh pr create`` 失败必须 best-effort 清理**远端残留分支**。
+
+    实证缺陷（交互作用）：push 已成功 ⇒ 分支**已躺在远端**；随后 ``gh pr create`` 失败 ⇒ PR 没了
+    但分支还在。此后新的 ``ls-remote`` 守卫每次都判「远端已存在」⇒ **该候选被永久阻塞**，
+    每日都只打印「远端分支已存在」却再也不会自愈 ⇒ 选题**永久损失**。故必须 best-effort 删除。
+
+    本断言**锁定既有修复**（此前生产代码已有 ``_delete_remote_branch``，但测试零断言 ⇒
+    可被任何人静默删除而无人察觉）。行为级断言：
+    - ``gh pr create`` 失败 ⇒ 观测到 ``git push origin --delete <branch>``，且分支名**精确匹配**；
+    - 删除发生在 **push 之后**（否则删的是还没推上去的分支，无意义）；
+    - 该清理**不得**抛异常打断流程（返回可区分的 ERROR 结果而非崩溃）。
+    """
+    if not hasattr(ch, "_delete_remote_branch"):
+        errors.append("[P0-1] curate_harvester 缺少 _delete_remote_branch()（远端残留清理）")
+        return
+
+    branch = f"candidate/{_G9_FIXTURE_CANDIDATE['slug']}"
+    result, calls, printed = _drive_create_draft_pr(gh_create_fail=True)
+
+    delete_idx = next(
+        (
+            idx
+            for idx, cmd in enumerate(calls)
+            if cmd[:2] == ["git", "push"] and "--delete" in cmd
+        ),
+        None,
+    )
+    push_idx = next(
+        (idx for idx, cmd in enumerate(calls) if cmd[:2] == ["git", "push"] and "--delete" not in cmd),
+        None,
+    )
+
+    if delete_idx is None:
+        errors.append(
+            "[P0-1] gh pr create 失败后未 best-effort 删除远端残留分支"
+            "（该候选会被 ls-remote 守卫**永久阻塞**，选题永久损失）"
+        )
+    elif branch not in calls[delete_idx]:
+        errors.append(
+            f"[P0-1] 远端清理必须精确删除已推送的那个分支 {branch}，实际 {calls[delete_idx]}"
+        )
+    if push_idx is None:
+        errors.append("[P0-1][反空转] 未观测到真实 push（gh_create_fail 场景本应先 push 再清理）")
+    elif delete_idx is not None and delete_idx < push_idx:
+        errors.append(
+            "[P0-1] 远端清理必须发生在 push **之后**（否则删除的是尚未推送的分支，无意义）"
+        )
+    if result != ch.PR_RESULT_ERROR:
+        errors.append(
+            f"[P0-1] gh pr create 失败应返回可区分的 PR_RESULT_ERROR（不得抛异常崩溃），实际 {result!r}"
+        )
+
+    if delete_idx is not None and push_idx is not None and delete_idx > push_idx and result == ch.PR_RESULT_ERROR:
+        print(
+            f"[P0-1] 远端残留清理固化通过：gh pr create 失败 ⇒ push 之后精确执行 "
+            f"`git push origin --delete {branch}`，返回可区分的 error 结果（不崩溃）"
+        )
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
     print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）以及 G9（草稿模板经 node + 本项目 MDX 引擎真实编译须通过、且不含 `<!--` / 无 raw_desc 泄漏；候选分支不带台账；跳过-成功返回值语义可区分且零进展 ::warning:: 可见；R1~R5 收口：候选分支名经 $GITHUB_OUTPUT 与返回值交给上层且工作流自检在候选分支上、失败候选不污染后续、--create-pr 一次性预取预排除被占用候选、积压 exit 0 与真故障 exit 1 措辞分明、raw_desc 进 PR 正文且泄漏守卫不空转）。")
@@ -4928,6 +5772,19 @@ def run_gate() -> None:
     validate_s2_backlog_issue_channel(errors)
     validate_s2_gate_annotations_reach_stdout(errors)
     validate_s2_content_gate_enforced(errors)
+
+    # [P1 收口批次] 为上一轮落地的 8 项修复**补齐可判红门禁断言**（此前实现零断言 = 假绿）：
+    # 探测失败留痕 / 探测预算截断可见 / 子进程超时全覆盖 / 本地撞车跳过 / 准入人话标签与死胡同 /
+    # 积压 PR 链接 / 积压出路提示 / 要点数单一真值源，以及 P0-1 远端残留清理的固化断言。
+    validate_p1_9_probe_failure_is_visible(errors)
+    validate_p1_2_probe_budget_truncation_visible(errors)
+    validate_p1_4_every_subprocess_has_timeout(errors)
+    validate_p1_5_local_branch_collision_skipped(errors)
+    validate_p1_6_verdict_label_and_deadend(errors)
+    validate_p1_7_backlog_has_clickable_pr_link(errors)
+    validate_p1_9_backlog_nudge_when_accumulated(errors)
+    validate_p1_8_single_source_of_truth(errors)
+    validate_p0_1_remote_branch_cleaned_on_pr_failure(errors)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")

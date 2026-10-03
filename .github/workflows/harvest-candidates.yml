@@ -199,4 +199,4 @@ jobs:
         run: |
           echo "### 🌸 Pipeline B 每日自动化候选扫描已完成" >> $GITHUB_STEP_SUMMARY
           echo "- **执行时间**：$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "- **审阅指引**：若有新候选抓取成功，可在 [Pull Requests](https://github.com/${{ github.repository }}/pulls?q=is%3Apr+label%3Adaily-candidate) 查看并一键合并上线。" >> $GITHUB_STEP_SUMMARY
+          echo "- **审阅指引**：若有新候选抓取成功，可在 [Pull Requests](https://github.com/${{ github.repository }}/pulls?q=is%3Apr+label%3Adaily-candidate) 查看；**草稿含占位符与待人工补全项（人工要点 / 速测题 / 版权核验），审阅并补全内容后方可合并，不可直接合并上线。**" >> $GITHUB_STEP_SUMMARY

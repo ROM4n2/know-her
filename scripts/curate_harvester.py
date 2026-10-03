@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,6 +28,34 @@ LEDGER_FILE = os.path.join(SCRIPT_DIR, ".curate-ledger.json")
 QUIZ_FILE = os.path.join(ROOT_DIR, "src", "data", "dailyQuiz.ts")
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+# [P1-8] 人工要点条数的**单一真值源**（模板注释 / PR Checklist / run_draft_url 指引三处共用）。
+# 三处此前各写各的（模板「3~4 条」、PR Checklist「3~4 点」、本地指引「3~5 条」）⇒ 维护者
+# 按本地指引写 5 条、按 PR Checklist 自查时又以为超编，两份「验收标准」互相矛盾。
+# 本常量只约束**条数区间**；下限锚定模板里预置的 3 条占位要点（写 3 条即达标）。
+DRAFT_KEYPOINT_RANGE = "3~4 条"
+
+# ---------------------------------------------------------------------------
+# 子进程超时预算（防止 git/gh 挂到内核级超时，而 job 预算先耗尽 ⇒ 连摘要步骤都不执行）
+# ---------------------------------------------------------------------------
+# 每个 subprocess.run **必须**显式带 timeout=：无超时的 git push 遇 TLS 黑洞会挂到
+# 操作系统级 TCP 超时（Windows 可达数分钟），而 harvest-candidates.yml 的 job 预算是
+# timeout-minutes: 15（900s）——子进程挂死会把整个 job 拖到硬杀，运行摘要 / 积压开单
+# 这些「唯一给人留痕」的步骤全部落空。故三类命令各给一个有界预算：
+#   · GIT_LOCAL_TIMEOUT：纯本地 git 操作（status/branch/checkout/add/commit），秒级；
+#   · GIT_NET_TIMEOUT / GH_TIMEOUT：触网操作（ls-remote/push/fetch、gh pr），需覆盖
+#     TLS 握手 + API 往返，给足 120s。
+GIT_LOCAL_TIMEOUT = 60
+GIT_NET_TIMEOUT = 120
+GH_TIMEOUT = 120
+
+# push 重试退避（秒）：**指数**退避而非固定 2s——固定间隔重试在持续抖动下只是把同一次
+# 抖动重试三遍；2→4→8 让「瞬时抖动」与「持续故障」在时间上可区分。
+PUSH_RETRY_BACKOFFS_SECONDS = (2, 4, 8)
+
+# [P1-9b] 积压「出路提示」的触发阈值（条）。低于此值逐条人工审阅成本可接受，不必刷屏；
+# 达到此值说明选题池已被待审 PR 占住、机器会持续零产出，此时必须主动给出清理路径。
+BACKLOG_NUDGE_THRESHOLD = 5
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +447,7 @@ is_full_text: false
 
 合并前必须依次完成（PR Checklist 严禁机器自勾选，必须由人核实）：
   1. 跳转 source_url 通读原文，核实主题与本条完全匹配、无张冠李戴；
-  2. 把下方三条占位要点改写为 3~4 条真正有医学增量的提炼干货，删除占位文字与本注释块；
+  2. 把下方三条占位要点改写为 {DRAFT_KEYPOINT_RANGE}真正有医学增量的提炼干货，删除占位文字与本注释块；
   3. 确认零版权搬运：只保留人工提炼要点 + 原文直达链接（抓取来的原出处描述摘录仅存于 PR 描述，
      严禁搬入正文）；
   4. 补写 frontmatter 的 summary；证据等级 / 复审人 / 最后核验日期三类字段一律由人工核验后填写，
@@ -453,6 +482,13 @@ is_full_text: false
 #   ③ max_pages 仅为 sitemap index 递归深度上限，不承担截断职责。
 MAX_SITEMAP_ENTRIES = 5000
 MAX_SITEMAP_BYTES = 5 * 1024 * 1024
+
+# [P1-2] **本轮真实探测次数**上限（与上面的 sitemap 条目数上限语义不同：那个限「解析」，
+# 这个限「逐条发网络请求」，而后者才是 job 预算的主要消耗项）。
+# 取值依据（每次探测 HTTP 超时 10s，job 预算 900s）：
+#   上限 60 次 ⇒ 最坏 60×10s = 600s，留 300s 给依赖安装 + pnpm check/build，不被硬杀；
+#   正常路径需探测 1~10 次（PR_CANDIDATE_BATCH=10），远低于 60 ⇒ **零影响**。
+MAX_HARVEST_PROBES = 60
 
 
 def is_source_admitted(src: dict) -> bool:
@@ -773,6 +809,20 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
 
     candidates = []
 
+    # [P1-9] 探测计数：区分「没发现候选」（内容耗尽）与「发现了但全部探测失败」（出口故障）。
+    # 收尾文案据此选不同的成因与出路，避免把网络故障表述成内容耗尽。
+    probe_attempted = 0
+    probe_failed = 0
+    # [P1-2] 发现阶段的**探测次数上限**（有界且可见）：
+    #   最坏情况 = 每次探测各吃满 HTTP 超时（10s）。--create-pr 的 PR_CANDIDATE_BATCH=10
+    #   只需取到 10 个成功候选，但探测循环会在「成功数不足」时继续扫**全部**初筛命中项，
+    #   而初筛命中数无上限（实测当前 48 条，若某信源改用 sitemap 模式可达数千条）。
+    #   48×10s=480s 已吃掉 900s 预算的一半；再叠加依赖安装与 pnpm check/build 即超预算，
+    #   job 被硬杀 ⇒ 连「写入工作流执行摘要」都不会执行（值班人零留痕）。
+    #   故设 MAX_HARVEST_PROBES：正常路径（当前 48 候选、每日取 1~10）**不受影响**
+    #   （10 次成功即可满足，远低于上限），只在异常膨胀时才截断，且**打印截断了多少条**。
+    truncated_probes = 0
+
     for src in sources:
         if source_id and src.get("id") != source_id:
             continue
@@ -785,9 +835,22 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
             if len(candidates) >= limit:
                 break
 
+            # [P1-2] 探测预算耗尽 ⇒ 停止探测并如实报告截断量（不静默丢弃）。
+            if probe_attempted >= MAX_HARVEST_PROBES:
+                truncated_probes += 1
+                continue
+
+            probe_attempted += 1
             p_status, p_html = fetch_url(full_url, timeout=10)
             if p_status != 200 or not p_html:
+                probe_failed += 1
                 all_seen_urls.add(full_url)
+                # [P1-9] 探测失败**必须留痕**：此前此处直接 continue 且无任何 print，
+                # 10 个候选全失败时日志里一行「发生过探测」都没有 ⇒ 值班人看到收尾的
+                # 「候选池为空」只会以为内容已耗尽，进而去改 sources.json 的
+                # link_pattern/keywords（治错了地方），而真正的出口故障无人察觉。
+                reason = "连接失败/超时（status=0）" if p_status == 0 else f"HTTP {p_status}"
+                print(f"  ⚠️ 候选探测未通过（{reason}，非内容问题）：{full_url}")
                 continue
 
             page_title, desc = extract_metadata(p_html)
@@ -821,6 +884,26 @@ def harvest_candidates(limit: int = 1, source_id: str | None = None) -> list[dic
         if len(candidates) >= limit:
             break
 
+    # [P1-2] 截断必须**可见**：静默丢弃会让「候选池为空」看起来像内容耗尽。
+    if truncated_probes:
+        print(
+            f"  ⚠️ 探测预算已达上限 {MAX_HARVEST_PROBES} 次，"
+            f"本轮**跳过探测 {truncated_probes} 条**候选（未计入候选数，也未写台账）。"
+            f"若确实需要更多候选，请提高 MAX_HARVEST_PROBES 并同步复核 job 的 timeout-minutes。"
+        )
+
+    # [P1-9] 收尾小结：把「探测了几条 / 失败几条」显式说出来，供 main() 与值班人区分
+    # 「内容耗尽」与「出口故障」。无任何输出 ⇒ 至少留下一行「本轮探测 N 条、失败 M 条」。
+    if probe_attempted:
+        print(
+            f"  ℹ️ 本轮共探测 {probe_attempted} 条候选，成功 {probe_attempted - probe_failed} 条，"
+            f"失败 {probe_failed} 条。"
+        )
+        if not candidates and probe_failed == probe_attempted:
+            print(
+                "  ⚠️ 本轮**所有**候选探测均失败（成功 0 条）——这是**出口/网络故障**，"
+                "不是「内容已耗尽」。请先查网络出口与 DNS，再考虑调整信源配置。"
+            )
     return candidates
 
 
@@ -1335,7 +1418,7 @@ def run_draft_url(url: str) -> int:
     print(
         "\n" + "=" * 72 + "\n"
         "✅ 草稿骨架已生成。请完成以下**人工动作**后再提 PR（机器不得自证）：\n"
-        f"  1) 通读原文，把 src/content/articles/{slug}.mdx 的三条占位要点改写为 3~5 条提炼干货，"
+        f"  1) 通读原文，把 src/content/articles/{slug}.mdx 的三条占位要点改写为 {DRAFT_KEYPOINT_RANGE}提炼干货，"
         "并删除占位文字与注释块；\n"
         f"  2) 补完速测题占位：编辑 src/data/dailyQuiz.ts 中 '{slug}' 条目，"
         "清空占位文字并填写题干 / 选项 / 正解 / 解析；\n"
@@ -1360,6 +1443,23 @@ def _license_url_candidates(src: dict) -> list:
             if candidate_url not in candidates:
                 candidates.append(candidate_url)
     return candidates
+
+
+# [P1-6] verdict 的人话对照表（**单一真值源**）。
+# 原实现直接把内部枚举 ``real`` / ``redirect_home`` / ``unreachable`` 打印给人看，
+# 而这三者都是**代码内部命名**：值班人看到 ``[real]`` 无法判断它是否等于
+# 「许可条款已核实」——而实际上 ``real`` 只意味着「抓到一个非首页的 200 响应」，
+# 与条款内容毫无关系。不加对照表会诱导人工把「可达」误读成「已核实」。
+VERDICT_HUMAN_LABELS = {
+    "real": "抓到真实页面（**仅证明可达，不代表许可条款已核实**）",
+    "redirect_home": "落回站点首页（**假阳性**，不是许可页）",
+    "unreachable": "不可达",
+}
+
+
+def _verdict_label(verdict) -> str:
+    """把内部 verdict 枚举渲染成人话（未知枚举原样透出，不静默伪装成已知含义）。"""
+    return VERDICT_HUMAN_LABELS.get(verdict, f"未知判定 {verdict!r}（请人工复核）")
 
 
 def _print_license_probe(candidate_url: str, info: dict) -> None:
@@ -1423,7 +1523,7 @@ def run_admit_source(source_id: str) -> int:
         info = probe_page(probe_url, base_url, timeout=10)
         print(
             f"   - {label}: {probe_url} → HTTP {info['status']} 落地 {info['final_url']} "
-            f"[{info['verdict']}]"
+            f"→ {_verdict_label(info['verdict'])}"
         )
         if label == "base_url" and info["status"] == 200 and info["content_length"] > 0:
             root_length = info["content_length"]
@@ -1458,9 +1558,29 @@ def run_admit_source(source_id: str) -> int:
     }
     print(json.dumps(draft, ensure_ascii=False, indent=2))
 
+    # [P1-6] 死胡同修复：原文案无条件说「请人工打开上述许可页」。当 5 个候选**全部** 404 /
+    # 落回首页时，「上述许可页」一个都不存在 ⇒ 人工照着做只会白跑一趟，且看不出
+    # 「机器没找到」与「条款不存在」的区别。此处按 real_count 分流：
+    #   · 有真实候选 ⇒ 原指引成立（打开、阅读、填写）；
+    #   · 全军覆没   ⇒ 如实说明**成因**（路径是猜的 / 本机出口被墙），并给出真正走得通的下一步。
+    if real_count:
+        print(
+            "\n⚠️ No-Auto-Approve：本命令**不会**自动通过。请人工打开上述许可页、阅读条款后，"
+            "再**自行**填写 license / license_url 并把 status 置为 \"admitted\"。\n"
+        )
+    else:
+        print(
+            f"\n⚠️ No-Auto-Approve：本命令**不会**自动通过。\n"
+            f"   ⚠️ 上面 {len(probes)} 个许可页候选**一个都没探到真实许可页**，"
+            f"因此「打开上述许可页」这一步**无对象可打开**——这是路径猜错或本机出口被墙，"
+            f"**不是**「该站没有许可条款」。\n"
+            f"   ➜ 下一步（按顺序）：先看上面每条的成因（不可达 / 落回首页）；\n"
+            f"     若多为「落回站点首页」，说明该站没有上述常见路径 ⇒ 改为人工打开站点、"
+            f"经由页脚/法务页找到真实版权与转载条款页，再把该 URL 填入 license_url；\n"
+            f"     若多为「不可达」，先按下方 CI-Egress-Only 说明在 CI 出口重跑一次，"
+            f"确认不是本机网络问题。\n"
+        )
     print(
-        "\n⚠️ No-Auto-Approve：本命令**不会**自动通过。请人工打开上述许可页、阅读条款后，"
-        "再**自行**填写 license / license_url 并把 status 置为 \"admitted\"。\n"
         "⚠️ CI-Egress-Only：verified_by_run 必须来自 CI 出口（GitHub Actions run URL）——"
         f"{LOCAL_EGRESS_UNTRUSTED_NOTE}。\n"
         "   （在本地执行本命令得到的可达性仅为参考，准入证据须补一次 CI 运行。）"
@@ -1533,6 +1653,7 @@ def fetch_open_candidate_branches() -> "set | None":
         ["gh", "pr", "list", "--state", "open", "--json", "headRefName"],
         capture_output=True,
         text=True,
+        timeout=GH_TIMEOUT,
     )
     if res.returncode != 0:
         print(
@@ -1572,7 +1693,7 @@ def _remote_branch_exists(branch_name: str) -> bool:
     cmd = ["git", "ls-remote", "--heads", "origin", branch_name]
     last_stderr = ""
     for attempt in range(1, LS_REMOTE_ATTEMPTS + 1):
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_NET_TIMEOUT)
         if res.returncode == 0:
             return bool((res.stdout or "").strip())
         last_stderr = (res.stderr or "").strip()[:160]
@@ -1587,6 +1708,48 @@ def _remote_branch_exists(branch_name: str) -> bool:
     return True
 
 
+def _refresh_remote_baseline(branch_name: str) -> None:
+    """[P1-4] push 重试前**刷新远端引用基准**（只读 fetch），失败仅告警、绝不抛出。
+
+    纯 ``git fetch``（无 --force*、不改本地提交、不写工作区），仅为让下一次重试基于最新的
+    ``origin/<branch>`` 判定。任何异常都不得中断 push 重试流程，故全部吞掉并打印。
+    """
+    try:
+        res = subprocess.run(
+            ["git", "fetch", "origin", branch_name],
+            capture_output=True,
+            text=True,
+            timeout=GIT_NET_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  ⚠️ 刷新远端基准失败（不中断重试）：{exc}")
+        return
+    if res.returncode != 0:
+        print(
+            f"  ⚠️ 刷新远端基准失败（不中断重试）：{(res.stderr or '').strip()[:160]}"
+        )
+
+
+def _local_branch_exists(branch_name: str) -> bool:
+    """[P1-5] 只读探测**本地**是否已存在该分支（``git rev-parse --verify refs/heads/<branch>``）。
+
+    用它替代 ``git checkout -b`` 的撞车判定：后者在分支已存在时以 exit 128 抛异常（见调用处注释）。
+    本探测 ``check=False``，git 对「引用不存在」返回 128 且**不抛**，故可直接读 ``returncode``。
+    探测本身异常（OSError 等 git 缺失）时按 fail-closed 判「已存在」⇒ 跳过而非冒险覆盖。
+    """
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--verify", f"refs/heads/{branch_name}"],
+            capture_output=True,
+            text=True,
+            timeout=GIT_LOCAL_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  ⚠️ 本地分支探测异常（按 fail-closed 跳过本候选）：{exc}")
+        return True
+    return res.returncode == 0
+
+
 def _delete_remote_branch(branch_name: str) -> None:
     """[P0-1] best-effort 删除远端候选分支：失败仅告警，**绝不**抛出（不得让流程崩溃）。
 
@@ -1598,6 +1761,7 @@ def _delete_remote_branch(branch_name: str) -> None:
             ["git", "push", "origin", "--delete", branch_name],
             capture_output=True,
             text=True,
+            timeout=GIT_NET_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"  ⚠️ 清理远端分支 {branch_name} 时异常（请人工执行下方命令）：{exc}")
@@ -1621,6 +1785,7 @@ def _branch_already_open(branch_name: str) -> bool:
         ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
         capture_output=True,
         text=True,
+        timeout=GH_TIMEOUT,
     )
     return dup.returncode == 0 and dup.stdout.strip() not in ("", "[]")
 
@@ -1639,14 +1804,22 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
     target_file = os.path.join(ARTICLES_DIR, f"{slug}.mdx")
 
     # 1. 检查 git 状态
-    st = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    st = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        timeout=GIT_LOCAL_TIMEOUT,
+    )
     if st.stdout.strip():
         print("❌ 当前 Git 工作区存在未提交变更，请先保存后再发起 Draft PR")
         _emit_step_output("branch", "")
         return DraftPrResult(PR_RESULT_ERROR, "")
 
     current_branch = subprocess.run(
-        ["git", "branch", "--show-current"], capture_output=True, text=True
+        ["git", "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        timeout=GIT_LOCAL_TIMEOUT,
     ).stdout.strip()
 
     # [P0-3] 速测题占位注入会**改动** src/data/dailyQuiz.ts：未成功提交时（校验/暂存/提交任一失败）
@@ -1676,7 +1849,25 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
             return DraftPrResult(PR_RESULT_SKIPPED_REMOTE_EXISTS, "")
 
         # 创建分支
-        subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+        # [P1-5] **本地重提案撞车检测**：``git checkout -b <已存在的分支>`` 自身即以非零码退出
+        # （git: "a branch named 'x' already exists"，exit 128）。此前此处直接跑 checkout -b，
+        # 撞车时抛 CalledProcessError ⇒ 落入 except ⇒ 整个候选判 PR_RESULT_ERROR ⇒ _report_failure
+        # ⇒ ::error:: + exit 1：**一个本地残留分支就让每日定时任务红灯**，且文案是误导性的
+        # 「创建流程出现错误」（真实成因是本地撞车，与远端残留无关）。
+        # 故先用只读的 ``git rev-parse --verify refs/heads/<branch>`` 判定：探测命令不存在分支时
+        # 返回 128 且**不抛**（check=False），可安全用作前置判据；命中即跳过本候选并继续下一个
+        # （与 PR_RESULT_SKIPPED_DUPLICATE 同属「等待人工」⇒ exit 0，不得污染为故障）。
+        # 绝不自动 ``git branch -D``：本地分支同样可能含人工提交。
+        if _local_branch_exists(branch_name):
+            print(
+                f"  ⏭️ 本地分支 {branch_name} 已存在，跳过本候选"
+                f"（未覆盖本地任何提交；如需重新提案，请先本地删除：git branch -D {branch_name}）"
+            )
+            _emit_step_output("branch", "")
+            return DraftPrResult(PR_RESULT_SKIPPED_DUPLICATE, "")
+        subprocess.run(
+            ["git", "checkout", "-b", branch_name], check=True, timeout=GIT_LOCAL_TIMEOUT
+        )
 
         # 写入 MDX
         mdx_content = compose_mdx_content(candidate)
@@ -1694,6 +1885,7 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         chk = subprocess.run(
             ["python", os.path.join(SCRIPT_DIR, "curate.py"), "check", "--allow-machine-draft"],
             capture_output=True, text=True,
+            timeout=GIT_LOCAL_TIMEOUT,
         )
         if chk.returncode != 0:
             print(f"❌ 草稿结构校验失败:\n{chk.stdout}\n{chk.stderr}")
@@ -1723,9 +1915,13 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         # [C 修复] 只提交草稿文件与速测题占位，**不**提交 scripts/.curate-ledger.json：台账是机器状态，
         # master 侧每日运行也会写它 ⇒ 把它提交进候选分支必然与 master 冲突（PR #4 mergeable=CONFLICTING
         # 即由此而来）。故候选分支只携带 .mdx 与 dailyQuiz.ts。
-        subprocess.run(["git", "add", target_file, QUIZ_FILE], check=True)
+        subprocess.run(
+            ["git", "add", target_file, QUIZ_FILE], check=True, timeout=GIT_LOCAL_TIMEOUT
+        )
         commit_msg = f"feat(curate): 自动生成候选导读草稿《{candidate['title']}》"
-        subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg], check=True, timeout=GIT_LOCAL_TIMEOUT
+        )
         committed = True
 
         # Git push (带重试机制，防止网络抖动)
@@ -1733,21 +1929,30 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         # 故不需要强制覆盖；若推送仍失败（non-fast-forward）说明守卫之外仍有残留 ⇒ 交给人工解锁。
         print(f"  ⬆️ 正在推送分支 {branch_name} 至远端 GitHub...")
         pushed = False
-        for attempt in range(1, 4):
+        for attempt, backoff in enumerate(PUSH_RETRY_BACKOFFS_SECONDS, 1):
             try:
                 subprocess.run(
                     ["git", "push", "-u", "origin", branch_name],
                     check=True,
+                    timeout=GIT_NET_TIMEOUT,
                 )
                 pushed = True
                 break
             except subprocess.CalledProcessError:
-                print(f"  ⚠️ git push 第 {attempt} 次失败，等待重试...")
-                import time
-                time.sleep(2)
+                print(
+                    f"  ⚠️ git push 第 {attempt}/{len(PUSH_RETRY_BACKOFFS_SECONDS)} 次失败，"
+                    f"{backoff}s 后重试..."
+                )
+                # [P1-4] 重试前**刷新远端引用基准**：``git push`` 失败常见成因是本地远端跟踪引用
+                # 陈旧（``origin/<branch>`` 未反映远端真实状态）。此处只做 fetch（纯只读刷新，
+                # 不改本地提交、不含任何 --force*），让后续重试基于最新基准判定，避免把
+                # 「基准陈旧」误判为「持续故障」而白等满整个退避序列。
+                _refresh_remote_baseline(branch_name)
+                if attempt < len(PUSH_RETRY_BACKOFFS_SECONDS):
+                    time.sleep(backoff)
 
         if not pushed:
-            raise RuntimeError("git push failed after 3 attempts")
+            raise RuntimeError(f"git push failed after {len(PUSH_RETRY_BACKOFFS_SECONDS)} attempts")
 
         # PR Body
         pr_body = f"""## 🌸 每日自动化候选导读草稿提交 (Pipeline B)
@@ -1763,7 +1968,7 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
 
 ### ✍️ 维护者人工审阅 Checklist（严禁机器自打勾，合并前必须由人核实）
 - [ ] **原文核实**：点击上述出处链接，确认内容与本篇主题完全匹配；
-- [ ] **人工撰写导读**：已在 Files changed 中填入 3~4 点人工提炼的核心要点，清除了占位提示；
+- [ ] **人工撰写导读**：已在 Files changed 中填入 {DRAFT_KEYPOINT_RANGE}人工提炼的核心要点，清除了占位提示；
 - [ ] **补全速测题占位**：`src/data/dailyQuiz.ts` 中本条（articleId `{slug}`）的占位条目已写全
       **题干 / 选项 / 正确项 / 解析**四项——G1 门禁强制文章↔速测题 **1:1**，占位未补全即判定
       「文章缺少速测题」而必红，占位文字绝不可直接合并；
@@ -1787,7 +1992,7 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
             "--base", "master",
             "--head", branch_name
         ]
-        res = subprocess.run(pr_cmd, capture_output=True, text=True)
+        res = subprocess.run(pr_cmd, capture_output=True, text=True, timeout=GH_TIMEOUT)
         if res.returncode == 0:
             pr_url = res.stdout.strip()
             print(f"  🎉 Draft PR 创建成功: {pr_url}")
@@ -1807,7 +2012,11 @@ def create_draft_pr(candidate: dict) -> "DraftPrResult":
         return DraftPrResult(PR_RESULT_ERROR, "")
     finally:
         # 无论成功失败，恢复原分支
-        subprocess.run(["git", "checkout", current_branch], check=False)
+        subprocess.run(
+            ["git", "checkout", current_branch],
+            check=False,
+            timeout=GIT_LOCAL_TIMEOUT,
+        )
         # [P0-3] 未成功提交时，速测题占位的改动不会随 checkout 消失（会被带回主工作区），
         # 必须按备份逐字节还原，否则批次内后续候选的入口预检会因工作区脏而直接判 ERROR。
         if not committed and quiz_backup is not None:
@@ -1843,19 +2052,65 @@ def _append_step_summary(markdown: str) -> None:
         pass
 
 
-def _report_backlog(reason: str) -> None:
+def _candidate_pulls_url() -> str:
+    """[P1-7] 拼出**待审候选 PR 的可点链接**；无法确定仓库时返回空串（降级为纯文本指引）。
+
+    [可移植性] 仓库名**绝不硬编码**——脚本可能被 fork / 换仓库运行，硬编一个仓库名会让
+    摘要里的链接指向**别人的仓库**，维护者点进去看到无关 PR，属主动误导。
+    这里只认 GitHub Actions 注入的 ``GITHUB_REPOSITORY``（形如 ``owner/repo``）；
+    本地运行未设该变量时返回空串 ⇒ 调用方降级为「去仓库的 Pull Requests 页按
+    ``daily-candidate`` 标签筛选」这样的纯文本指引，**不编造 URL**。
+    """
+    repo = (os.environ.get("GITHUB_REPOSITORY") or "").strip().strip("/")
+    # 只接受形如 owner/repo 的值，拒绝路径穿越 / 注入（会污染 Markdown 链接目标）。
+    if not re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", repo):
+        return ""
+    return f"https://github.com/{repo}/pulls?q=is%3Apr+label%3Adaily-candidate"
+
+
+def _report_backlog(reason: str, backlog_count: int = 0) -> None:
     """[R4 修复] 上报**积压**（候选全部已有待审 PR，即「轮到人审了」）：非故障。
 
     打印 ``::warning::`` + 运行摘要，措辞明确点名「积压 / 等待人工审阅」，**不**含「故障」字样；
     调用方应据此 ``exit 0``——定时 Harvest **不得**因积压而每天变红。
+
+    [P1-7] 摘要必须带**待审候选 PR 的可点链接**：原文案只有一句「请人工审阅并合并后即可
+    恢复产出」，维护者必须自己知道去哪个页面、点哪个标签才能找到那批 PR——积压通知若不含
+    跳转路径，收到通知的人仍无从处置，等于没通知。仓库名由 ``GITHUB_REPOSITORY`` 决定；
+    取不到时降级为纯文本指引，绝不硬编码仓库名（详见 ``_candidate_pulls_url``）。
+
+    [P1-9b] 积压**必须给出路**：只报「积压了」而不给出可执行的下一步，积压会单调增长直至
+    选题池被低价值 PR 占满、机器永久零产出。故 ``backlog_count`` 达到阈值时追加一条
+    **可复制的批量关闭命令**——这是恢复产出的最短路径。
     """
     message = f"本日零进展：{reason}"
     print(f"\n⏸️ {message}")
+
+    pr_url = _candidate_pulls_url()
+    if pr_url:
+        print(f"  🔗 待审候选 PR 列表（daily-candidate 标签）：{pr_url}")
+    else:
+        print("  🔗 待审候选 PR 列表：请到本仓库的 Pull Requests 页按 `daily-candidate` 标签筛选")
+
+    # [P1-9b] 出路提示：积压条数越多越需要主动清理，故设阈值而非无条件刷屏。
+    if backlog_count >= BACKLOG_NUDGE_THRESHOLD:
+        print(
+            f"  ➜ 积压已积 {backlog_count} 个待审候选，建议批量关闭低价值候选以恢复产出："
+            f'gh pr close <n> --comment "选题不合本站定位"'
+        )
+
     print(f"::warning::{message}")
     _append_step_summary(
         f"### ⏸️ {message}\n\n"
         "- 结论：**积压**（非故障）——本轮发现的候选均已有待审 PR，请人工审阅并合并后即可恢复产出。\n"
-        "- 定时 Harvest 不会因此次积压变红（exit 0）。\n"
+        f"- 待审候选 PR：{pr_url if pr_url else '本仓库 Pull Requests 页 → `daily-candidate` 标签（未设 GITHUB_REPOSITORY，不猜测链接）'}\n"
+        + (
+            f"- ➜ 积压已积 {backlog_count} 个，建议批量关闭低价值候选以恢复产出："
+            f'`gh pr close <n> --comment "选题不合本站定位"`\n'
+            if backlog_count >= BACKLOG_NUDGE_THRESHOLD
+            else ""
+        )
+        + "- 定时 Harvest 不会因此次积压变红（exit 0）。\n"
     )
 
 
@@ -1914,7 +2169,9 @@ def run_create_pr(candidates: list) -> int:
         total = len(candidates)
         if total == 0:
             # [R4] 全部候选均已被占用 ⇒ 积压（非故障）⇒ exit 0。
-            _report_backlog(f"{found} 个候选均已有待审 PR，等待人工审阅")
+            _report_backlog(
+                f"{found} 个候选均已有待审 PR，等待人工审阅", backlog_count=found
+            )
             return 0
 
         skipped = 0
@@ -1948,7 +2205,7 @@ def run_create_pr(candidates: list) -> int:
             )
             if unlock:
                 detail = f"{detail}，解锁命令：{unlock}"
-            _report_backlog(detail)
+            _report_backlog(detail, backlog_count=skipped + remote_skipped)
             return 0
         # [R4] 出现创建失败 ⇒ 真故障 ⇒ exit 1 + ::error::。
         _report_failure(
