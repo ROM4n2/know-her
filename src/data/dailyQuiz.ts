@@ -328,6 +328,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '由卫生工作者施行残割被称为「医疗化」（medicalization）。WHO 明确：该做法没有任何健康益处、只有伤害，因此强烈敦促卫生工作者不得实施残割女性生殖器，并专门制定全球战略支持卫生部门终结医疗化——因为由医护人员施行会为该习俗赋予医学正当性外观，反而让社群更难放弃它。',
   },
+  'body-syphilis': {
+    articleId: 'body-syphilis',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
