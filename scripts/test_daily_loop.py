@@ -4280,6 +4280,561 @@ def validate_p1_pool_table_has_url(errors: list) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# [S2 批次] 信号通道与强制执行点
+#   S2-1 积压（唯一「必须人行动」的状态）必须有独立于 run 颜色的通知通道，且**绝不重复开单**；
+#   S2-2 ::error::/::warning:: 必须**同时**写 stdout（产生 annotation）与 summary（人看）；
+#   S2-3 内容门禁（pnpm test:graph）必须有强制执行点（master 的 push 覆盖 + 部署前阻断）。
+#
+# 范式说明：本节以「**行为级**断言」为主 —— 逐字节取出工作流里真实的 shell / github-script
+# 脚本，在全打桩的沙箱里真跑一遍（bash 桩 git/pnpm、node 桩 github SDK），
+# 观察**真实产物**（stdout 是否出现 ::error::、是否真的调用 issues.create），
+# 而不是正则扫描 YAML 文本（文本扫描会被注释措辞影响、判别力脆弱）。
+# ---------------------------------------------------------------------------
+
+
+def _yaml_block_scalar(body_lines: list, key: str, step_indent: int) -> str:
+    """从步骤块行列表中提取 ``key:`` 的值文本（纯 stdlib 文本解析，零第三方依赖）。
+
+    同时支持两种 YAML 写法：块标量 ``key: |``（多行脚本）与行内标量 ``key: pnpm build``。
+    ``body_lines`` 为某一步骤（含其 ``- name:`` 行）的全部行；``step_indent`` 为该步骤 ``-`` 的缩进。
+    找不到该键时返回空串。
+    """
+    start = None
+    child_indent = 0
+    for index, line in enumerate(body_lines):
+        matched = re.match(r"^(\s*)" + re.escape(key) + r":(?:\s*\|.*)?$", line)
+        if matched and matched.group(0).rstrip().endswith(("|", "|-", "|+")):
+            key_indent = len(matched.group(1))
+            if key_indent > step_indent:
+                start = index + 1
+                child_indent = key_indent + 2
+            break
+        inline = re.match(r"^(\s*)" + re.escape(key) + r":\s+(\S.*)$", line)
+        if inline and len(inline.group(1)) > step_indent:
+            return inline.group(2).strip()
+    if start is None:
+        return ""
+    collected: list = []
+    for line in body_lines[start:]:
+        if not line.strip():
+            collected.append("")
+            continue
+        current = len(line) - len(line.lstrip())
+        if current < child_indent:
+            break
+        collected.append(line[child_indent:])
+    return "\n".join(collected).strip("\n")
+
+
+def _workflow_step_blocks(text: str) -> list:
+    """把工作流文本切成「步骤块」列表（纯 stdlib 文本解析，零第三方依赖）。
+
+    每个块为 dict：``name`` / ``indent`` / ``body``（含 ``- name:`` 行的整段文本）/
+    ``run``（``run: |`` 块标量的去缩进脚本）/ ``script``（github-script 的 ``with.script``）。
+    """
+    lines = text.splitlines()
+    starts: list = []
+    for index, line in enumerate(lines):
+        matched = re.match(r"^(\s*)- name: (.*)$", line)
+        if matched:
+            starts.append((index, len(matched.group(1)), matched.group(2).strip()))
+
+    blocks: list = []
+    for start, indent, name in starts:
+        end = len(lines)
+        for cursor in range(start + 1, len(lines)):
+            line = lines[cursor]
+            if not line.strip():
+                continue
+            current = len(line) - len(line.lstrip())
+            if current <= indent:
+                end = cursor
+                break
+        body_lines = lines[start:end]
+        blocks.append(
+            {
+                "name": name,
+                "indent": indent,
+                "body": "\n".join(body_lines),
+                "run": _yaml_block_scalar(body_lines, "run", indent),
+                "script": _yaml_block_scalar(body_lines, "script", indent),
+            }
+        )
+    return blocks
+
+
+def _find_workflow_step(text: str, name_fragment: str) -> dict:
+    """按步骤名片段取出步骤块；未找到返回 ``{}``。"""
+    for block in _workflow_step_blocks(text):
+        if name_fragment in block["name"]:
+            return block
+    return {}
+
+
+def _workflow_on_block(text: str) -> str:
+    """取出 ``on:`` 触发器块（含其下缩进的所有行）的原始文本。"""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(r"^on:\s*$", line):
+            collected = [line]
+            for cursor in range(index + 1, len(lines)):
+                nxt = lines[cursor]
+                if not nxt.strip() or not nxt.startswith((" ", "\t")):
+                    break
+                collected.append(nxt)
+            return "\n".join(collected)
+    return ""
+
+
+# --- 沙箱①：node 桩 github SDK，真跑工作流里的 github-script 积压开单逻辑 ---
+_BACKLOG_PROBE_JS = r"""
+const fs = require('fs');
+const scriptSrc = fs.readFileSync(process.argv[2], 'utf8');
+const scenario = process.argv[3];
+const calls = [];
+const pr = (n, ref) => ({ html_url: 'https://github.com/know-her/know-her/pull/' + n, head: { ref: ref } });
+const prs = scenario === 'dedup'
+  ? [pr(11, 'candidate/alpha-facts'), pr(12, 'candidate/beta-guide')]
+  : [pr(13, 'candidate/gamma-guide')];
+const openIssues = scenario === 'dedup'
+  ? [{ number: 42, title: '[Pipeline B 积压] 候选积压 2 个，等待人工审阅', labels: [{ name: 'curate-backlog' }] }]
+  : [];
+const github = {
+  rest: {
+    pulls: { list: async () => ({ data: prs }) },
+    issues: {
+      listForRepo: async () => ({ data: openIssues }),
+      create: async (args) => { calls.push({ name: 'issues.create', args: args }); return { data: { number: 99 } }; },
+      createComment: async (args) => { calls.push({ name: 'issues.createComment', args: args }); return { data: { id: 1 } }; },
+      getLabel: async () => ({ data: { name: 'curate-backlog' } }),
+      createLabel: async (args) => { calls.push({ name: 'issues.createLabel', args: args }); return { data: { name: 'curate-backlog' } }; }
+    }
+  },
+  paginate: async (fn, args) => (await fn(args)).data
+};
+const context = { repo: { owner: 'know-her', repo: 'know-her' }, runId: 4242, serverUrl: 'https://github.com' };
+const core = { info: (m) => calls.push({ name: 'core.info', args: { message: m } }) };
+const wrapped = 'return (async () => {\n' + scriptSrc + '\n})()';
+new Function('github', 'context', 'core', wrapped)(github, context, core).then(() => {
+  process.stdout.write(JSON.stringify(calls));
+}).catch((e) => {
+  process.stderr.write(String((e && e.stack) || e));
+  process.exit(1);
+});
+"""
+
+
+def _run_backlog_script_in_sandbox(script: str, scenario: str) -> list:
+    """在 node 沙箱里真跑工作流里的积压开单 github-script，返回其对 github SDK 的**真实调用序列**。
+
+    全部打桩：``github.rest`` / ``github.paginate`` / ``context`` / ``core`` 均为本地假对象，
+    **零真实网络、零真实 GitHub 写**。``scenario='dedup'`` 时桩里已存在一个未关闭的积压 issue。
+    """
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("PATH 中未找到 node 可执行文件（需 Node 18+ 以运行 github-script 沙箱探针）")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        probe = tmp_dir / "backlog_probe.cjs"
+        probe.write_text(_BACKLOG_PROBE_JS, encoding="utf-8")
+        target = tmp_dir / "backlog_script.js"
+        target.write_text(script, encoding="utf-8")
+        proc = subprocess.run(
+            [node, str(probe), str(target), scenario],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+        )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"积压脚本沙箱执行失败（scenario={scenario}），exit={proc.returncode}，"
+            f"stderr 尾部：{proc.stderr.strip()[-500:]}"
+        )
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"积压脚本沙箱输出非合法 JSON（scenario={scenario}）：{exc}；"
+            f"stdout 尾部：{proc.stdout.strip()[-300:]}"
+        ) from exc
+
+
+# --- 沙箱②：bash 桩 git/pnpm，真跑工作流里自检步骤的 run 脚本，观察真实 stdout 与 summary ---
+def _sandbox_run_selfcheck(
+    script: str, *, branch: str, draft_exists: bool, pnpm_exit: int
+) -> tuple:
+    """在 tempfile + bash 沙箱里真跑一次自检步骤的 ``run`` 脚本。
+
+    ``git`` / ``pnpm`` 被打桩为 shell 函数（**零真实 git 写、零网络、零 src/ 改动**：工作目录是
+    临时目录，``${{ ... }}`` 表达式已替换为夹具分支名）。返回 ``(stdout, summary_text)``。
+    """
+    bash = shutil.which("bash")
+    if not bash:
+        raise RuntimeError("PATH 中未找到 bash 可执行文件（需 bash 以运行自检步骤沙箱探针）")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        tmp_posix = tmp_dir.as_posix()
+        rendered = re.sub(r"\$\{\{.*?\}\}", lambda _m: branch, script)
+        rendered = rendered.replace("/tmp/", f"{tmp_posix}/")
+        step_file = tmp_dir / "step.sh"
+        with open(step_file, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(rendered)
+        if draft_exists:
+            slug = branch.split("/", 1)[1] if "/" in branch else branch
+            draft = tmp_dir / "src" / "content" / "articles" / f"{slug}.mdx"
+            draft.parent.mkdir(parents=True, exist_ok=True)
+            draft.write_text("---\ntitle: \"x\"\n---\n", encoding="utf-8")
+        summary = tmp_dir / "summary.md"
+        wrapper = tmp_dir / "wrapper.sh"
+        with open(wrapper, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(
+                "git() { echo \"[stub git] $*\"; return 0; }\n"
+                f"pnpm() {{ echo \"[stub pnpm] $*\"; return {pnpm_exit}; }}\n"
+                f'. "{step_file.as_posix()}"\n'
+            )
+        env = dict(os.environ)
+        env["GITHUB_STEP_SUMMARY"] = str(summary).replace("\\", "/")
+        proc = subprocess.run(
+            [bash, str(wrapper)],
+            cwd=str(tmp_dir),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+        )
+        summary_text = summary.read_text(encoding="utf-8") if summary.is_file() else ""
+        return proc.stdout, summary_text
+
+
+# ---------------------------------------------------------------------------
+# [S2-1] 积压自动开 issue：唯一「必须人行动」的状态，必须有独立于 run 颜色的通知通道
+# ---------------------------------------------------------------------------
+
+
+def validate_s2_backlog_issue_channel(errors: list) -> None:
+    """[S2-1] 积压（机器在等人）必须**自动开 issue**，且**绝不重复开单**。
+
+    实证缺陷：``_report_backlog`` 走 ``exit 0`` + ``::warning::``，而 GitHub 对定时任务的
+    邮件 / 通知**只按 exit code 决定** ⇒ 积压**产生零通知**，必须有人主动点进一个绿色 run
+    才看得见；同是真故障反而发红 ⇒ 信号优先级是反的。同仓 ``daily-routine.yml`` 与
+    ``weekly-full-audit.yml`` 早已有成熟的「异常 → 自动开 issue」通道，唯独 Pipeline B 没有。
+
+    判定为「行为级」：逐字节取出工作流里真实的 github-script，在 node 沙箱里以**全打桩**的
+    ``github`` / ``context`` / ``core`` 真跑一遍，观察**真实调用序列**：
+
+    - 场景 A（尚无未关闭的积压 issue）⇒ 恰好调用一次 ``issues.create``，且
+      标题 / 正文含**积压数量**、**待审 PR 的链接列表**、**可执行的解锁命令**
+      （``git push origin --delete candidate/<slug>``），并带固定 label ``curate-backlog``；
+    - 场景 B（已存在未关闭的积压 issue）⇒ ``issues.create`` **零调用**（否则每天开一个新单），
+      且脚本以可识别方式「跳过」而不是硬失败；
+    - 触发条件：只在本轮收尾为**积压**（exit 0 且无候选分支）时触发，
+      **真故障**（exit 1）已由红灯 + 通知覆盖，不得走本通道（避免双重噪音）。
+    """
+    workflow = ROOT_DIR / ".github" / "workflows" / "harvest-candidates.yml"
+    if not workflow.is_file():
+        errors.append(f"[S2-1] 工作流文件缺失：{workflow}")
+        return
+    text = _read_text(workflow)
+
+    # —— 权限：只加 issues: write，不得越权拿 actions: write ——
+    permissions = re.search(r"^permissions:\n((?:[ \t]+.*\n|\n)*)", text, re.MULTILINE)
+    if permissions is None:
+        errors.append("[S2-1] harvest-candidates.yml 缺少 permissions 段（无法授予 issues: write）")
+    else:
+        perm_text = permissions.group(1)
+        if not re.search(r"^\s+issues:\s*write\s*$", perm_text, re.MULTILINE):
+            errors.append("[S2-1] harvest-candidates.yml 未授予 `issues: write`（积压无法自动开 issue）")
+        if re.search(r"^\s+actions:\s*write\s*$", perm_text, re.MULTILINE):
+            errors.append("[S2-1] harvest-candidates.yml 不得授予 `actions: write`（本任务只需 issues: write）")
+
+    step = _find_workflow_step(text, "积压")
+    if not step:
+        errors.append("[S2-1] harvest-candidates.yml 缺少「积压」收尾步骤（积压仍无独立通知通道）")
+        return
+    if not re.search(r"^\s*if:\s*always\(\)", step["body"], re.MULTILINE):
+        errors.append("[S2-1] 积压步骤的 if 必须是 always()（故障收尾时也必须给出积压判定）")
+
+    cond_block = re.search(r"^\s*if:\s*(.+)$", step["body"], re.MULTILINE)
+    condition = cond_block.group(1) if cond_block else ""
+    # 真故障（create_pr 步骤 exit 1 ⇒ outcome=failure）不得走本通道
+    if "failure()" in condition:
+        errors.append("[S2-1] 积压步骤的 if 不得含 failure()（真故障已有红灯 + 通知，双通道会制造双重噪音）")
+    if "steps.create_pr.outcome" not in condition or "success" not in condition:
+        errors.append(
+            "[S2-1] 积压步骤的 if 必须以 steps.create_pr.outcome == 'success' 收口"
+            "（exit 1 的真故障不得走积压通道）"
+        )
+    if "steps.create_pr.outputs.branch" not in condition or "== ''" not in condition:
+        errors.append(
+            "[S2-1] 积压步骤的 if 必须以 steps.create_pr.outputs.branch == '' 收口"
+            "（exit 0 且无候选分支 ⇔ 收尾为积压；exit 0 且有分支 ⇔ 已成功创建 PR）"
+        )
+
+    script = step["script"]
+    if "actions/github-script" not in step["body"]:
+        errors.append("[S2-1] 积压步骤未复用 actions/github-script（与 daily-routine.yml 的既有惯例不一致）")
+    if "issues.create" not in script:
+        errors.append("[S2-1] 积压脚本未调用 github.rest.issues.create")
+    if "curate-backlog" not in script:
+        errors.append("[S2-1] 积压脚本未使用固定 label `curate-backlog`（去重必须靠固定 label）")
+    if "git push origin --delete" not in script:
+        errors.append("[S2-1] 积压脚本未给出可执行的解锁命令 `git push origin --delete <branch>`")
+
+    if not script:
+        errors.append("[S2-1] 积压步骤的 github-script `with.script` 为空")
+        return
+
+    # —— 行为断言 A：无既有积压 issue ⇒ 恰好开一个单 ——
+    try:
+        calls_fresh = _run_backlog_script_in_sandbox(script, "fresh")
+    except RuntimeError as exc:
+        errors.append(f"[S2-1] 无法执行积压脚本行为断言：{exc}")
+        return
+    creates_fresh = [c for c in calls_fresh if c["name"] == "issues.create"]
+    if len(creates_fresh) != 1:
+        errors.append(
+            f"[S2-1] 行为断言：首次积压应恰好调用一次 issues.create，实际 {len(creates_fresh)} 次"
+            f"（全部调用={[c['name'] for c in calls_fresh]}）"
+        )
+    else:
+        args = creates_fresh[0]["args"]
+        title = str(args.get("title", ""))
+        body = str(args.get("body", ""))
+        labels = [str(x) for x in (args.get("labels") or [])]
+        if "curate-backlog" not in labels:
+            errors.append(f"[S2-1] 新建积压 issue 未打固定 label `curate-backlog`（去重依赖它）：{labels}")
+        if "alpha-facts" not in title and not re.search(r"\d", title):
+            errors.append(f"[S2-1] 积压 issue 标题未点明积压数量：{title!r}")
+        if "pull/13" not in body:
+            errors.append(f"[S2-1] 积压 issue 正文缺少待审 PR 的链接列表：{body[-400:]!r}")
+        if "git push origin --delete candidate/gamma-guide" not in body:
+            errors.append(f"[S2-1] 积压 issue 正文缺少该 PR 对应的可执行解锁命令：{body[-400:]!r}")
+
+    # —— 行为断言 B：已存在未关闭的积压 issue ⇒ 绝不重复开单 ——
+    try:
+        calls_dedup = _run_backlog_script_in_sandbox(script, "dedup")
+    except RuntimeError as exc:
+        errors.append(f"[S2-1] 无法执行积压脚本去重行为断言：{exc}")
+        return
+    creates_dedup = [c for c in calls_dedup if c["name"] == "issues.create"]
+    if creates_dedup:
+        errors.append(
+            "[S2-1] 行为断言：已存在未关闭的积压 issue 时**仍然**调用了 issues.create"
+            f"（会每天开一个新单）：{[c['args'].get('title') for c in creates_dedup]}"
+        )
+
+    if len(creates_fresh) == 1 and not creates_dedup:
+        print(
+            "[S2-1] 积压通知通道行为断言通过：首次积压开 1 个带 `curate-backlog` label 的 issue"
+            "（含积压数量 / 待审 PR 链接 / 可执行解锁命令）；已存在未关闭积压 issue 时零重复开单"
+        )
+
+
+# ---------------------------------------------------------------------------
+# [S2-2] ::error:: / ::warning:: 必须同时写 stdout（annotation）与 summary（人看）
+# ---------------------------------------------------------------------------
+
+
+def validate_s2_gate_annotations_reach_stdout(errors: list) -> None:
+    """[S2-2] 自检步骤的 ``::error::`` / ``::warning::`` 必须**双写** stdout + ``$GITHUB_STEP_SUMMARY``。
+
+    实证缺陷（已实测 annotation 数为 0）：GitHub 的 workflow command（``::error::`` /
+    ``::warning::``）**只在 stdout 被解析**；而 ``harvest-candidates.yml`` 把它们重定向进
+    ``$GITHUB_STEP_SUMMARY``，那只是普通 markdown 文本 ⇒ 唯一的失败信号完全失效，
+    维护者只看到一行裸的 ``::error::`` 字面量，annotations 面板永远空白。
+
+    判定为「行为级」：逐字节取出该步骤真实的 ``run`` 脚本，在 tempfile + bash 沙箱里
+    （``git`` / ``pnpm`` 均为桩 ⇒ 零真实 git 写、零网络、零 src/ 改动）真跑两遍，
+    观察**真实 stdout** 与**真实 summary 文件**：
+
+    - 「门禁 FAIL 分支」：桩 pnpm 退出非零 ⇒ stdout 出现 ``::error::``，且 summary 也有可读说明；
+    - 「候选分支缺草稿文件」分支：stdout 出现 ``::error::``，且 summary 也有可读说明。
+
+    反空转守卫：两分支的 stdout 探针**不得**靠「脚本压根没跑」蒙混 —— 桩 pnpm 必须被真实调用。
+    """
+    workflow = ROOT_DIR / ".github" / "workflows" / "harvest-candidates.yml"
+    if not workflow.is_file():
+        errors.append(f"[S2-2] 工作流文件缺失：{workflow}")
+        return
+    text = _read_text(workflow)
+    step = _find_workflow_step(text, "机器可验证门禁自检")
+    if not step:
+        errors.append("[S2-2] 未找到「机器可验证门禁自检」步骤")
+        return
+    script = step["run"]
+    if not script:
+        errors.append("[S2-2] 自检步骤的 run 脚本为空，无法产生任何信号")
+        return
+
+    if not re.search(r"^\s*continue-on-error:\s*true\s*$", step["body"], re.MULTILINE):
+        errors.append("[S2-2] 自检步骤必须保留 continue-on-error: true（草稿按设计必红，不得让 Harvest 变红）")
+
+    # 反向：不得把 ::error:: / ::warning:: 整体重定向进 summary（那正是被证伪的旧写法）
+    for line in script.splitlines():
+        if ("::error::" in line or "::warning::" in line) and re.search(
+            r">>\s*\"?\$GITHUB_STEP_SUMMARY", line
+        ):
+            errors.append(
+                "[S2-2] 存在把 ::error::/::warning:: 只重定向进 $GITHUB_STEP_SUMMARY 的写法"
+                "（workflow command 只在 stdout 被解析 ⇒ annotations 面板永远空白）："
+                f"{line.strip()!r}"
+            )
+
+    branch = "candidate/s2-fixture"
+
+    # —— 分支①：门禁 FAIL（桩 pnpm 退出 1）——
+    try:
+        stdout_fail, summary_fail = _sandbox_run_selfcheck(
+            script, branch=branch, draft_exists=True, pnpm_exit=1
+        )
+    except RuntimeError as exc:
+        errors.append(f"[S2-2] 无法执行自检脚本行为断言：{exc}")
+        return
+    # 反空转守卫：pnpm 桩的输出被 run_gate 重定向进 /tmp/gate_self_check.log 并 tail 进 summary，
+    # 故「桩确被调用」由 summary 里的桩痕迹证明（而不是 stdout —— stdout 只有 annotation 通道）。
+    if "[stub pnpm]" not in summary_fail:
+        errors.append(
+            "[S2-2] 行为断言空转：门禁 FAIL 场景下沙箱内 pnpm 桩压根没被调用（断言会永真）："
+            f"summary 尾部={summary_fail[-300:]!r}"
+        )
+    if "::error::" not in stdout_fail:
+        errors.append(
+            "[S2-2] 门禁 FAIL 分支未把 ::error:: 写到 **stdout**"
+            "（⇒ 无 annotation，唯一的失败信号失效；仅写 summary 只是普通 markdown）："
+            f"stdout 尾部={stdout_fail[-300:]!r}"
+        )
+    if "pnpm check" not in summary_fail:
+        errors.append(f"[S2-2] 门禁 FAIL 分支的 summary 未记录失败的门禁名：{summary_fail[-300:]!r}")
+
+    # —— 分支②：候选分支缺草稿文件 ——
+    try:
+        stdout_nodraft, summary_nodraft = _sandbox_run_selfcheck(
+            script, branch=branch, draft_exists=False, pnpm_exit=0
+        )
+    except RuntimeError as exc:
+        errors.append(f"[S2-2] 无法执行自检脚本「缺草稿文件」行为断言：{exc}")
+        return
+    if "::error::" not in stdout_nodraft:
+        errors.append(
+            "[S2-2] 「候选分支缺草稿文件」分支未把 ::error:: 写到 **stdout**"
+            f"（⇒ 无 annotation）：stdout 尾部={stdout_nodraft[-300:]!r}"
+        )
+    if "s2-fixture.mdx" not in summary_nodraft:
+        errors.append(
+            "[S2-2] 「候选分支缺草稿文件」分支的 summary 未记录缺失的草稿文件名"
+            f"（人看不到任何说明）：{summary_nodraft[-300:]!r}"
+        )
+
+    if (
+        "::error::" in stdout_fail
+        and "::error::" in stdout_nodraft
+        and "pnpm check" in summary_fail
+        and "s2-fixture.mdx" in summary_nodraft
+    ):
+        print(
+            "[S2-2] annotation 双写行为断言通过：「门禁 FAIL」与「候选分支缺草稿文件」两处 "
+            "::error:: 均出现在真实 stdout（产生 annotation）且 summary 同步留有可读说明"
+        )
+
+
+# ---------------------------------------------------------------------------
+# [S2-3] 内容门禁（pnpm test:graph）必须有强制执行点
+# ---------------------------------------------------------------------------
+
+
+def validate_s2_content_gate_enforced(errors: list) -> None:
+    """[S2-3] 内容门禁（文章↔速测题 1:1 等 G1~G9，全在 ``pnpm test:graph``）必须有强制执行点。
+
+    实证缺陷（已实测）：``branches/master/protection`` → 404、``/rulesets`` → ``[]``（无任何强制检查）；
+    ``ci.yml`` 的 ``push`` 带 ``branches-ignore: [ master ]`` ⇒ **合并到 master 也不跑门禁**；
+    ``deploy.yml`` 在 build 前只跑 ``curate:check`` / ``curate:links`` / ``pnpm build``，
+    **不含** ``pnpm test:graph`` ⇒ 内容门禁在合并前后都没人执行。
+
+    断言（结构级，零网络、零 GitHub API）：
+      - ``ci.yml`` 的 ``push`` 触发器**不得**排除 master，且其中含 ``pnpm test:graph``
+        且该步骤**非** ``continue-on-error``；
+      - ``deploy.yml`` 在 ``pnpm build`` **之前**必须有一步执行 ``pnpm test:graph``，
+        且该步**非** ``continue-on-error``（内容门禁失败必须**阻断部署**）。
+
+    反向守卫：``test:graph`` 步若被改成 ``continue-on-error: true``（只警告不阻断），
+    本断言必须判红 —— 故对每个含 ``pnpm test:graph`` 的步骤逐一核对。
+    """
+    ci_path = ROOT_DIR / ".github" / "workflows" / "ci.yml"
+    deploy_path = ROOT_DIR / ".github" / "workflows" / "deploy.yml"
+    for path in (ci_path, deploy_path):
+        if not path.is_file():
+            errors.append(f"[S2-3] 工作流文件缺失：{path}")
+    if errors and any("[S2-3] 工作流文件缺失" in e for e in errors):
+        return
+
+    ci_text = _read_text(ci_path)
+    deploy_text = _read_text(deploy_path)
+
+    # —— ci.yml：master 的 push 也必须被门禁覆盖 ——
+    on_block = _workflow_on_block(ci_text)
+    if not on_block:
+        errors.append("[S2-3] ci.yml 的 on: 触发器块无法解析")
+    else:
+        if "push" not in on_block:
+            errors.append("[S2-3] ci.yml 缺少 push 触发器")
+        excluded = re.findall(r"^\s*branches-ignore:\s*\[(.*?)\]\s*$", on_block, re.MULTILINE)
+        ignored_masters = [m for m in excluded if "master" in m]
+        if ignored_masters:
+            errors.append(
+                "[S2-3] ci.yml 的 push 触发器仍排除 master"
+                f"（branches-ignore={ignored_masters}）⇒ 合并到 master 也不跑任何门禁，"
+                "内容门禁在合并环节彻底失守"
+            )
+
+    # —— ci.yml / deploy.yml：test:graph 步骤必须阻断，且不得被 continue-on-error 稀释 ——
+    all_graph_blocking = True
+    for label, path, text in (("ci.yml", ci_path, ci_text), ("deploy.yml", deploy_path, deploy_text)):
+        blocks = _workflow_step_blocks(text)
+        graph_steps = [b for b in blocks if "pnpm test:graph" in b["run"]]
+        if not graph_steps:
+            errors.append(f"[S2-3] {label} 中没有任何步骤执行 `pnpm test:graph`（G1~G9 内容门禁无执行点）")
+            all_graph_blocking = False
+            continue
+        for block in graph_steps:
+            if re.search(r"^\s*continue-on-error:\s*true\s*$", block["body"], re.MULTILINE):
+                errors.append(
+                    f"[S2-3] {label} 的 `pnpm test:graph` 步骤被标为 continue-on-error: true"
+                    f"（内容门禁失败不再阻断 ⇒ 门禁形同虚设）：步骤「{block['name']}」"
+                )
+                all_graph_blocking = False
+
+    # —— deploy.yml：test:graph 必须在 pnpm build 之前（build 后跑等于没跑）——
+    deploy_blocks = _workflow_step_blocks(deploy_text)
+    graph_idx = [i for i, b in enumerate(deploy_blocks) if "pnpm test:graph" in b["run"]]
+    build_idx = [i for i, b in enumerate(deploy_blocks) if re.search(r"pnpm build", b["run"])]
+    if not build_idx:
+        errors.append("[S2-3] deploy.yml 中找不到执行 `pnpm build` 的步骤（无法判定门禁次序）")
+    elif not graph_idx:
+        errors.append("[S2-3] deploy.yml 在 build 前未接入 `pnpm test:graph`（内容门禁失败不会阻断部署）")
+    elif min(graph_idx) > min(build_idx):
+        errors.append(
+            f"[S2-3] deploy.yml 的 `pnpm test:graph`（#{min(graph_idx)}）排在 `pnpm build`"
+            f"（#{min(build_idx)}）**之后**（build 后再跑内容门禁已无阻断意义）"
+        )
+
+    if (
+        on_block
+        and "push" in on_block
+        and not [m for m in excluded if "master" in m]
+        and all_graph_blocking
+        and graph_idx
+        and build_idx
+        and min(graph_idx) < min(build_idx)
+    ):
+        print(
+            "[S2-3] 内容门禁强制执行点通过：ci.yml 的 push 不再排除 master 且含 pnpm test:graph；"
+            "deploy.yml 在 pnpm build **之前**阻断式执行 pnpm test:graph（无 continue-on-error）"
+        )
+
+
 def run_gate() -> None:
     print("[gate] 每日循环不变量门禁 (Daily Loop Invariant Gate)")
     print("[gate] 已实现 G1（文章<->速测题 1:1）、G2（三池非空 + 词条池真参与周期）、G3（lcm(文章池, 词条池) -> >= 90 天不重复 + 两池不退化）、G4（信源 schema 合法性 + admitted⇒license 非空 + http(s) 前缀 + rank_candidates 缺口升序 + --pool 零副作用/空池可执行报错 + 空池两类成因分别提示）、G5（候选池台账 v2 幂等迁移 + 真实台账字段完备 + v2 下 harvest_candidates 零 TypeError）、G6（今日上新窗口 + 附加展示零扰动轮换索引）、G7（速测题占位注入幂等 tempfile 自证 + 反向坏实现可判红 + --admit-source 只读不改 sources.json）与 G8（node 原生载入 rotation.ts 的真实行为断言，含 G8a 双时区一致 / G8b pickFreshArticle 真行为）以及 G9（草稿模板经 node + 本项目 MDX 引擎真实编译须通过、且不含 `<!--` / 无 raw_desc 泄漏；候选分支不带台账；跳过-成功返回值语义可区分且零进展 ::warning:: 可见；R1~R5 收口：候选分支名经 $GITHUB_OUTPUT 与返回值交给上层且工作流自检在候选分支上、失败候选不污染后续、--create-pr 一次性预取预排除被占用候选、积压 exit 0 与真故障 exit 1 措辞分明、raw_desc 进 PR 正文且泄漏守卫不空转）。")
@@ -4368,6 +4923,11 @@ def run_gate() -> None:
     validate_p1_pending_visible_in_pool(errors)
     validate_p1_inject_result_distinguishable(errors)
     validate_p1_pool_table_has_url(errors)
+
+    # [S2 批次] 信号通道与强制执行点：积压自动开 issue（去重）/ annotation 双写 / 内容门禁强制点
+    validate_s2_backlog_issue_channel(errors)
+    validate_s2_gate_annotations_reach_stdout(errors)
+    validate_s2_content_gate_enforced(errors)
 
     if errors:
         print(f"[FAIL] 每日循环不变量门禁未通过，发现 {len(errors)} 个问题：")

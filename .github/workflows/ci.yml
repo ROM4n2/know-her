@@ -2,9 +2,12 @@ name: CI
 
 # 门禁：始终运行，无路径过滤（ADR-0001 P1 折叠条款 / 架构子计划 Task 6）
 # fork PR 零凭据原则：本文件不引用任何仓库 secret 值
+#
+# [S2 修复] push 触发器原带 `branches-ignore: [ master ]` ⇒ **合并到 master 也不跑门禁**；
+# 而本仓库无 branch protection / ruleset（已实测 404 / []）⇒ 内容门禁在合并环节彻底失守。
+# 故 master 的 push 同样纳入覆盖：内容门禁（pnpm test:graph，G1~G9）必须有一个强制执行点。
 on:
   push:
-    branches-ignore: [ master ]
   pull_request:
 
 permissions:

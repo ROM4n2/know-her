@@ -10,6 +10,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # [S2 修复] 积压是**唯一「必须人行动」**的状态（机器在等人），却**唯一无通知**：
+  # _report_backlog 走 exit 0 + ::warning::，而 GitHub 对定时任务的邮件/通知**只按 exit code**
+  # ⇒ 积压零通知（必须有人主动点进一个绿色 run 才看得到），真故障反而发红 ⇒ 信号优先级是反的。
+  # 故为「积压 → 自动开 issue」补上通道（仅此一个权限，不得越权拿 actions: write）。
+  issues: write
 
 concurrency:
   group: "harvest-candidates"
@@ -81,6 +86,11 @@ jobs:
               echo "- ✅ \`$name\` PASS" >> "$GITHUB_STEP_SUMMARY"
             else
               code="$?"
+              # [S2 修复] GitHub 的 workflow command（::error:: / ::warning::）**只在 stdout 被解析**；
+              # 重定向进 $GITHUB_STEP_SUMMARY 只是普通 markdown 文本 ⇒ annotations 面板永远空白、
+              # 唯一的失败信号完全失效，维护者只看到一行裸的 `::error::` 字面量。
+              # 故此处**双写**：stdout 负责产生 annotation，下一行 summary 负责人读。
+              echo "::error::Pipeline B 机器可验证门禁自检失败：\`$name\`（exit=$code），详见运行摘要"
               echo "- ❌ \`$name\` FAIL（exit=$code，日志尾部如下）" >> "$GITHUB_STEP_SUMMARY"
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -102,7 +112,8 @@ jobs:
           if [ ! -f "src/content/articles/${SLUG}.mdx" ]; then
             echo "**断言失败**：候选分支 \`$BRANCH\` 上不存在草稿文件 \`src/content/articles/${SLUG}.mdx\`。" >> "$GITHUB_STEP_SUMMARY"
             echo "自检未打在草稿上，**不**执行 \`pnpm check\`/\`pnpm build\`（避免误报已编译草稿）。" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::候选分支 $BRANCH 缺少草稿文件 src/content/articles/${SLUG}.mdx，跳过草稿构建自检" >> "$GITHUB_STEP_SUMMARY"
+            # [S2 修复] 同上：::error:: 写 **stdout**（产生 annotation），summary 侧保留人读版。
+            echo "::error::候选分支 $BRANCH 缺少草稿文件 src/content/articles/${SLUG}.mdx，跳过草稿构建自检"
             exit 0
           fi
           echo "- 已检出候选分支并确认草稿存在：\`src/content/articles/${SLUG}.mdx\`" >> "$GITHUB_STEP_SUMMARY"
@@ -112,6 +123,76 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "> B 新增的草稿模板 MDX 编译门禁（G9）属 test:graph 的一部分，本步不重复跑 test:graph；但 \`pnpm build\` 已对候选分支 \`$BRANCH\` 上检出的草稿做真实 MDX 编译，等价覆盖。" >> "$GITHUB_STEP_SUMMARY"
           echo "> 内容类门禁（文章↔速测题 1:1、要点撰写、外链全量巡检）属人工职责，草稿合并前必红，故不在此步阻塞。" >> "$GITHUB_STEP_SUMMARY"
+
+      # [S2 修复] 积压自动开 issue：给「唯一需要人行动」的状态一条**独立于 run 颜色**的通知通道。
+      #
+      # 触发条件 = 本次收尾为**积压**，用 exit code + 既有步骤输出表达（**不改 Python**）：
+      #   steps.create_pr.outcome == 'success'：collect 步骤 exit 0（真故障是 exit 1 ⇒ outcome=failure）
+      #   steps.create_pr.outputs.branch == ''：本轮**未**创建任何候选分支
+      # 二者合起来 ⇔ _report_backlog 收尾（exit 0 且零进展）。若 branch 非空 ⇔ 已成功创建 PR（无需开单）；
+      # 若 outcome == 'failure'（exit 1 真故障）⇒ 已有红灯 + 邮件通知，**不**走本通道（避免双重噪音）。
+      #
+      # 去重：若已存在一个**未关闭**的积压 issue（固定 label `curate-backlog`），则**绝不**重复创建，
+      # 改为在既有 issue 上留一条简短评论（绝不允许每天开一个新 issue）。
+      - name: 积压自动开 issue（等待人审，积压期间不重复开单）
+        if: always() && steps.create_pr.outcome == 'success' && steps.create_pr.outputs.branch == ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const LABEL = 'curate-backlog';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            // 本次收尾为积压：机器在等人工审阅，且本轮零进展。
+            // open 的 candidate PR 列表即「积压数量」与「待审 PR 的链接列表」的唯一真值源。
+            const { data: openPrs } = await github.rest.pulls.list({
+              owner, repo, state: 'open', base: 'master', per_page: 100,
+            });
+            const candidates = openPrs.filter((pr) => pr.head.ref.startsWith('candidate/'));
+
+            // 去重：已存在未关闭的积压 issue ⇒ 绝不重复开单，只在既有 issue 上留一条简短评论。
+            const { data: backlogIssues } = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: LABEL, per_page: 100,
+            });
+            if (backlogIssues.length > 0) {
+              const existing = backlogIssues[0];
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `积压仍在持续：当前有 **${candidates.length}** 个待审候选 PR（本次运行零进展，机器在等人工审阅）。\n\n运行记录: ${runUrl}`,
+              });
+              core.info(`已存在未关闭的积压 issue #${existing.number}，跳过重复开单（仅追加一条评论）。`);
+              return;
+            }
+
+            const prLines = candidates.length > 0
+              ? candidates.map((pr) => `- [${pr.title}](${pr.html_url})  ·  分支 \`${pr.head.ref}\``)
+              : ['- （本次未取到 open 的候选 PR；积压成因为远端候选分支残留等待解锁）'];
+            const unlockCmds = candidates.map((pr) => `git push origin --delete ${pr.head.ref}`);
+
+            await github.rest.issues.create({
+              owner, repo,
+              title: `⏸️ [Pipeline B 积压] ${candidates.length} 个候选待人工审阅，机器已停止推进`,
+              body: [
+                '## 候选积压：机器在等**人**',
+                '',
+                `本次定时 Harvest **零进展**（收尾为「积压」而非故障，故流水线不会变红）。GitHub 对定时任务的邮件/通知只按 exit code 决定，而积压是 exit 0 ⇒ 该状态本身**不产生任何通知**，必须主动开单才可见。`,
+                '',
+                `- 积压数量：**${candidates.length}** 个待审候选 PR`,
+                `- 运行记录: ${runUrl}`,
+                '',
+                '### 待审 PR 链接列表',
+                ...prLines,
+                '',
+                '### 解锁命令',
+                candidates.length > 0
+                  ? '审阅合并任一候选 PR 后机器即恢复产出。若某候选不再需要，用下列命令删除其远端分支以解锁该选题：'
+                  : '下列远端候选分支已残留、机器永不覆盖（可能含人工提交）。确认弃用后用下列命令解锁：',
+                '```bash',
+                ...unlockCmds,
+                '```',
+              ].join('\n'),
+              labels: [LABEL],
+            });
 
       - name: 写入工作流执行摘要
         if: always()

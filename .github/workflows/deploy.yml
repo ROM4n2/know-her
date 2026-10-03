@@ -42,6 +42,13 @@ jobs:
           pnpm curate:check
           pnpm curate:links
 
+      # [S2 修复] 内容门禁（G1~G9：文章↔速测题 1:1、决策树图连通性、词典完整性、草稿模板 MDX 编译…）
+      # 原先 deploy 在 build 前**只**跑 curate:check / curate:links / pnpm build，**不含** pnpm test:graph
+      # ⇒ 合并到 master 不跑门禁（ci.yml 曾排除 master）、合并后部署也不跑 ⇒ 内容门禁零执行点。
+      # 此步**阻断式**执行（非 continue-on-error）：内容门禁失败 ⇒ 不产出 dist ⇒ 不部署。
+      - name: Content Gate (图连通性 / 词典完整性 / 文章↔速测题 1:1，阻断)
+        run: pnpm test:graph
+
       - name: Astro build
         run: pnpm build
 
