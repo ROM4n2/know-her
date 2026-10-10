@@ -11,6 +11,7 @@ import ArousalBrakesChecklist from '../../components/tools/ArousalBrakesChecklis
 import ContraceptionMatrix from '../../components/tools/ContraceptionMatrix.astro';
 import ClinicMemo from '../../components/tools/ClinicMemo.astro';
 import PositionAndIntimacyGuide from '../../components/tools/PositionAndIntimacyGuide.astro';
+import ReportDecoder from '../../components/tools/ReportDecoder.astro';
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -48,7 +49,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
           <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"/>
           </svg>
-          <span>快速定位 7 大实用工具：</span>
+          <span>快速定位 8 大实用工具：</span>
         </span>
         <span class="text-[11px] text-[#8B8676] hidden sm:inline">纯前端计算 · 零隐私上传</span>
       </div>
@@ -101,6 +102,15 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         >
           <span class="font-mono text-[10px] text-amber-700 font-bold">[07]</span>
           <span>门诊就诊沟通备忘录小抄</span>
+        </a>
+        <a
+          href="#sec-report-decoder"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-rose-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+          aria-label="[08] 妇科检查报告通俗解码台"
+          title="[08] 妇科检查报告通俗解码台"
+        >
+          <span class="font-mono text-[10px] text-rose-600 font-bold">[08]</span>
+          <span>妇科检查报告通俗解码台</span>
         </a>
       </div>
     </nav>
@@ -200,6 +210,11 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         <section id="sec-clinic-memo" class="scroll-mt-20">
           <ClinicMemo />
         </section>
+
+        {/* 工具 8：妇科检查报告通俗解码台 */}
+        <section id="sec-report-decoder" class="scroll-mt-20">
+          <ReportDecoder />
+        </section>
       </div>
     </section>
   </main>
@@ -219,6 +234,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         'position-intimacy': 'sec-position-intimacy',
         'contraception-matrix': 'sec-contraception-matrix',
         'clinic-memo': 'sec-clinic-memo',
+        'report-decoder': 'sec-report-decoder',
       };
 
       var sectionId = toolSectionMap[toolId];
@@ -267,7 +283,29 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         if (tab) tab.click();
       }
 
-      // 3. 平滑滚动聚焦目标工具并短暂高亮
+      // 3. 报告通俗解码台：按 category / item 参数激活对应分类与指标卡片
+      var categoryParam = params.get('category');
+      var itemParam = params.get('item');
+      if (toolId === 'report-decoder') {
+        if (typeof window.selectReportDecoderItem === 'function') {
+          window.selectReportDecoderItem(categoryParam, itemParam);
+        } else {
+          if (categoryParam) {
+            var catBtn = document.querySelector(
+              '.decoder-category-tab[data-category-id="' + categoryParam + '"]'
+            );
+            if (catBtn) catBtn.click();
+          }
+          if (itemParam) {
+            var itemCard = document.querySelector(
+              '.decoder-item-card[data-item-id="' + itemParam + '"]'
+            );
+            if (itemCard) itemCard.click();
+          }
+        }
+      }
+
+      // 4. 平滑滚动聚焦目标工具并短暂高亮
       var targetSection = document.getElementById(sectionId);
       if (targetSection) {
         window.requestAnimationFrame(function () {

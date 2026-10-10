@@ -32,6 +32,7 @@ REQUIRED_COMPONENTS = [
     ("ClinicMemo.astro", ["clinic-memo-container", "clinic-copy-btn", "abnormal-uterine-bleeding"]),
     ("ContraceptionMatrix.astro", ["matrix-filter-container", "matrix-card", "contraception-condoms"]),
     ("PositionAndIntimacyGuide.astro", ["position-filter-container", "position-card", "intimacy-checklist-root", "pleasure-woman-on-top-mechanics"]),
+    ("ReportDecoder.astro", ["decoder-category-tab", "decoder-item-card", "abnormal-uterine-bleeding"]),
 ]
 
 
@@ -617,6 +618,44 @@ def validate_search_intent_pills(errors: list):
                 errors.append(f"articles/[id].astro 缺失医学名词 In-situ 速查微标签: {token}")
 
 
+def validate_tool_contracts(errors: list):
+    """验证妇科检查报告通俗解码台组件、页面路由挂载与 URL 参数状态接驳契约"""
+    decoder_path = os.path.join(COMPONENTS_DIR, "ReportDecoder.astro")
+    if not os.path.exists(decoder_path):
+        errors.append(f"组件缺失: ReportDecoder.astro ({decoder_path})")
+
+    if not os.path.exists(TOOLS_PAGE):
+        errors.append(f"工具箱主页面缺失: {TOOLS_PAGE}")
+        return
+
+    with open(TOOLS_PAGE, "r", encoding="utf-8") as f:
+        page_content = f.read()
+
+    if "ReportDecoder" not in page_content:
+        errors.append("tools/index.astro 未导入或引用 ReportDecoder 组件")
+
+    if 'id="sec-report-decoder"' not in page_content and "id='sec-report-decoder'" not in page_content:
+        errors.append("tools/index.astro 未挂载锚点 #sec-report-decoder")
+
+    if 'href="#sec-report-decoder"' not in page_content and "href='#sec-report-decoder'" not in page_content:
+        errors.append("tools/index.astro 缺失 #sec-report-decoder 快速定位导航锚点")
+
+    if "[08] 妇科检查报告通俗解码台" not in page_content:
+        errors.append("tools/index.astro 导航锚点缺失 '[08] 妇科检查报告通俗解码台' 文案")
+
+    if "'report-decoder': 'sec-report-decoder'" not in page_content and '"report-decoder": "sec-report-decoder"' not in page_content:
+        errors.append("tools/index.astro toolSectionMap 缺失 'report-decoder' 映射")
+
+    if "report-decoder" not in page_content:
+        errors.append("tools/index.astro URL 参数处理逻辑缺失 report-decoder 工具支持")
+
+    if "category" not in page_content:
+        errors.append("tools/index.astro URL 参数处理逻辑缺失 category 参数支持")
+
+    if "item" not in page_content:
+        errors.append("tools/index.astro URL 参数处理逻辑缺失 item 参数支持")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -657,6 +696,7 @@ def run_tests():
                 and not token.startswith("matrix-")
                 and not token.startswith("position-")
                 and not token.startswith("intimacy-")
+                and not token.startswith("decoder-")
             ):
                 art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{token}{ext}")) for ext in [".mdx", ".md"])
                 if not art_found:
@@ -691,6 +731,9 @@ def run_tests():
 
     # 11. 验证妇科检查报告通俗解码数据集契约
     validate_lab_report_data(errors)
+
+    # 12. 验证妇科检查报告通俗解码台交互组件与契约
+    validate_tool_contracts(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
