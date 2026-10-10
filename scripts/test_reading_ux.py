@@ -36,6 +36,8 @@ ARTICLE_PAGE_FILE = os.path.join(PROJECT_ROOT, "src", "pages", "articles", "[id]
 SEARCH_MODAL_FILE = os.path.join(PROJECT_ROOT, "src", "components", "SearchModal.astro")
 BASE_LAYOUT_FILE = os.path.join(PROJECT_ROOT, "src", "layouts", "Base.astro")
 PACKAGE_JSON_FILE = os.path.join(PROJECT_ROOT, "package.json")
+LANG_CONVERTER_FILE = os.path.join(PROJECT_ROOT, "src", "lib", "ui", "langConverter.ts")
+LANG_SWITCHER_FILE = os.path.join(PROJECT_ROOT, "src", "components", "LangSwitcher.astro")
 
 EMOJI_PATTERN = re.compile(
     r"[\U0001F600-\U0001F64F"  # emoticons
@@ -267,6 +269,92 @@ def validate_search_modal_contract(errors: list) -> list:
         print("   ✅ SearchModal.astro 模态弹窗、快捷键、DOM 安全 API 与零 emoji 规范合规")
     return errors
 
+def validate_lang_converter_contract(errors: list) -> list:
+    print("🔤 [7/7] 检验客户端纯静态一键简繁转换契约 (LangSwitcher & langConverter)...")
+    # 1. 检验 opencc-js 依赖注册
+    if os.path.isfile(PACKAGE_JSON_FILE):
+        with open(PACKAGE_JSON_FILE, "r", encoding="utf-8") as f:
+            pkg = json.load(f)
+        deps = pkg.get("dependencies", {})
+        if "opencc-js" not in deps:
+            errors.append("package.json dependencies 必须包含 'opencc-js'")
+    else:
+        errors.append(f"package.json 文件不存在: {PACKAGE_JSON_FILE}")
+
+    # 2. 检验文件物理存在性
+    if not os.path.isfile(LANG_CONVERTER_FILE):
+        errors.append(f"缺失简繁转换核心模块: {LANG_CONVERTER_FILE}")
+    if not os.path.isfile(LANG_SWITCHER_FILE):
+        errors.append(f"缺失简繁切换组件: {LANG_SWITCHER_FILE}")
+
+    # 3. 检验 Base.astro 导入与渲染
+    if os.path.isfile(BASE_LAYOUT_FILE):
+        with open(BASE_LAYOUT_FILE, "r", encoding="utf-8") as f:
+            base_content = f.read()
+        clean_base = re.sub(r"\{\/\*[\s\S]*?\*\/\}", "", base_content)
+        clean_base = re.sub(r"<!--[\s\S]*?-->", "", clean_base)
+        if "LangSwitcher" not in clean_base or ("import LangSwitcher" not in base_content and "import LangSwitcher from" not in base_content):
+            errors.append("Base.astro 必须引入 LangSwitcher 组件")
+        if not re.search(r"<LangSwitcher\s*/>", clean_base) and not re.search(r"<LangSwitcher\s*>", clean_base):
+            errors.append("Base.astro 必须挂载并渲染 <LangSwitcher />")
+    else:
+        errors.append(f"缺失 Base 布局文件: {BASE_LAYOUT_FILE}")
+
+    # 4. 检验 langConverter.ts 契约
+    if os.path.isfile(LANG_CONVERTER_FILE):
+        with open(LANG_CONVERTER_FILE, "r", encoding="utf-8") as f:
+            converter_content = f.read()
+
+        # 动态加载 opencc-js
+        if "import('opencc-js')" not in converter_content and 'import("opencc-js")' not in converter_content:
+            errors.append("langConverter.ts 必须使用动态 import('opencc-js')，确保简体用户初次加载零额外开销")
+
+        # DOM 递归遍历与 Node.TEXT_NODE === 3
+        if "3" not in converter_content or ("TEXT_NODE" not in converter_content and "nodeType" not in converter_content):
+            errors.append("langConverter.ts 必须递归遍历 DOM 文本节点 (Node.TEXT_NODE === 3)")
+
+        # 跳过 SCRIPT, STYLE, CODE, PRE
+        for tag in ["SCRIPT", "STYLE", "CODE", "PRE"]:
+            if tag not in converter_content:
+                errors.append(f"langConverter.ts DOM 遍历必须跳过 {tag} 标签")
+
+        # document.title 转换
+        if "document.title" not in converter_content:
+            errors.append("langConverter.ts 必须转换 document.title")
+
+        # safeGet 与 safeSet 封装
+        if "safeGet" not in converter_content or "safeSet" not in converter_content:
+            errors.append("langConverter.ts 必须包含 safeGet 与 safeSet 封装（try...catch 避免 Safari 隐身模式报错）")
+        if "try" not in converter_content or "catch" not in converter_content:
+            errors.append("langConverter.ts 必须包含 try...catch 存储异常防护")
+
+        # 暴露 initLangConverter 与 toggleLanguage
+        if "initLangConverter" not in converter_content or "toggleLanguage" not in converter_content:
+            errors.append("langConverter.ts 必须暴露 initLangConverter 与 toggleLanguage 方法")
+
+    # 5. 检验 LangSwitcher.astro 契约
+    if os.path.isfile(LANG_SWITCHER_FILE):
+        with open(LANG_SWITCHER_FILE, "r", encoding="utf-8") as f:
+            switcher_content = f.read()
+
+        if 'id="lang-switch-btn"' not in switcher_content and "id='lang-switch-btn'" not in switcher_content:
+            errors.append("LangSwitcher.astro 必须包含 id=\"lang-switch-btn\"")
+
+        # 括号排版字符
+        has_bracket = any(term in switcher_content for term in ["[ 繁體 ]", "[ 简体 ]", "[ 繁 / 简 ]", "[繁體]", "[简体]"])
+        if not has_bracket:
+            errors.append("LangSwitcher.astro 必须使用括号学术排版字符 (如 [ 繁體 ] / [ 简体 ] / [ 繁 / 简 ])")
+
+        # 零 emoji
+        emojis = EMOJI_PATTERN.findall(switcher_content)
+        if emojis:
+            errors.append(f"LangSwitcher.astro 存在违规 emoji 字符: {emojis}，必须保持纯净学术编辑排版")
+
+    if not any(e for e in errors if "LangSwitcher" in e or "langConverter" in e or "opencc-js" in e):
+        print("   ✅ LangSwitcher.astro 与 langConverter.ts 动态加载、DOM遍历、安全存储与排版契约合规")
+
+    return errors
+
 def run_tests() -> list:
     all_errors = []
     all_errors.extend(test_components_exist())
@@ -275,6 +363,7 @@ def run_tests() -> list:
     all_errors.extend(test_table_of_contents_contract())
     all_errors.extend(test_package_json_registration())
     validate_search_modal_contract(all_errors)
+    validate_lang_converter_contract(all_errors)
     return all_errors
 
 def main():

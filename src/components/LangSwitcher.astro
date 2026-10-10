@@ -1,0 +1,24 @@
+---
+// src/components/LangSwitcher.astro
+// 客户端纯静态一键简繁切换图章组件（Academic Modern Editorial 纸墨排版风格）
+---
+
+<button
+  type="button"
+  id="lang-switch-btn"
+  class="inline-flex items-center justify-center rounded-full border border-[#15140F]/15 bg-white/80 px-2.5 py-1 text-xs text-[#5A5448] hover:border-rose-400 hover:text-rose-600 transition-colors shadow-2xs cursor-pointer tracking-wider select-none font-mono"
+  title="切換為繁體中文"
+  aria-label="简繁语言切换"
+>
+  <span class="lang-btn-text">[ 繁體 ]</span>
+</button>
+
+<script>
+  import { initLangConverter } from '../lib/ui/langConverter';
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initLangConverter());
+  } else {
+    initLangConverter();
+  }
+</script>
