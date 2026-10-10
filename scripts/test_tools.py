@@ -17,6 +17,7 @@ CONTRACEPTION_DATA_FILE = os.path.join(DATA_DIR, "contraceptionMethods.ts")
 CLINIC_DATA_FILE = os.path.join(DATA_DIR, "clinicQuestions.ts")
 POSITION_DATA_FILE = os.path.join(DATA_DIR, "positionMatrix.ts")
 CHECKLIST_DATA_FILE = os.path.join(DATA_DIR, "intimacyChecklist.ts")
+LAB_DATA_FILE = os.path.join(DATA_DIR, "labReportDecoder.ts")
 DECISION_TREE_FILE = os.path.join(DATA_DIR, "decisionTree.ts")
 DECISION_GUIDE_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "DecisionGuide.astro")
 MEMO_EXPORTER_FILE = os.path.join(ROOT_DIR, "src", "lib", "ui", "memoImageExporter.ts")
@@ -330,6 +331,127 @@ def validate_checklist_data(errors: list):
         errors.append(f"INTIMACY_CHECKLIST_CONFIGS 包含的题目项不足 15 项，当前共 {total_items_count} 项")
 
 
+def validate_lab_report_data(errors: list):
+    """验证妇科检查报告通俗解码数据集契约"""
+    if not os.path.exists(LAB_DATA_FILE):
+        errors.append(f"检查报告解码数据集文件缺失: {LAB_DATA_FILE}")
+        return
+
+    with open(LAB_DATA_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if "LAB_REPORT_CATEGORIES" not in content or "export const LAB_REPORT_CATEGORIES" not in content:
+        errors.append("labReportDecoder.ts 未导出 LAB_REPORT_CATEGORIES")
+        return
+
+    arr_str = extract_array_block(content, "LAB_REPORT_CATEGORIES")
+    if not arr_str:
+        errors.append("无法解析 LAB_REPORT_CATEGORIES 数组内容")
+        return
+
+    categories = extract_objects_from_array(arr_str)
+    if len(categories) < 4:
+        errors.append(f"LAB_REPORT_CATEGORIES 包含的分类不足 4 个，当前为 {len(categories)} 个")
+
+    required_categories = {"discharge", "ultrasound", "cervical", "pregnancy_endocrine"}
+    found_categories = set()
+
+    required_item_fields = [
+        "id",
+        "name",
+        "en_name",
+        "category",
+        "clinical_definition",
+        "plain_language_meaning",
+        "management_tier",
+        "overtreatment_redflags",
+        "doctor_questions",
+        "related_article",
+    ]
+    total_items_count = 0
+
+    for cat_idx, cat_block in enumerate(categories):
+        for field in ["id", "name", "items"]:
+            if not re.search(rf"\b{field}\s*:", cat_block):
+                errors.append(f"检查报告分类 [索引 {cat_idx}] 缺失必要字段: '{field}'")
+
+        cat_id_match = re.search(r"\bid\s*:\s*['\"]([^'\"]+)['\"]", cat_block)
+        if cat_id_match:
+            found_categories.add(cat_id_match.group(1).strip())
+
+        items_arr_match = re.search(r"\bitems\s*:\s*\[", cat_block)
+        if not items_arr_match:
+            errors.append(f"检查报告分类 [索引 {cat_idx}] 未能定位 items 数组")
+            continue
+
+        start_pos = items_arr_match.end() - 1
+        depth = 0
+        in_string = False
+        quote_char = ""
+        items_arr_str = ""
+        i = start_pos
+        while i < len(cat_block):
+            c = cat_block[i]
+            if in_string:
+                if c == "\\":
+                    i += 2
+                    continue
+                if c == quote_char:
+                    in_string = False
+                i += 1
+                continue
+            if c in ("'", '"', '`'):
+                in_string = True
+                quote_char = c
+                i += 1
+                continue
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    items_arr_str = cat_block[start_pos : i + 1]
+                    break
+            i += 1
+
+        if not items_arr_str:
+            errors.append(f"检查报告分类 [索引 {cat_idx}] 无法解析 items 数组结构")
+            continue
+
+        items = extract_objects_from_array(items_arr_str)
+        total_items_count += len(items)
+
+        for item_idx, item_block in enumerate(items):
+            item_id_match = re.search(r"\bid\s*:\s*['\"]([^'\"]+)['\"]", item_block)
+            item_id = item_id_match.group(1) if item_id_match else f"cat_{cat_idx}_item_{item_idx}"
+
+            for field in required_item_fields:
+                if not re.search(rf"\b{field}\s*:", item_block):
+                    errors.append(f"检查项 [{item_id}] 缺失必要字段: '{field}'")
+
+            tier_match = re.search(r"\bmanagement_tier\s*:\s*['\"]([^'\"]+)['\"]", item_block)
+            if tier_match:
+                tier = tier_match.group(1).strip()
+                if tier not in ("normal_physiologic", "routine_monitoring", "specialist_consult"):
+                    errors.append(f"检查项 [{item_id}] management_tier 无效值: '{tier}'")
+
+            art_match = re.search(r"\brelated_article\s*:\s*['\"]([^'\"]+)['\"]", item_block)
+            if art_match:
+                slug = art_match.group(1).strip()
+                art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{slug}{ext}")) for ext in [".mdx", ".md"])
+                if not art_found:
+                    errors.append(f"检查项 [{item_id}] 关联的外键文章不存在: {slug}")
+            else:
+                errors.append(f"检查项 [{item_id}] 未能解析出 related_article 值")
+
+    missing_cats = required_categories - found_categories
+    if missing_cats:
+        errors.append(f"LAB_REPORT_CATEGORIES 缺失必要分类: {', '.join(sorted(missing_cats))}")
+
+    if total_items_count < 12:
+        errors.append(f"LAB_REPORT_CATEGORIES 包含的检查项不足 12 项，当前共 {total_items_count} 项")
+
+
 def validate_floating_bars(errors: list):
     """验证悬浮对比条容器在移动端的吸底避让 (bottom-20)"""
     bars = [
@@ -566,6 +688,9 @@ def run_tests():
 
     # 10. 验证首页突发场景意图胶囊与长文医学名词速查悬浮预览
     validate_search_intent_pills(errors)
+
+    # 11. 验证妇科检查报告通俗解码数据集契约
+    validate_lab_report_data(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
