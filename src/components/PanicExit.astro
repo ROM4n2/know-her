@@ -1,0 +1,324 @@
+---
+// src/components/PanicExit.astro
+// 全局防窥一键伪装避险组件：学术极简工作备忘看板模拟与敏感状态瞬间擦除
+---
+
+<!-- 全局防窥一键伪装触发按钮 (默认状态：低侵入性学术便签微按钮，避让移动端吸底导航) -->
+<button
+  type="button"
+  id="panic-trigger-btn"
+  class="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-[#15140F]/15 bg-[#FAF8F5]/90 hover:bg-[#F3EFEA] text-[#5A5448] hover:text-[#15140F] text-xs font-mono shadow-2xs backdrop-blur-xs transition-colors cursor-pointer select-none group focus:outline-hidden focus:ring-1 focus:ring-[#15140F]/20"
+  title="切换工作便签避险模式 (双击 Esc / 点击)"
+  aria-label="快速切换工作便签避险模式"
+  aria-controls="panic-disguise-layer"
+  aria-expanded="false"
+>
+  <svg class="w-3.5 h-3.5 text-[#5A5448] group-hover:text-[#15140F] transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+  <span class="tracking-tight">[ 便签模式 ]</span>
+</button>
+
+<!-- 全局防窥伪装层 (极简中性工作备忘看板与临时草稿区) -->
+<div
+  id="panic-disguise-layer"
+  class="hidden fixed inset-0 z-50 bg-[#F9F9F8] text-[#1E1E1E] font-mono overflow-y-auto selection:bg-[#E2E2DF] selection:text-[#111111]"
+  role="dialog"
+  aria-modal="true"
+  aria-label="工作备忘录 - 每日待办事项"
+>
+  <!-- 顶栏控制台 -->
+  <header
+    id="panic-header-bar"
+    class="border-b border-[#E2E2DF] bg-[#F2F2EF] px-4 py-3 sm:px-8 sm:py-3.5 flex flex-wrap items-center justify-between gap-3 select-none cursor-default"
+    title="双击此顶栏或按 Esc 可解锁退出"
+  >
+    <div class="flex items-center gap-3">
+      <span class="font-bold text-sm tracking-tight text-[#111111]">[ 备忘录 ] 工作备忘录 - 每日待办事项</span>
+      <span class="hidden sm:inline-block text-xs text-[#737373]">| 双击顶栏或按 Esc 解锁</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="panic-clock" class="text-xs text-[#555555] tracking-wider">2026-10-10 15:30:00</span>
+      <button
+        type="button"
+        id="panic-unlock-btn"
+        class="text-xs px-2.5 py-1 rounded-sm border border-[#1E1E1E]/25 bg-[#FAF8F5] hover:bg-[#EAEAEA] active:bg-[#DFDFD9] text-[#1E1E1E] transition-colors cursor-pointer"
+        aria-label="解锁并返回原页面"
+      >
+        [ 解锁并返回 ]
+      </button>
+    </div>
+  </header>
+
+  <!-- 主体工作区 -->
+  <main class="max-w-4xl mx-auto p-4 sm:p-8 space-y-6">
+    <!-- 状态指示条 -->
+    <div class="border border-[#E2E2DF] bg-white p-4 rounded-sm shadow-2xs space-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-[#F0F0EE] pb-2 text-[#666666]">
+        <span>WORKSPACE: /usr/local/services/prod-infra</span>
+        <span>STATUS: ACTIVE | SYNC: AUTO</span>
+        <span>PID: 40912</span>
+      </div>
+      <p class="text-xs text-[#444444] leading-relaxed">
+        系统当前处于日常运行与文档归档周期。以下为当前排期事项与架构巡检备忘，修改条目将自动持久化至本地临时缓存。
+      </p>
+    </div>
+
+    <!-- 待办任务看板 -->
+    <section class="border border-[#E2E2DF] bg-white p-4 sm:p-6 rounded-sm shadow-2xs space-y-4">
+      <div class="flex items-center justify-between border-b border-[#F0F0EE] pb-3">
+        <h2 class="text-sm font-bold text-[#111111]">[ 待办清单 ] 核心技术排期与系统巡检</h2>
+        <span id="panic-todo-counter" class="text-xs text-[#737373]">已完成 2 / 总计 5</span>
+      </div>
+
+      <!-- 快速新增条目表单 -->
+      <form id="panic-new-todo-form" class="flex gap-2">
+        <input
+          type="text"
+          id="panic-new-todo-input"
+          class="flex-1 text-xs px-3 py-2 border border-[#E2E2DF] rounded-sm bg-[#FAFAFA] text-[#1E1E1E] focus:outline-hidden focus:border-[#1E1E1E]/50 focus:bg-white placeholder:text-[#999999]"
+          placeholder="[ 输入新增待办事项并按回车... ]"
+        />
+        <button
+          type="submit"
+          class="text-xs px-3 py-2 border border-[#1E1E1E]/20 bg-[#F2F2EF] hover:bg-[#EAEAEA] rounded-sm text-[#1E1E1E] transition-colors cursor-pointer"
+        >
+          [ 添加 ]
+        </button>
+      </form>
+
+      <!-- 任务列表容器 (完全通过 textContent & createElement 渲染，严禁 innerHTML) -->
+      <ul id="panic-todo-list" class="space-y-1.5 text-xs text-[#2A2A2A]">
+      </ul>
+    </section>
+
+    <!-- 临时架构随手记 Notepad -->
+    <section class="border border-[#E2E2DF] bg-white p-4 sm:p-6 rounded-sm shadow-2xs space-y-3">
+      <div class="flex items-center justify-between border-b border-[#F0F0EE] pb-2">
+        <h2 class="text-sm font-bold text-[#111111]">[ 临时便签 ] 架构会议随手记 (本地临时缓冲区)</h2>
+        <span class="text-xs text-[#737373]">BUFFER: SCRATCHPAD_01</span>
+      </div>
+      <textarea
+        id="panic-scratchpad"
+        rows="6"
+        class="w-full text-xs p-3 border border-[#E2E2DF] rounded-sm bg-[#FAFAFA] text-[#1E1E1E] focus:outline-hidden focus:border-[#1E1E1E]/50 focus:bg-white leading-relaxed resize-y placeholder:text-[#999999]"
+        placeholder="// 随时记录技术会议沟通重点、排障命令或配置参数草稿..."
+      >// 2026-Q4 架构优化重点纪要：
+// 1. 服务间调用重试机制引入全抖动指数退避，避免雪崩
+// 2. 数据库读写分离连接池按慢查询分级配置超时与兜底降级
+// 3. 构建产物分片 Hash 缓存策略验证，确保零冗余全量打包</textarea>
+    </section>
+
+    <!-- 底部状态说明与快捷退出提示 -->
+    <footer class="text-center text-xs text-[#888888] pt-3 border-t border-[#EAEAE8] space-y-1">
+      <p>SYSTEM REVISION: 7.3.3-PROD | NODE_ENV: PRODUCTION</p>
+      <p class="text-[#555555]">提示：按 [Escape] 键、双击顶栏或点击右上角 [ 解锁并返回 ] 即可恢复原科普浏览窗口</p>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    const triggerBtn = document.getElementById('panic-trigger-btn');
+    const disguiseLayer = document.getElementById('panic-disguise-layer');
+    const unlockBtn = document.getElementById('panic-unlock-btn');
+    const headerBar = document.getElementById('panic-header-bar');
+    const clockEl = document.getElementById('panic-clock');
+    const todoListEl = document.getElementById('panic-todo-list');
+    const todoCounterEl = document.getElementById('panic-todo-counter');
+    const newTodoForm = document.getElementById('panic-new-todo-form');
+    const newTodoInput = document.getElementById('panic-new-todo-input') as HTMLInputElement | null;
+
+    if (!triggerBtn || !disguiseLayer) return;
+
+    let isMasked = false;
+    let savedTitle = document.title;
+    let clockInterval: number | null = null;
+    let lastEscTime = 0;
+
+    // 默认待办任务列表数据
+    const defaultTodos = [
+      { text: '季度技术架构评审文档整理与性能压测基准比对', done: false },
+      { text: '数据库索引慢查询优化与读写分离配置验证', done: true },
+      { text: '团队周会敏捷对齐与跨组联调接口依赖梳理', done: false },
+      { text: '监控报警规则微调与错误阈值降噪配置', done: true },
+      { text: '前端构建流水线构建缓存优化与包体积分析', done: false },
+    ];
+
+    let todos = [...defaultTodos];
+
+    // 更新时钟时间戳
+    function updateClock() {
+      if (!clockEl) return;
+      const d = new Date();
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      const seconds = pad(d.getSeconds());
+      clockEl.textContent = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // 渲染待办事项 (严格零 innerHTML，全使用 createElement / textContent / replaceChildren)
+    function renderTodos() {
+      if (!todoListEl) return;
+      const fragment = document.createDocumentFragment();
+      let completedCount = 0;
+
+      todos.forEach((item, index) => {
+        if (item.done) completedCount++;
+
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-2.5 p-2 rounded-sm hover:bg-[#F2F2EF] cursor-pointer select-none transition-colors group';
+        li.setAttribute('role', 'checkbox');
+        li.setAttribute('aria-checked', item.done ? 'true' : 'false');
+        li.tabIndex = 0;
+
+        const marker = document.createElement('span');
+        marker.className = item.done
+          ? 'font-bold text-[#737373]'
+          : 'font-bold text-[#1E1E1E] group-hover:text-black';
+        marker.textContent = item.done ? '[x]' : '[ ]';
+
+        const textSpan = document.createElement('span');
+        textSpan.className = item.done
+          ? 'line-through text-[#888888]'
+          : 'text-[#2A2A2A]';
+        textSpan.textContent = item.text;
+
+        li.appendChild(marker);
+        li.appendChild(textSpan);
+
+        function toggleItem() {
+          todos[index].done = !todos[index].done;
+          renderTodos();
+        }
+
+        li.addEventListener('click', toggleItem);
+        li.addEventListener('keydown', (e) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            toggleItem();
+          }
+        });
+
+        fragment.appendChild(li);
+      });
+
+      todoListEl.replaceChildren(fragment);
+
+      if (todoCounterEl) {
+        todoCounterEl.textContent = `已完成 ${completedCount} / 总计 ${todos.length}`;
+      }
+    }
+
+    // 伪装避险激活
+    function mask() {
+      if (!triggerBtn || !disguiseLayer || isMasked) return;
+      isMasked = true;
+      savedTitle = document.title;
+
+      // 1. 替换页面标题为中性工作备忘录
+      document.title = '工作备忘录 - 每日待办事项';
+
+      // 2. 清洗 URL 敏感参数 (保留纯净 pathname)
+      try {
+        history.replaceState({ panicDisguised: true }, '', window.location.pathname);
+      } catch (_) {}
+
+      // 3. 展现伪装层
+      disguiseLayer.classList.remove('hidden');
+      triggerBtn.setAttribute('aria-expanded', 'true');
+
+      // 4. 启动时钟与渲染任务
+      updateClock();
+      if (!clockInterval) {
+        clockInterval = window.setInterval(updateClock, 1000);
+      }
+      renderTodos();
+
+      // 5. 阻止页面底层滚动
+      document.body.style.overflow = 'hidden';
+    }
+
+    // 解锁并还原
+    function unmask() {
+      if (!triggerBtn || !disguiseLayer || !isMasked) return;
+      isMasked = false;
+
+      // 还原页面标题
+      document.title = savedTitle || 'know-her';
+
+      // 隐藏伪装层
+      disguiseLayer.classList.add('hidden');
+      triggerBtn.setAttribute('aria-expanded', 'false');
+
+      // 停止时钟
+      if (clockInterval) {
+        clearInterval(clockInterval);
+        clockInterval = null;
+      }
+
+      // 还原页面滚动
+      document.body.style.overflow = '';
+      triggerBtn.focus();
+    }
+
+    // 绑定触发事件
+    triggerBtn.addEventListener('click', mask);
+    unlockBtn?.addEventListener('click', unmask);
+    headerBar?.addEventListener('dblclick', unmask);
+
+    // 新增任务表单
+    newTodoForm?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!newTodoInput) return;
+      const text = newTodoInput.value.trim();
+      if (text) {
+        todos.unshift({ text, done: false });
+        newTodoInput.value = '';
+        renderTodos();
+      }
+    });
+
+    // 键盘触发：双击 Escape 触发伪装；已伪装状态下单次按 Escape 即刻解锁；按 '`' 键亦可快速切换
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const now = Date.now();
+        if (isMasked) {
+          e.preventDefault();
+          unmask();
+        } else {
+          if (now - lastEscTime < 500) {
+            e.preventDefault();
+            mask();
+          }
+          lastEscTime = now;
+        }
+      } else if (e.key === '`' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName || '')) {
+        // 反引号快速伪装切换
+        if (isMasked) {
+          unmask();
+        } else {
+          mask();
+        }
+      }
+    });
+
+    // 移动端/触屏：双指同时触碰屏幕快速触发避险
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length >= 2 && !isMasked) {
+        mask();
+      }
+    }, { passive: true });
+
+    // 初始化渲染一次待办数据与时钟预备
+    renderTodos();
+  })();
+</script>

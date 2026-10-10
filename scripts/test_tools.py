@@ -23,6 +23,8 @@ DECISION_GUIDE_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "Decision
 MEMO_EXPORTER_FILE = os.path.join(ROOT_DIR, "src", "lib", "ui", "memoImageExporter.ts")
 SEARCH_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "Search.astro")
 ARTICLE_DETAIL_PAGE = os.path.join(ROOT_DIR, "src", "pages", "articles", "[id].astro")
+PANIC_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "PanicExit.astro")
+BASE_LAYOUT = os.path.join(ROOT_DIR, "src", "layouts", "Base.astro")
 
 REQUIRED_COMPONENTS = [
     ("EmergencyCountdown.astro", ["ec-datetime-input", "ec-progress-bar", "contraception-emergency-pill"]),
@@ -656,6 +658,71 @@ def validate_tool_contracts(errors: list):
         errors.append("tools/index.astro URL 参数处理逻辑缺失 item 参数支持")
 
 
+def validate_panic_exit_contract(errors: list):
+    """验证全局防窥一键伪装避险组件 (PanicExit.astro) 契约与 Base.astro 挂载"""
+    if not os.path.exists(BASE_LAYOUT):
+        errors.append(f"基础布局缺失: {BASE_LAYOUT}")
+    else:
+        with open(BASE_LAYOUT, "r", encoding="utf-8") as f:
+            base_content = f.read()
+
+        if "PanicExit" not in base_content:
+            errors.append("Base.astro 未导入 PanicExit 组件")
+
+        if not re.search(r"<PanicExit\s*/>", base_content):
+            errors.append("Base.astro 未渲染 <PanicExit /> 组件")
+
+    if not os.path.exists(PANIC_COMPONENT):
+        errors.append(f"防窥避险组件缺失: {PANIC_COMPONENT}")
+        return
+
+    with open(PANIC_COMPONENT, "r", encoding="utf-8") as f:
+        panic_content = f.read()
+
+    # 1. 触发器标识校验
+    has_trigger_btn = (
+        "panic-trigger-btn" in panic_content
+        or "panic-exit-btn" in panic_content
+    )
+    if not has_trigger_btn:
+        errors.append("PanicExit.astro 缺失避险触发按钮 (#panic-trigger-btn 或 #panic-exit-btn)")
+
+    has_disguise_layer = (
+        'id="panic-disguise-layer"' in panic_content
+        or "panic-disguise-layer" in panic_content
+    )
+    if not has_disguise_layer:
+        errors.append("PanicExit.astro 缺失伪装层容器 (#panic-disguise-layer)")
+
+    has_escape_trigger = (
+        "Escape" in panic_content
+        and ("key === 'Escape'" in panic_content or 'key === "Escape"' in panic_content)
+    )
+    if not has_escape_trigger:
+        errors.append("PanicExit.astro 缺失按键双击/监听 Escape 触发避险逻辑 (key === 'Escape')")
+
+    # 2. 伪装内容与标题替换校验
+    has_disguise_text = (
+        "工作备忘录" in panic_content
+        or "每日待办事项" in panic_content
+    )
+    if not has_disguise_text:
+        errors.append("PanicExit.astro 缺失工作伪装文本或标题替换 ('工作备忘录' 或 '每日待办事项')")
+
+    # 3. URL 清理逻辑校验
+    if "history.replaceState" not in panic_content:
+        errors.append("PanicExit.astro 缺失 URL 敏感参数清洗逻辑 (history.replaceState)")
+
+    # 4. 解锁还原逻辑校验
+    has_unlock_action = (
+        "解锁" in panic_content
+        or "unlock" in panic_content.lower()
+        or "unmask" in panic_content.lower()
+    )
+    if not has_unlock_action:
+        errors.append("PanicExit.astro 缺失解锁还原机制")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -734,6 +801,9 @@ def run_tests():
 
     # 12. 验证妇科检查报告通俗解码台交互组件与契约
     validate_tool_contracts(errors)
+
+    # 13. 验证全局防窥一键伪装避险组件契约
+    validate_panic_exit_contract(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")

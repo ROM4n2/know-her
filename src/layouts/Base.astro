@@ -3,6 +3,7 @@ import '../styles/global.css';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import AgePreferenceBanner from '../components/AgePreferenceBanner.astro';
 import MedicalDisclaimer from '../components/MedicalDisclaimer.astro';
+import PanicExit from '../components/PanicExit.astro';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 
 interface Props {
@@ -226,5 +227,7 @@ const validArticleUrls = allArticles
         });
       }
     </script>
+
+    <PanicExit />
   </body>
 </html>
