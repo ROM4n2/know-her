@@ -328,6 +328,78 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '由卫生工作者施行残割被称为「医疗化」（medicalization）。WHO 明确：该做法没有任何健康益处、只有伤害，因此强烈敦促卫生工作者不得实施残割女性生殖器，并专门制定全球战略支持卫生部门终结医疗化——因为由医护人员施行会为该习俗赋予医学正当性外观，反而让社群更难放弃它。',
   },
+  'body-pcos-lifestyle-management': {
+    articleId: 'body-pcos-lifestyle-management',
+    question: '关于多囊卵巢综合征（PCOS）的生活方式干预，以下哪项被国际临床指南推荐为超重或肥胖患者的一线基础方案？',
+    options: [
+      '通过低升糖饮食与规律运动减轻 5%~10% 的体重，可显著改善排卵与胰岛素抵抗',
+      '严格长期无碳水生酮饮食配合高强度节食，直到完全恢复月经',
+      '只要服药即可，生活方式调理对多囊卵巢的激素内分泌改善没有任何作用',
+    ],
+    correctIndex: 0,
+    explanation:
+      '国际 PCOS 共识指南明确将生活方式干预列为一线治疗底座。研究证实，超重患者体重减轻 5%~10% 即可显著降低游离雄激素水平，改善全身胰岛素敏感性并促进自发排卵。',
+  },
+  'body-perimenopause-hormone-fluctuation': {
+    articleId: 'body-perimenopause-hormone-fluctuation',
+    question: '关于更年期过渡（围绝经期）出现的潮热、盗汗与激素替代疗法（MHT），以下哪项描述符合现代临床共识？',
+    options: [
+      '潮热是因为身体火气过旺，多喝凉茶降火即可，不可使用任何现代医疗干预',
+      '在绝经 10 年以内或 60 岁之前且无禁忌证时启动 MHT，收益通常显著大于风险',
+      '一旦进入围绝经期，所有女性都终身严禁使用任何天然雌孕激素',
+    ],
+    correctIndex: 1,
+    explanation:
+      '围绝经期潮热是由雌激素剧烈波动导致下丘脑体温调节中枢敏感所致。国际绝经学会指出，在 60 岁以前或绝经 10 年内的“治疗窗口期”，规范应用 MHT 能有效缓解血管舒缩症状并保护骨骼与心血管，收益明显大于风险。',
+  },
+  'body-ovulation-bleeding-vs-implantation': {
+    articleId: 'body-ovulation-bleeding-vs-implantation',
+    question: '如何从时间窗口和生理机制上鉴别排卵期出血与受精卵着床出血？',
+    options: [
+      '排卵期出血通常发生在下次月经前约 14 天（周期间期）；着床出血发生在排卵后 6~12 天（临近预计经期）',
+      '排卵期出血往往伴有持续一周的大量鲜红血液和巨大血块',
+      '受精卵着床出血通常发生在同房后的第 1 个小时以内',
+    ],
+    correctIndex: 0,
+    explanation:
+      '排卵期出血源于卵泡破裂后雌激素短暂撤退，发生在两次月经正中间（下次月经前约 14 天）；而受精卵完成受精并游走到宫腔植入内膜通常需要 6~12 天，因此着床出血发生在排卵受精后约一周到下一次经期来潮前后，二者均以极少量点滴褐色或粉色分泌物为特征。',
+  },
+  'body-tampon-menstrual-cup-tss-safety': {
+    articleId: 'body-tampon-menstrual-cup-tss-safety',
+    question: '为了预防极其罕见但凶险的中毒性休克综合征（TSS），卫生棉条的单次佩戴时长上限是多久？',
+    options: [
+      '单次佩戴严禁超过 8 小时，通常建议每 4~8 小时更换一次',
+      '为了省事可以连续放置 24 小时以上无需更换',
+      '只要棉条没有吸饱经血，放置 2 到 3 天也是绝对安全的',
+    ],
+    correctIndex: 0,
+    explanation:
+      '长时间放置吸血棉条可能为金黄色葡萄球菌过度繁殖和产生外毒素提供温床。世界卫生组织及妇科临床指南严格规定，单次佩戴棉条严禁超过 8 小时，夜间睡眠超过 8 小时建议换用夜用卫生巾。',
+  },
+  'pleasure-vaginismus-pelvic-floor-therapy': {
+    articleId: 'pleasure-vaginismus-pelvic-floor-therapy',
+    question: '关于阴道痉挛（生殖器-骨盆疼痛与插入障碍），以下哪项是现代医学与盆底康复的权威共识？',
+    options: [
+      '阴道痉挛是盆底肌肉的不自主保护性痉挛，循序渐进的扩张器脱敏与盆底放松治疗有效率极高',
+      '纯粹是当事人心理过度矫情或抗拒，只要伴侣多用蛮力强行插入就能彻底解决',
+      '阴道痉挛是完全无法改善的先天性生殖器官畸形，没有任何医学手段可以治疗',
+    ],
+    correctIndex: 0,
+    explanation:
+      '阴道痉挛是耻骨尾骨肌等骨盆肌肉不受意识控制的反射性痉挛，强行插入会造成物理创伤与恐惧加剧。通过盆底肌生物反馈、手法松解以及患者完全自主掌控的阶梯式扩张器脱敏训练，绝大多数均可治愈。',
+  },
+  'intimacy-sexual-boundary-saying-no': {
+    articleId: 'intimacy-sexual-boundary-saying-no',
+    question: '根据国际公认的积极知情同意（FRIES）黄金法则，关于在亲密过程中表达拒绝与撤回同意，以下说法正确的是？',
+    options: [
+      '只要最开始答应了亲吻或前戏，中途就绝对没有权利喊停',
+      '同意具有随时可撤回性（Reversible），在亲密行为的任何阶段任何一方说“停”都必须被无条件立即尊重',
+      '沉默或不反抗就等于双方达成了充分的知情同意',
+    ],
+    correctIndex: 1,
+    explanation:
+      'FRIES 原则强调同意是自愿的、可撤回的（Reversible）、知情的、热情的且具体的。亲密过程中的同意不是一次签署终身有效的契约，任何一方在任何时候感到不适都可以喊停，且这一界限必须得到伴侣的绝对尊重。',
+  },
 };
 
 /**
