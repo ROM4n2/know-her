@@ -96,6 +96,8 @@ const validArticleUrls = allArticles
       title={SITE_TITLE}
       href={`${base}rss.xml`}
     />
+    <link rel="manifest" href={`${base}manifest.webmanifest`} />
+    <meta name="theme-color" content="#FAF8F5" />
     <slot name="head" />
   </head>
   <body class="flex min-h-screen flex-col bg-[#FAF8F5] text-[#2A2620] antialiased selection:bg-rose-100 selection:text-rose-900">
@@ -214,6 +216,15 @@ const validArticleUrls = allArticles
         document.getElementById('mobile-bottom-random-btn')?.addEventListener('click', triggerRandomArticle);
         document.getElementById('random-explore-btn')?.addEventListener('click', triggerRandomArticle);
       })();
+    </script>
+
+    {/* PWA Service Worker 离线急救缓存注册 */}
+    <script is:inline define:vars={{ base }}>
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register(`${base}sw.js`).catch(function () {});
+        });
+      }
     </script>
   </body>
 </html>
