@@ -1,0 +1,183 @@
+---
+// src/components/TableOfContents.astro
+// 长文悬浮目录树与导视导航 (Academic Modern Editorial: #15140F, #FAF8F5, #5A5448, rose-600)
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  headings?: Heading[];
+}
+
+const { headings = [] } = Astro.props;
+
+// 过滤 depth === 2 || depth === 3 (H2 与 H3) 的正文标题
+const tocHeadings = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{
+  tocHeadings.length > 0 && (
+    <nav id="table-of-contents" aria-label="文章目录大纲" class="my-6">
+      {/* 移动端与平板端：内嵌可折叠目录导读卡片 (xl:hidden) */}
+      <details class="xl:hidden group rounded-xl border border-[#15140F]/15 bg-[#FAF8F5] p-4 shadow-2xs">
+        <summary class="flex cursor-pointer list-none items-center justify-between text-xs font-mono font-bold text-[#15140F] select-none">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-rose-600"></span>
+            <span>[ 目录 // CONTENTS ]</span>
+            <span class="text-[11px] font-normal text-[#5A5448]">({tocHeadings.length} 节)</span>
+          </div>
+          <span class="text-[#5A5448] group-open:rotate-180 transition-transform text-xs font-mono">
+            [+]
+          </span>
+        </summary>
+        <div class="mt-3.5 pt-3 border-t border-[#15140F]/10 space-y-1">
+          {tocHeadings.map((h) => (
+            <a
+              href={`#${h.slug}`}
+              class:list={[
+                'toc-link block py-1.5 pr-2 text-xs leading-relaxed transition-colors rounded-sm',
+                h.depth === 3 ? 'pl-6 text-[11px]' : 'pl-3 font-medium'
+              ]}
+              data-slug={h.slug}
+            >
+              {h.depth === 3 && <span class="text-[#5A5448] font-mono mr-1">└</span>}
+              <span>{h.text}</span>
+            </a>
+          ))}
+        </div>
+      </details>
+
+      {/* 桌面大屏宽屏：右侧悬浮固定目录树 (hidden xl:block) */}
+      <div class="hidden xl:block xl:fixed xl:left-[calc(50%+24rem+1.5rem)] xl:top-24 xl:w-56 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-xl border border-[#15140F]/15 bg-[#FAF8F5] p-4 shadow-2xs">
+        <div class="mb-3 pb-2 border-b border-[#15140F]/10 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 font-mono text-[11px] font-bold text-[#15140F]">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+            <span>[ 目录 // CONTENTS ]</span>
+          </div>
+          <span class="text-[10px] font-mono text-[#5A5448]">{tocHeadings.length} 节</span>
+        </div>
+        <ul class="space-y-1 text-xs">
+          {tocHeadings.map((h) => (
+            <li>
+              <a
+                href={`#${h.slug}`}
+                class:list={[
+                  'toc-link block py-1 pr-2 transition-all leading-snug rounded-xs',
+                  h.depth === 3 ? 'pl-4 text-[11px]' : 'pl-2 font-medium'
+                ]}
+                data-slug={h.slug}
+              >
+                {h.depth === 3 && <span class="text-[#5A5448] font-mono mr-1">·</span>}
+                <span>{h.text}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </nav>
+  )
+}
+
+<script>
+  (() => {
+    const tocContainer = document.getElementById('table-of-contents');
+    if (!tocContainer) return;
+
+    const links = document.querySelectorAll<HTMLAnchorElement>('.toc-link');
+    if (links.length === 0) return;
+
+    const headingIds = Array.from(links)
+      .map((link) => link.getAttribute('data-slug'))
+      .filter((slug): slug is string => Boolean(slug));
+
+    const headingElements = headingIds
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => Boolean(el));
+
+    if (headingElements.length === 0) return;
+
+    function setActive(activeId: string) {
+      links.forEach((link) => {
+        const slug = link.getAttribute('data-slug');
+        if (slug === activeId) {
+          link.classList.add('active-toc-link');
+          link.setAttribute('aria-current', 'location');
+        } else {
+          link.classList.remove('active-toc-link');
+          link.removeAttribute('aria-current');
+        }
+      });
+    }
+
+    // 初始化高亮首个标题
+    if (headingElements.length > 0) {
+      setActive(headingElements[0].id);
+    }
+
+    // 采用 IntersectionObserver 监听正文标题进入视口顶部区域
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries.filter((e) => e.isIntersecting);
+        if (visibleEntries.length > 0) {
+          visibleEntries.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          setActive(visibleEntries[0].target.id);
+        }
+      },
+      {
+        rootMargin: '0px 0px -70% 0px',
+        threshold: [0, 1]
+      }
+    );
+
+    headingElements.forEach((h) => observer.observe(h));
+
+    // 辅助滚动监听：快速滚动时兜底更新最近的上方章节
+    let ticking = false;
+    window.addEventListener(
+      'scroll',
+      () => {
+        if (!ticking) {
+          window.requestAnimationFrame(() => {
+            const scrollY = window.scrollY;
+            if (scrollY < 100 && headingElements.length > 0) {
+              setActive(headingElements[0].id);
+            } else {
+              let currentId = headingElements[0].id;
+              for (const h of headingElements) {
+                const rect = h.getBoundingClientRect();
+                if (rect.top <= 140) {
+                  currentId = h.id;
+                } else {
+                  break;
+                }
+              }
+              setActive(currentId);
+            }
+            ticking = false;
+          });
+          ticking = true;
+        }
+      },
+      { passive: true }
+    );
+  })();
+</script>
+
+<style>
+  .toc-link {
+    color: #5A5448;
+    border-left: 2px solid transparent;
+  }
+  .toc-link:hover {
+    color: #15140F;
+    border-left-color: rgba(225, 29, 72, 0.4);
+  }
+  .toc-link.active-toc-link {
+    color: #E11D48; /* rose-600 */
+    font-weight: 600;
+    border-left-color: #E11D48;
+    background-color: rgba(254, 242, 242, 0.7);
+  }
+</style>

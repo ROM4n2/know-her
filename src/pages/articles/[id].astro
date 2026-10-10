@@ -6,6 +6,8 @@
 import { getCollection, render, type CollectionEntry } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import ArticleSchema from '../../components/ArticleSchema.astro';
+import ReadingProgress from '../../components/ReadingProgress.astro';
+import TableOfContents from '../../components/TableOfContents.astro';
 import { CATEGORIES, type CategoryKey } from '../../consts';
 
 interface Props {
@@ -20,7 +22,7 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
 const data = entry.data;
 
 const base = import.meta.env.BASE_URL.endsWith('/')
@@ -87,6 +89,8 @@ const relatedGlossary = allGlossary.filter(
       is_full_text={data.is_full_text}
     />
   </Fragment>
+
+  <ReadingProgress />
 
   <nav class="mb-6 flex items-center gap-2 text-xs text-gray-400">
     <a href={base} class="hover:text-rose-600 transition-colors">首页</a>
@@ -214,6 +218,8 @@ const relatedGlossary = allGlossary.filter(
     )}
   </header>
 
+  <TableOfContents headings={headings} />
+
   <article class="article-body">
     <Content />
   </article>
@@ -300,19 +306,7 @@ const relatedGlossary = allGlossary.filter(
     </div>
   </footer>
 
-  {/* 顶部滚动阅读进度条 */}
-  <div id="reading-progress-bar" class="fixed top-0 left-0 h-[3px] bg-rose-600 z-50 transition-all duration-75 w-0"></div>
-
   <script is:inline define:vars={{ shareTitle: data.title, shareSummary: data.summary, shareSource: data.source_name, shareCategory: categoryInfo.label, shareUrl: url }}>
-    // 监听滚动更新阅读进度条
-    window.addEventListener('scroll', () => {
-      const bar = document.getElementById('reading-progress-bar');
-      if (!bar) return;
-      const total = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = total > 0 ? (window.scrollY / total) * 100 : 0;
-      bar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
-    }, { passive: true });
-
     document.getElementById('copy-summary-btn')?.addEventListener('click', async () => {
       const text = `【know-her 科普速览】《${shareTitle}》\n专题：${shareCategory} · 权威来源：${shareSource}\n\n核心看点：\n${shareSummary}\n\n完整导读与出处直达：\n${shareUrl}`;
       try {

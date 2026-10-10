@@ -1,0 +1,42 @@
+---
+// src/components/ReadingProgress.astro
+// 长文阅读进度指示条 (置顶 2px，零遮挡，requestAnimationFrame 滚动节流优化)
+---
+
+<div
+  id="reading-progress-bar"
+  class="fixed top-0 left-0 w-0 h-[2px] bg-rose-600 z-50 pointer-events-none transition-[width] duration-75 ease-out"
+  aria-hidden="true"
+></div>
+
+<script>
+  (() => {
+    const bar = document.getElementById('reading-progress-bar');
+    if (!bar) return;
+
+    let ticking = false;
+
+    const updateProgress = () => {
+      const doc = document.documentElement;
+      const total = doc.scrollHeight - window.innerHeight;
+      const current = window.scrollY || doc.scrollTop || 0;
+      const progress = total > 0 ? (current / total) * 100 : 0;
+      const clamped = Math.min(100, Math.max(0, progress));
+      bar.style.width = `${clamped}%`;
+      ticking = false;
+    };
+
+    window.addEventListener(
+      'scroll',
+      () => {
+        if (!ticking) {
+          window.requestAnimationFrame(updateProgress);
+          ticking = true;
+        }
+      },
+      { passive: true }
+    );
+
+    updateProgress();
+  })();
+</script>
