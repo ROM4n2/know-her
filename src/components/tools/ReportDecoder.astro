@@ -682,4 +682,18 @@ const firstTier = getTierStyle(firstItem.management_tier);
       switchCategory(catId);
     }
   };
+
+  // 检查初始 URL 参数（保障在模块延迟加载与冷启动直链场景下能无竞态激活目标指标）
+  try {
+    const initParams = new URLSearchParams(window.location.search);
+    if (initParams.get('tool') === 'report-decoder') {
+      const initCat = initParams.get('category');
+      const initItem = initParams.get('item');
+      if (initCat || initItem) {
+        (window as unknown as { selectReportDecoderItem?: (c?: string | null, i?: string | null) => void }).selectReportDecoderItem?.(initCat, initItem);
+      }
+    }
+  } catch (e) {
+    // 忽略异常，降级到默认首选指标
+  }
 </script>
