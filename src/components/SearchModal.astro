@@ -1,0 +1,314 @@
+---
+/**
+ * SearchModal.astro — 全局即时搜索模态弹窗
+ * 支持 ⌘K / Ctrl+K / / 快捷键即时唤起与 Pagefind WASM 毫秒级检索
+ * 纯净 Academic Modern Editorial 排版，严禁使用 innerHTML (零 XSS 隐患)，零彩色 Emoji
+ */
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+const INTENT_PILLS = [
+  { label: '避孕套滑脱', href: `${base}guide/decision-tree/#condom` },
+  { label: '紧急避孕 72h', href: `${base}tools/?tool=ec-countdown` },
+  { label: '漏服药补救', href: `${base}tools/?tool=coc-remedy` },
+  { label: '同房疼痛', href: `${base}articles/pleasure-dyspareunia-pain/` },
+  { label: '问诊备忘录', href: `${base}tools/?tool=clinic-memo&complaint=bleeding` },
+];
+---
+
+<div
+  id="search-modal-container"
+  class="fixed inset-0 z-50 bg-[#15140F]/60 backdrop-blur-xs flex items-start justify-center p-4 sm:p-6 pt-16 sm:pt-24 hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="search-modal-title"
+>
+  <div id="search-modal-backdrop" class="fixed inset-0" aria-hidden="true"></div>
+
+  <div class="relative w-full max-w-xl rounded-2xl border border-[#15140F]/15 bg-[#FAF8F5] p-4 sm:p-5 shadow-2xl space-y-4 font-sans z-10">
+    {/* 弹窗头部与快捷键提示徽章 */}
+    <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="flex h-6 w-6 items-center justify-center rounded-md bg-[#15140F] text-white">
+          <svg class="w-3.5 h-3.5 text-rose-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+        </span>
+        <span id="search-modal-title" class="text-xs font-bold text-[#15140F]">全局即时搜索</span>
+        <span class="font-mono text-[10px] text-[#8B8676] bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">[ ⌘K / Ctrl+K / / 唤起 ]</span>
+      </div>
+      <button
+        type="button"
+        id="search-modal-close-btn"
+        class="font-mono text-[10px] text-[#5A5448] hover:text-[#15140F] bg-white px-2 py-0.5 rounded border border-[#15140F]/15 hover:border-rose-400 transition-colors cursor-pointer"
+        title="关闭搜索弹窗 (ESC)"
+      >
+        [ ESC 关闭 ]
+      </button>
+    </div>
+
+    {/* 搜索输入框 */}
+    <div class="relative">
+      <input
+        type="search"
+        id="search-modal-input"
+        class="w-full rounded-xl border border-[#15140F]/15 bg-white px-4 py-3 text-sm text-[#15140F] placeholder-[#8B8676] focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/50"
+        placeholder="输入疾病症状、避孕疑问或生理名词（快捷键 ↑↓ 选择，Enter 直达）..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    {/* 高频突发场景快捷意图胶囊 */}
+    <div id="search-modal-intents" class="space-y-2">
+      <div class="flex items-center justify-between text-[11px] text-[#8B8676]">
+        <span class="font-mono font-bold text-rose-600">[ 突发场景快捷入口 ]</span>
+        <span>一时组织不出关键词？直接点选直达处置路径</span>
+      </div>
+      <div class="flex flex-wrap gap-1.5 sm:gap-2">
+        {INTENT_PILLS.map((pill) => (
+          <a
+            href={pill.href}
+            class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-2.5 py-1 text-xs font-medium text-[#2A2620] shadow-2xs hover:border-rose-400 hover:bg-rose-50/50 hover:text-rose-700 transition-colors"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+            <span>{pill.label}</span>
+            <span class="text-rose-600 font-mono">→</span>
+          </a>
+        ))}
+      </div>
+    </div>
+
+    {/* 搜索结果列表容器 (严格采用安全 DOM API 挂载渲染) */}
+    <div id="search-modal-results" class="space-y-2 max-h-72 overflow-y-auto"></div>
+
+    {/* 底栏键盘快捷键提示 */}
+    <div class="flex items-center justify-between border-t border-[#15140F]/10 pt-2.5 text-[11px] text-[#8B8676] font-mono">
+      <div class="flex items-center gap-3">
+        <span>[ ↑↓ 选择 ]</span>
+        <span>[ Enter 打开 ]</span>
+      </div>
+      <span>[ Pagefind WASM 纯本地离线索引 ]</span>
+    </div>
+  </div>
+</div>
+
+<script is:inline define:vars={{ base }}>
+  (function () {
+    const container = document.getElementById('search-modal-container');
+    const backdrop = document.getElementById('search-modal-backdrop');
+    const closeBtn = document.getElementById('search-modal-close-btn');
+    const input = document.getElementById('search-modal-input');
+    const resultsContainer = document.getElementById('search-modal-results');
+    const intentsContainer = document.getElementById('search-modal-intents');
+
+    let pagefindInstance = null;
+    let selectedIndex = -1;
+    let debounceTimer = null;
+
+    async function loadPagefind() {
+      if (pagefindInstance) return pagefindInstance;
+      if (window.pagefind) {
+        pagefindInstance = window.pagefind;
+        return pagefindInstance;
+      }
+      try {
+        const pf = await import(/* @vite-ignore */ `${base}pagefind/pagefind.js`);
+        if (typeof pf.init === 'function') {
+          await pf.init();
+        }
+        pagefindInstance = pf;
+        return pagefindInstance;
+      } catch (err) {
+        console.warn('[SearchModal] Pagefind 索引尚未生成或未加载', err);
+        return null;
+      }
+    }
+
+    function openSearchModal() {
+      if (!container || !input) return;
+      container.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      input.focus();
+      loadPagefind();
+    }
+
+    function closeSearchModal() {
+      if (!container) return;
+      container.classList.add('hidden');
+      document.body.style.overflow = '';
+      if (input) input.blur();
+    }
+
+    window.openSearchModal = openSearchModal;
+    window.closeSearchModal = closeSearchModal;
+
+    backdrop?.addEventListener('click', closeSearchModal);
+    closeBtn?.addEventListener('click', closeSearchModal);
+
+    // 绑定外部搜索触发按钮
+    document.getElementById('nav-search-trigger')?.addEventListener('click', openSearchModal);
+    document.getElementById('global-search-btn')?.addEventListener('click', openSearchModal);
+
+    function updateActiveSelection(items) {
+      items.forEach((item, idx) => {
+        if (idx === selectedIndex) {
+          item.classList.add('border-rose-400', 'bg-rose-50/70', 'ring-1', 'ring-rose-200');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('border-rose-400', 'bg-rose-50/70', 'ring-1', 'ring-rose-200');
+        }
+      });
+    }
+
+    input?.addEventListener('keydown', (e) => {
+      const items = resultsContainer ? resultsContainer.querySelectorAll('.search-result-item') : [];
+      if (items.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex + 1) % items.length;
+          updateActiveSelection(items);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+          updateActiveSelection(items);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < items.length) {
+            items[selectedIndex].click();
+          } else if (items.length > 0) {
+            items[0].click();
+          }
+          return;
+        }
+      }
+    });
+
+    async function performSearch(query) {
+      if (!resultsContainer) return;
+      selectedIndex = -1;
+
+      if (!query) {
+        resultsContainer.replaceChildren();
+        if (intentsContainer) intentsContainer.style.display = 'block';
+        return;
+      }
+
+      if (intentsContainer) intentsContainer.style.display = 'none';
+
+      const pf = await loadPagefind();
+      if (!pf) {
+        const notice = document.createElement('div');
+        notice.className = 'py-6 text-center text-xs text-[#8B8676] font-mono';
+        notice.textContent = '[ 提示：本地开发模式尚未生成 Pagefind 索引，构建后可用 ]';
+        resultsContainer.replaceChildren(notice);
+        return;
+      }
+
+      const search = await pf.search(query);
+      if (!search || !search.results || search.results.length === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'py-6 text-center text-xs text-[#8B8676]';
+        emptyEl.textContent = '未找到与「' + query + '」相关的内容';
+        resultsContainer.replaceChildren(emptyEl);
+        return;
+      }
+
+      const data = await Promise.all(search.results.slice(0, 5).map((r) => r.data()));
+      const fragment = document.createDocumentFragment();
+
+      data.forEach((itemData, index) => {
+        const item = document.createElement('a');
+        item.href = itemData.url;
+        item.className = 'search-result-item block rounded-xl border border-[#15140F]/10 bg-white p-3 hover:border-rose-300 hover:bg-rose-50/40 transition-colors cursor-pointer group';
+        item.setAttribute('data-index', String(index));
+
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between text-xs mb-1';
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'font-bold text-[#15140F] group-hover:text-rose-700 transition-colors';
+        titleEl.textContent = (itemData.meta && itemData.meta.title) ? itemData.meta.title : '科普条目';
+
+        const badge = document.createElement('span');
+        badge.className = 'font-mono text-[10px] text-[#8B8676]';
+        badge.textContent = '[ 0' + (index + 1) + ' // 结果 ]';
+
+        header.appendChild(titleEl);
+        header.appendChild(badge);
+        item.appendChild(header);
+
+        if (itemData.excerpt) {
+          const excerptEl = document.createElement('p');
+          excerptEl.className = 'text-xs text-[#5A5448] line-clamp-2 leading-relaxed';
+
+          const parts = itemData.excerpt.split(/(<mark>.*?<\/mark>)/g);
+          for (let p = 0; p < parts.length; p++) {
+            const part = parts[p];
+            if (part.startsWith('<mark>') && part.endsWith('</mark>')) {
+              const mark = document.createElement('mark');
+              mark.className = 'bg-rose-100 text-rose-800 font-medium px-0.5 rounded';
+              mark.textContent = part.slice(6, -7).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+              excerptEl.appendChild(mark);
+            } else if (part) {
+              const cleanText = part.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+              excerptEl.appendChild(document.createTextNode(cleanText));
+            }
+          }
+          item.appendChild(excerptEl);
+        }
+
+        fragment.appendChild(item);
+      });
+
+      resultsContainer.replaceChildren(fragment);
+    }
+
+    input?.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        performSearch(input.value.trim());
+      }, 120);
+    });
+
+    // Global keyboard listener
+    window.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          activeEl.isContentEditable);
+
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        if (container && !container.classList.contains('hidden')) {
+          closeSearchModal();
+        } else {
+          openSearchModal();
+        }
+        return;
+      }
+
+      if (e.key === '/' && !isInput) {
+        e.preventDefault();
+        openSearchModal();
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (container && !container.classList.contains('hidden')) {
+          e.preventDefault();
+          closeSearchModal();
+        }
+      }
+    });
+  })();
+</script>

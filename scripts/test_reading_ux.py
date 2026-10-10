@@ -33,6 +33,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOC_FILE = os.path.join(PROJECT_ROOT, "src", "components", "TableOfContents.astro")
 PROGRESS_FILE = os.path.join(PROJECT_ROOT, "src", "components", "ReadingProgress.astro")
 ARTICLE_PAGE_FILE = os.path.join(PROJECT_ROOT, "src", "pages", "articles", "[id].astro")
+SEARCH_MODAL_FILE = os.path.join(PROJECT_ROOT, "src", "components", "SearchModal.astro")
+BASE_LAYOUT_FILE = os.path.join(PROJECT_ROOT, "src", "layouts", "Base.astro")
 PACKAGE_JSON_FILE = os.path.join(PROJECT_ROOT, "package.json")
 
 EMOJI_PATTERN = re.compile(
@@ -180,26 +182,116 @@ def test_package_json_registration():
     print("   ✅ package.json 成功注册 test_reading_ux.py 到自动化测试链路")
     return []
 
-def main():
-    print("=" * 60)
-    print("🚀 开始执行 know-her 长文阅读体验升级 (TOC 与进度条) 契约检验")
-    print("=" * 60)
+def validate_search_modal_contract(errors: list) -> list:
+    print("🔍 [6/6] 检验全局即时搜索模态弹窗与快捷键契约 (SearchModal)...")
+    if not os.path.isfile(SEARCH_MODAL_FILE):
+        errors.append(f"缺失 SearchModal 组件: {SEARCH_MODAL_FILE}")
+        return errors
 
+    if not os.path.isfile(BASE_LAYOUT_FILE):
+        errors.append(f"缺失 Base 布局文件: {BASE_LAYOUT_FILE}")
+        return errors
+
+    # 1. 检验 Base.astro 导入与渲染
+    with open(BASE_LAYOUT_FILE, "r", encoding="utf-8") as f:
+        base_content = f.read()
+
+    clean_base = re.sub(r"\{\/\*[\s\S]*?\*\/\}", "", base_content)
+    clean_base = re.sub(r"<!--[\s\S]*?-->", "", clean_base)
+
+    if "SearchModal" not in clean_base or ("import SearchModal" not in base_content and "import SearchModal from" not in base_content):
+        errors.append("Base.astro 必须引入 SearchModal 组件")
+    if not re.search(r"<SearchModal\s*/>", clean_base) and not re.search(r"<SearchModal\s*>", clean_base):
+        errors.append("Base.astro 必须挂载并渲染 <SearchModal />")
+    if 'id="nav-search-trigger"' not in base_content and 'id="global-search-btn"' not in base_content and "id='nav-search-trigger'" not in base_content and "id='global-search-btn'" not in base_content:
+        errors.append("Base.astro 必须提供快速搜索触发按钮 (#nav-search-trigger 或 #global-search-btn)")
+
+    # 2. 检验 SearchModal.astro 组件内容与契约
+    with open(SEARCH_MODAL_FILE, "r", encoding="utf-8") as f:
+        modal_content = f.read()
+
+    # Modal container
+    if 'id="search-modal-container"' not in modal_content and "id='search-modal-container'" not in modal_content:
+        errors.append("SearchModal.astro 必须包含 id=\"search-modal-container\"")
+
+    # Backdrop
+    if 'id="search-modal-backdrop"' not in modal_content and "id='search-modal-backdrop'" not in modal_content:
+        errors.append("SearchModal.astro 必须包含 id=\"search-modal-backdrop\"")
+
+    # Input field
+    if 'id="search-modal-input"' not in modal_content and "id='search-modal-input'" not in modal_content:
+        errors.append("SearchModal.astro 必须包含 id=\"search-modal-input\"")
+
+    # Results list
+    if 'id="search-modal-results"' not in modal_content and "id='search-modal-results'" not in modal_content:
+        errors.append("SearchModal.astro 必须包含 id=\"search-modal-results\"")
+
+    # Keyboard event handlers: check for key === 'k' || key === 'K' (with metaKey or ctrlKey), and key === '/'
+    has_k_shortcut = ("'k'" in modal_content or '"k"' in modal_content) and ("metaKey" in modal_content or "ctrlKey" in modal_content)
+    if not has_k_shortcut:
+        errors.append("SearchModal.astro 必须监听 ⌘K / Ctrl+K 全局快捷键")
+
+    if "'/'" not in modal_content and '"/"' not in modal_content:
+        errors.append("SearchModal.astro 必须监听 '/' 全局搜索快捷键")
+
+    # Safe input check: ignore shortcut if user is already typing in INPUT, TEXTAREA, SELECT, or isContentEditable
+    for tag in ["INPUT", "TEXTAREA", "SELECT", "isContentEditable"]:
+        if tag not in modal_content:
+            errors.append(f"SearchModal.astro 快捷键处理必须规避用户输入态: 缺少对 {tag} 的判断")
+
+    # Escape close check
+    if "Escape" not in modal_content:
+        errors.append("SearchModal.astro 必须支持 Escape 键关闭弹窗")
+
+    # Focus management: focuses search-modal-input on open
+    if "focus()" not in modal_content or "search-modal-input" not in modal_content:
+        errors.append("SearchModal.astro 唤起时必须自动聚焦 search-modal-input 输入框")
+
+    # Zero innerHTML violation
+    clean_modal_js = re.sub(r"<!--[\s\S]*?-->", "", modal_content)
+    clean_modal_js = re.sub(r"//.*", "", clean_modal_js)
+    clean_modal_js = re.sub(r"/\*[\s\S]*?\*/", "", clean_modal_js)
+    if ".innerHTML" in clean_modal_js:
+        errors.append("SearchModal.astro 严禁使用 innerHTML (存在 XSS 风险)，必须严格使用 createElement/textContent/replaceChildren")
+
+    for method in ["createElement", "textContent", "replaceChildren"]:
+        if method not in modal_content:
+            errors.append(f"SearchModal.astro 动态渲染必须使用安全 DOM API: 缺少 {method}")
+
+    # Zero native colored emoji
+    emojis = EMOJI_PATTERN.findall(modal_content)
+    if emojis:
+        errors.append(f"SearchModal.astro 存在违规 emoji 字符: {emojis}，必须保持纯净学术编辑排版")
+
+    if not errors:
+        print("   ✅ SearchModal.astro 模态弹窗、快捷键、DOM 安全 API 与零 emoji 规范合规")
+    return errors
+
+def run_tests() -> list:
     all_errors = []
     all_errors.extend(test_components_exist())
     all_errors.extend(test_article_page_contract())
     all_errors.extend(test_reading_progress_contract())
     all_errors.extend(test_table_of_contents_contract())
     all_errors.extend(test_package_json_registration())
+    validate_search_modal_contract(all_errors)
+    return all_errors
+
+def main():
+    print("=" * 60)
+    print("🚀 开始执行 know-her 长文阅读体验升级与搜索模态契约检验")
+    print("=" * 60)
+
+    all_errors = run_tests()
 
     print("=" * 60)
     if all_errors:
-        print(f"❌ 长文阅读体验契约检验未通过，共发现 {len(all_errors)} 处违规：")
+        print(f"❌ 体验契约检验未通过，共发现 {len(all_errors)} 处违规：")
         for err in all_errors:
             print(f"   • {err}")
         sys.exit(1)
 
-    print("🎉 全部长文阅读体验契约通过！TOC 悬浮目录树与 ReadingProgress 表现合规！")
+    print("🎉 全部长文阅读体验与搜索模态契约通过！")
     print("=" * 60)
 
 if __name__ == "__main__":
