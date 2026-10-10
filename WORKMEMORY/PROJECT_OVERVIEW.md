@@ -93,12 +93,13 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 每日速测题库同步扩容 3 道知情题至 22 题闭环；
      - 上线第 4 大纯前端离线工具 `ArousalBrakesChecklist.astro`（性唤起“油门与刹车”自测盘点器，支持一键生成不伤人的伴侣沟通便签）。
      - 全站静态页面扩充至 32 个路由，测试门禁全部通过。
-  18. 实用工具箱扩展至 6 大离线工具与 3 大场景分区（方案 A 落地）：
-     - 建立 `src/data/contraceptionMethods.ts`（10 大现代避孕法）与 `src/data/clinicQuestions.ts`（4 大门诊主诉问诊逻辑与急腹症红旗预警）结构化数据集契约；
-     - 落地 `ClinicMemo.astro`（门诊就医沟通备忘录小抄生成器）：支持 SOAP 格式一句话主诉生成、LMP 智能天数推算、医生追问清单、一键复制与 `@media print` 纸质打印；
-     - 落地 `ContraceptionMatrix.astro`（全品类现代避孕知情选择与对比矩阵）：集成 6 维多标签即时筛选、珍珠指数典型/完美年失败率柱状对比、双选 PK 浮动条与侧边横向对比抽屉（零 innerHTML 严防 XSS）；
-     - 重构 `src/pages/tools/index.astro` 为 3 大临床与生活场景分区（场景一：突发意外与黄金救援窗口、场景二：日常生理与身体自主管理、场景三：知情决策与门诊就医沟通）及 `[01]`~`[06]` 微导航定位；
-     - 扩展 `scripts/test_tools.py` 自动化门禁，全站通过 `pnpm test` 全链路回归。
+  18. 实用工具箱扩展至 8 大离线工具与 3 大场景分区：
+     - 建立 `src/data/contraceptionMethods.ts`、`src/data/clinicQuestions.ts` 与 `src/data/labReportDecoder.ts` 结构化数据集契约；
+     - 落地 `ClinicMemo.astro`（门诊就诊小抄）与 `ContraceptionMatrix.astro`（避孕对比矩阵）；
+     - 落地 `ReportDecoder.astro`（妇科检查报告通俗解码台）：针对白带微生态、超声、TCT+HPV 及早孕血液指标提供人话诊断、三级处置建议与过度医疗防忽悠警示，联动 Canvas 纸墨长图导出；
+     - 落地原生 PWA 规范与 Service Worker 离线急救缓存（`manifest.webmanifest` + `sw.js`）；
+     - 落地全局防窥一键伪装避险组件 `PanicExit.astro`（双击 Esc 或双指触碰瞬间切换极简待办备忘录并脱敏 URL）；
+     - 自动化门禁脚本扩充至 8 套，全站 36 个静态页面 `pnpm test` 全绿通过。
   19. 性生理力学与伴侣探索知情清单落地（方案 C 落地）：
      - 突破单一插入迷思与网络低俗姿势误导，扩容 3 篇性生理力学深度长文（女上位掌控度与深部痛防护、侧卧匙羹力学与低耗能、后入位曲度与子宫后位避坑）；
      - 词典库同步扩容至 28 个医学词条（新增子宫后位、深部性交痛、解剖进入角度），每日速测题库扩充至 25 题 100% 覆盖；

@@ -279,5 +279,17 @@ Caps: filesystem-read, filesystem-write, shell-exec, browser-devtools(mcp)
 6. 额外验证：Node 24 原生 TS 运行时 + 最小 Canvas 桩对 memoImageExporter 做了 9 项运行时断言冒烟（1800x1790 画布、PNG blob、下载文件名非法字符净化、折行/墨框/墨线绘制），全通过后临时文件已清理；构建产物 grep 确认四大任务新钩子全部真实渲染。
 台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean，共 6 个原子提交。
 
+### 2026-10-10T15:35:00+08:00 | claude-sonnet-4-6__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地《妇科检查报告通俗解码台与 PWA 离线防窥急救包》（docs/plans/2026-10-10-lab-decoder-and-offline-pwa.md）全部 5 个原子任务。
+交付产物：
+1. `src/data/labReportDecoder.ts`：4 大分类 15 项指标结构化数据集，严格遵循 FIGO/ACOG 标准，设立三级处置标尺与过度医疗避坑提示；
+2. `src/components/tools/ReportDecoder.astro`：挂载为工具箱第 8 大实用工具，支持通俗人话诊断速解、就诊追问清单与 Canvas 纸墨便签长图导出；
+3. `public/manifest.webmanifest` & `public/sw.js`：原生 PWA 规范基建与离线急救缓存系统（Cache-First 静态资产 + Network-First 离线降级）；
+4. `src/components/PanicExit.astro`：全局防窥一键伪装避险组件（双击 Esc 或双指触碰瞬时重绘为工作待办备忘录并清理 URL）；
+5. 全量回归测试：`pnpm test`（含 8 套自动化测试脚本、Astro/TS 检查、文章元数据校验与 36 页静态打包）100% 全绿通过。
+台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean。
+
+
 
 

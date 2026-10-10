@@ -1,61 +1,61 @@
 {
   "version": "1.0.0",
-  "plan_file": "docs/plans/2026-09-26-phase2-experience-and-distribution.md",
-  "created_at": "2026-09-26T22:27:15.186490",
-  "last_updated": "2026-09-26T22:49:24",
+  "plan_file": "docs/plans/2026-10-10-lab-decoder-and-offline-pwa.md",
+  "created_at": "2026-10-10T14:41:28.612699",
+  "last_updated": "2026-10-10T15:34:32.003206",
   "total_tasks": 5,
   "completed_count": 5,
   "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
-      "title": "决策树与工具箱的 URL 参数状态透传与自动聚焦定位 (Cross-tool State Hand-off) [Role: TDD Builder]",
+      "title": "妇科检查报告通俗解码数据集与测试契约 (Data Layer & TDD Contract) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "1cb5ba2",
+      "commit_hash": "97afa67",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-09-26T22:27:23.312715",
-      "completed_at": "2026-09-26T22:48:47"
+      "started_at": "2026-10-10T14:42:01.237010",
+      "completed_at": "2026-10-10T14:53:04.378247"
     },
     {
       "id": "Task-2",
-      "title": "72h 紧急避孕本土药品指南校准与 2h 服药吸收观察计时器 (Local EC & Vomit Observation Timer) [Role: TDD Builder]",
+      "title": "妇科检查报告通俗解码台交互组件开发 (ReportDecoder.astro) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "b33ff5a",
+      "commit_hash": "579c2af",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-09-26T22:48:47"
+      "started_at": "2026-10-10T14:53:08.567028",
+      "completed_at": "2026-10-10T15:13:37.041398"
     },
     {
       "id": "Task-3",
-      "title": "纯前端零依赖 Canvas 纸墨质感便签长图导出器 (Editorial Canvas Memo Exporter) [Role: TDD Builder]",
+      "title": "PWA 规范基建与轻量 Service Worker 离线急救缓存系统 [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "a64aeb9",
+      "commit_hash": "d43c27d",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-09-26T22:48:47"
+      "started_at": "2026-10-10T15:13:42.843504",
+      "completed_at": "2026-10-10T15:24:36.707029"
     },
     {
       "id": "Task-4",
-      "title": "首页突发场景意图搜索胶囊与长文医学名词 In-situ Tooltip 悬浮预览 (Search Intent Pills & Glossary Popover) [Role: TDD Builder]",
+      "title": "全局防窥一键伪装避险组件开发 (PanicExit.astro) [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "7e9399e",
+      "commit_hash": "747ea52",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-09-26T22:48:47"
+      "started_at": "2026-10-10T15:24:40.194012",
+      "completed_at": "2026-10-10T15:33:34.285718"
     },
     {
       "id": "Task-5",
-      "title": "实用工具箱与全站全流水线回归核验 (Full Regression & Gate Verification) [Role: Integration Builder]",
+      "title": "全站全流水线回归核验与文档更新 (Full Regression & Milestone Close) [Role: Integration Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "272e3db",
+      "commit_hash": "747ea52",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-09-26T22:49:24"
+      "started_at": "2026-10-10T15:33:36.631051",
+      "completed_at": "2026-10-10T15:34:32.003170"
     }
   ]
 }
