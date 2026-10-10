@@ -1,0 +1,1018 @@
+---
+/**
+ * IntimacyBlindMatch.astro — 伴侣双人偏好双盲知情核对器
+ * 基于知情同意原则 (FRIES) 与性生理心理学设计
+ * 纯客户端离线计算，URL Hash 本地加密编码，零数据外发与网络请求
+ * 严格学术纸墨排版规范：零 innerHTML、零原生彩色 Emoji
+ */
+import {
+  INTIMACY_PREFERENCES,
+  INTIMACY_CATEGORIES,
+  type IntimacyItem,
+  type IntimacyCategoryKey,
+} from '../../data/intimacyPreferences';
+
+interface Props {
+  className?: string;
+}
+
+const { className = '' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+// 站内科普文章标题映射表
+const articleTitleMap: Record<string, string> = {
+  'pleasure-arousal-time-physiology': '女性性唤起生理时间窗口科普',
+  'female-pleasure-clitoris': '阴蒂解剖学与快感神经',
+  'pleasure-responsive-desire-dual-control': '双重控制模型与响应性欲望',
+  'pleasure-lubricant-guide': '润滑剂选择与使用指南',
+  'pleasure-woman-on-top-mechanics': '女上位掌控度与深部痛防护力学',
+  'pleasure-cat-technique-alignment': 'CAT性高潮对齐技术科学解析',
+  'pleasure-side-lying-spooning': '侧卧匙羹与剪刀式力学指南',
+  'pleasure-rear-entry-angles': '后入位进入轴线与子宫后位避坑',
+  'intimacy-fries-consent': 'FRIES知情同意原则与性边界沟通',
+  'intimacy-sexual-boundary-saying-no': '性边界建立与去内疚感拒绝技巧',
+  'contraception-condoms': '安全套正确使用与避孕',
+  'pleasure-dyspareunia-pain': '性交疼痛与痉挛排查',
+  'intimacy-sti-prevention': '性传播感染防护与安全检测',
+  'intimacy-healthy-boundaries': '亲密关系健康边界',
+  'pleasure-female-masturbation': '女性身体自慰与探索',
+};
+
+// 预组织分类与题目列表
+const categoriesList = Object.values(INTIMACY_CATEGORIES);
+const itemsByCategory: Record<IntimacyCategoryKey, IntimacyItem[]> = {
+  foreplay: [],
+  positions: [],
+  sensory: [],
+  boundaries: [],
+  aftercare: [],
+};
+
+for (const item of INTIMACY_PREFERENCES) {
+  itemsByCategory[item.category].push(item);
+}
+---
+
+<div
+  id="blind-match-container"
+  data-base-url={base}
+  class:list={[
+    "rounded-3xl border border-[#15140F]/15 bg-[#FAF8F5] p-6 sm:p-8 shadow-[3px_3px_0_rgba(21,20,15,0.08)] space-y-8",
+    className
+  ]}
+>
+  {/* 顶部标题区 */}
+  <header class="border-b border-[#15140F]/10 pb-5 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#15140F] text-white shadow-2xs">
+          <svg class="w-5 h-5 text-rose-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+        </span>
+        <div>
+          <div class="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-sm mb-1">
+            [ 09 // 伴侣双盲知情核对器 ]
+          </div>
+          <h2 class="text-lg sm:text-xl font-extrabold text-[#15140F] tracking-tight">
+            [ 伴侣双人偏好双盲知情核对器 ]
+          </h2>
+          <p class="text-xs text-[#5A5448] max-w-3xl mt-1 leading-relaxed">
+            基于知情同意原则 (FRIES) 与性生理心理学。双方独立勾选偏好，加密生成专属哈希链接；仅展示双方共同愿意探索的交集，拒绝项绝对隐藏，零尴尬、零压力。
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+        <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-800">
+          [ 纯前端哈希加密 ]
+        </span>
+        <span class="rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 font-medium text-[#5A5448]">
+          [ 绝对单向隐匿 ]
+        </span>
+        <span class="rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 font-medium text-rose-700">
+          [ FRIES 知情同意 ]
+        </span>
+      </div>
+    </div>
+  </header>
+
+  {/* 状态引导横幅 */}
+  <div
+    id="blind-match-status-banner"
+    class="rounded-2xl border border-stone-200 bg-white p-4 text-xs sm:text-sm text-[#2A2620] shadow-2xs space-y-1.5 transition-all"
+  >
+    <div class="flex items-center justify-between">
+      <span id="blind-match-mode-badge" class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-sm">
+        [ 发起方模式 (Party A) ]
+      </span>
+      <span id="blind-match-progress-text" class="font-mono text-xs text-[#5A5448]">
+        已选择: 0 / 20 项
+      </span>
+    </div>
+    <p id="blind-match-status-desc" class="text-xs text-[#5A5448] leading-relaxed">
+      请独立完成以下 20 项意向评估。选择完成后点击底部“生成双盲核对加密链接”，将加密链接发送给伴侣。伴侣独立选择后，双方即可揭晓共同意愿交集，对方绝不会知晓你的拒绝项。
+    </p>
+  </div>
+
+  {/* 题库主体表单区 */}
+  <div id="blind-match-form-section" class="space-y-8">
+    {categoriesList.map((category) => {
+      const items = itemsByCategory[category.id];
+      return (
+        <section class="space-y-4">
+          <div class="flex items-center justify-between border-b border-[#15140F]/10 pb-2">
+            <div>
+              <div class="font-mono text-xs font-bold text-rose-700">
+                {category.stamp}
+              </div>
+              <h3 class="text-sm sm:text-base font-bold text-[#15140F]">
+                {category.label}
+              </h3>
+            </div>
+            <span class="text-[11px] text-[#5A5448] hidden sm:inline">
+              {category.description}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {items.map((item) => (
+              <article
+                class="blind-match-item-card rounded-2xl border border-stone-200/90 bg-white p-4 sm:p-5 shadow-2xs space-y-3 transition-all hover:border-stone-300"
+                data-item-id={item.id}
+                data-category={item.category}
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <h4 class="font-bold text-sm text-[#15140F] leading-snug">
+                    {item.title}
+                  </h4>
+                  <span class="shrink-0 text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-sm bg-stone-100 text-[#5A5448] border border-stone-200">
+                    {item.id}
+                  </span>
+                </div>
+
+                <p class="text-xs text-[#5A5448] leading-relaxed">
+                  {item.description}
+                </p>
+
+                <div class="rounded-xl bg-stone-50 border border-stone-200/80 p-2.5 text-[11px] text-[#2A2620] space-y-1">
+                  <div class="font-bold text-[10px] font-mono text-stone-600 flex items-center gap-1">
+                    <span>[ 循证提示与沟通指引 ]</span>
+                  </div>
+                  <p class="leading-relaxed text-[#5A5448]">
+                    {item.guidance}
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-between pt-1 text-xs">
+                  <a
+                    href={`${base}articles/${item.related_article}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700 hover:underline transition-colors"
+                  >
+                    <span>[ 循证文章: {articleTitleMap[item.related_article] || item.related_article} ]</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+                    </svg>
+                  </a>
+                </div>
+
+                {/* 三级意向单选胶囊 */}
+                <div class="pt-2 border-t border-stone-100">
+                  <div class="text-[11px] text-stone-500 mb-1.5 font-medium">
+                    你的真实意向：
+                  </div>
+                  <div class="grid grid-cols-3 gap-1.5" role="group" aria-label={`对条目 ${item.title} 的意向选择`}>
+                    <button
+                      type="button"
+                      class="blind-match-pill-btn rounded-xl border border-stone-200 bg-stone-50 px-2 py-1.5 text-center text-xs font-medium text-[#5A5448] hover:border-rose-300 hover:text-rose-700 transition-all select-none"
+                      data-item-id={item.id}
+                      data-level="desire"
+                    >
+                      [ 渴望尝试 ]
+                    </button>
+                    <button
+                      type="button"
+                      class="blind-match-pill-btn rounded-xl border border-stone-200 bg-stone-50 px-2 py-1.5 text-center text-xs font-medium text-[#5A5448] hover:border-emerald-300 hover:text-emerald-700 transition-all select-none"
+                      data-item-id={item.id}
+                      data-level="willing"
+                    >
+                      [ 可以接受 ]
+                    </button>
+                    <button
+                      type="button"
+                      class="blind-match-pill-btn rounded-xl border border-stone-200 bg-stone-50 px-2 py-1.5 text-center text-xs font-medium text-[#5A5448] hover:border-stone-400 hover:text-[#15140F] transition-all select-none"
+                      data-item-id={item.id}
+                      data-level="reject"
+                    >
+                      [ 坚决拒绝 ]
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      );
+    })}
+
+    {/* 底部操作行动条 */}
+    <div class="pt-4 border-t border-[#15140F]/10 space-y-4">
+      {/* 发起方模式操作：生成加密链接 */}
+      <div id="blind-match-party-a-actions" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="font-bold text-sm text-[#15140F]">
+              完成选择，生成伴侣核对双盲专属加密链接
+            </div>
+            <p class="text-xs text-[#5A5448] mt-0.5">
+              数据将以本地散列编码在 URL Hash 中，全程零网络请求、零云端留存。
+            </p>
+          </div>
+          <button
+            type="button"
+            id="blind-match-generate-btn"
+            class="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#15140F] px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-2xs hover:bg-[#2A2620] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </svg>
+            <span>[ 生成双盲核对加密链接 ]</span>
+          </button>
+        </div>
+
+        {/* 生成后的分享链接展示框 */}
+        <div
+          id="blind-match-share-box"
+          class="hidden rounded-2xl border border-rose-200 bg-rose-50/50 p-4 space-y-3 transition-all"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-rose-900 font-mono">
+              [ 专属加密链接已就绪 · 发送给伴侣 ]
+            </span>
+            <span class="text-[11px] text-rose-700">
+              伴侣打开此链接后独立勾选
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              id="blind-match-url-input"
+              readonly
+              class="flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2 font-mono text-xs text-[#2A2620] select-all outline-hidden focus:border-rose-400"
+              placeholder="加密链接生成中…"
+            />
+            <button
+              type="button"
+              id="blind-match-copy-url-btn"
+              class="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer shadow-2xs"
+            >
+              [ 复制加密链接 ]
+            </button>
+          </div>
+
+          <p class="text-[11px] text-[#5A5448] leading-relaxed">
+            请将上方链接通过微信或即时通讯工具发送给伴侣。伴侣在自己的设备上独立作答后，点击“解密并揭晓交集”，即可揭晓双方共同意向，拒绝项将被完全隐匿。
+          </p>
+        </div>
+      </div>
+
+      {/* 伴侣核对模式操作：解密揭晓 */}
+      <div id="blind-match-party-b-actions" class="hidden space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+          <div>
+            <div class="font-bold text-sm text-emerald-950">
+              伴侣意向已载入，准备解密双方交集
+            </div>
+            <p class="text-xs text-[#5A5448] mt-0.5">
+              点击下方按钮立即计算双方意向交集。若任何一方选择拒绝，该项将归为“暂无共识”且不显示拒绝者身份。
+            </p>
+          </div>
+          <button
+            type="button"
+            id="blind-match-reveal-btn"
+            class="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-800 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-2xs hover:bg-emerald-900 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+            <span>[ 解密并揭晓交集 ]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* 揭晓交集与结果展示区 (默认隐藏) */}
+  <div
+    id="blind-match-reveal-view"
+    class="hidden space-y-6 pt-4 border-t border-[#15140F]/10"
+  >
+    {/* 交集概览统计 */}
+    <div class="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 shadow-2xs space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
+        <div>
+          <div class="text-xs font-mono font-bold text-rose-700">
+            [ 双方意向双盲核对报告 ]
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-[#15140F]">
+            [ 双方探索意愿交集揭晓 ]
+          </h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="blind-match-export-png-btn"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-[#2A2620] hover:border-rose-400 hover:text-rose-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 16.5V16.5M7.5 12 12 16.5m0 0L16.5 12M12 16.5V3" />
+            </svg>
+            <span id="blind-match-export-btn-text">[ 导出纸墨交集便签 (PNG) ]</span>
+          </button>
+          <button
+            type="button"
+            id="blind-match-reset-btn"
+            class="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-medium text-[#5A5448] hover:bg-stone-100 transition-all cursor-pointer"
+          >
+            <span>[ 重新发起 / 清空重置 ]</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 四格数据指标 */}
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="rounded-xl border border-rose-100 bg-rose-50/50 p-3 text-center">
+          <div class="text-[11px] font-medium text-rose-800">达成共识项目</div>
+          <div id="stat-total-matches" class="text-xl sm:text-2xl font-extrabold font-mono text-rose-700 mt-1">0</div>
+          <div class="text-[10px] text-stone-500 mt-0.5">共同愿尝试总数</div>
+        </div>
+        <div class="rounded-xl border border-rose-200 bg-rose-100/40 p-3 text-center">
+          <div class="text-[11px] font-medium text-rose-900">双向奔赴 / 强烈渴望</div>
+          <div id="stat-both-desire" class="text-xl sm:text-2xl font-extrabold font-mono text-rose-800 mt-1">0</div>
+          <div class="text-[10px] text-stone-500 mt-0.5">双方均渴望尝试</div>
+        </div>
+        <div class="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 text-center">
+          <div class="text-[11px] font-medium text-emerald-800">知情共识 / 愿意尝试</div>
+          <div id="stat-willing-matches" class="text-xl sm:text-2xl font-extrabold font-mono text-emerald-700 mt-1">0</div>
+          <div class="text-[10px] text-stone-500 mt-0.5">有一方或双方愿尝试</div>
+        </div>
+        <div class="rounded-xl border border-stone-200 bg-stone-50 p-3 text-center">
+          <div class="text-[11px] font-medium text-[#5A5448]">暂无共识 / 保护隐匿</div>
+          <div id="stat-unmatched" class="text-xl sm:text-2xl font-extrabold font-mono text-[#2A2620] mt-1">0</div>
+          <div class="text-[10px] text-stone-500 mt-0.5">单方或双方拒绝</div>
+        </div>
+      </div>
+
+      {/* FRIES 知情同意提示框 */}
+      <div class="rounded-xl border border-stone-200 bg-stone-50 p-3.5 text-xs text-[#2A2620] leading-relaxed">
+        <div class="font-bold text-[#15140F] flex items-center gap-1.5 mb-1">
+          <span class="font-mono text-rose-600">[ FRIES 知情同意原则 ]</span>
+          <span>知情同意是持续且随时可撤回的</span>
+        </div>
+        <p class="text-[#5A5448]">
+          以上交集仅代表双方在当下的理性意愿。亲密过程中，任何一方均拥有无条件暂停与退出的权利。请在探索过程中始终保持温和口头沟通与情绪确认。
+        </p>
+      </div>
+    </div>
+
+    {/* 达成共识的项目卡片动态渲染容器 */}
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h4 class="font-bold text-sm sm:text-base text-[#15140F]">
+          [ 双方积极共识条目列表 ]
+        </h4>
+        <span class="text-xs text-[#5A5448]">仅展示双方共同愿意探索的项目</span>
+      </div>
+      <div id="blind-match-reveal-list" class="space-y-3">
+        {/* JS 安全 DOM 渲染插槽 */}
+      </div>
+    </div>
+
+    {/* 暂无共识的项目折叠区域 (隐匿拒绝者) */}
+    <details class="rounded-2xl border border-stone-200 bg-white p-4 text-xs text-[#5A5448] group">
+      <summary class="font-bold text-[#15140F] cursor-pointer select-none flex items-center justify-between">
+        <span id="blind-match-non-consensus-title">[ 查看暂无共识项目 (共 0 项) ]</span>
+        <span class="text-[11px] font-normal text-stone-500 group-open:rotate-180 transition-transform">
+          ▼
+        </span>
+      </summary>
+      <div class="mt-3 pt-3 border-t border-stone-100 space-y-2">
+        <p class="text-[11px] leading-relaxed text-[#5A5448]">
+          以下项目未达成共同意向（存在单方或双方拒绝）。依据双盲知情核对防窥原则，系统严格隐藏任何单方的选择细节，以保护双方坦诚表达个人界限的心理安全感。
+        </p>
+        <ul id="blind-match-non-consensus-list" class="space-y-1.5 pl-3 list-disc text-stone-600">
+          {/* JS 安全 DOM 渲染插槽 */}
+        </ul>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+  import { exportMemoAsImage } from '../../lib/ui/memoImageExporter';
+  import {
+    INTIMACY_PREFERENCES,
+    INTIMACY_CATEGORIES,
+    type PreferenceLevel,
+    type IntimacyItem,
+  } from '../../data/intimacyPreferences';
+
+  interface MatchResultItem {
+    item: IntimacyItem;
+    partyA: PreferenceLevel;
+    partyB: PreferenceLevel;
+    matchType: 'both_desire' | 'consensual_willing' | 'no_consensus';
+  }
+
+  // 状态机全局变量
+  let myChoices: Record<string, PreferenceLevel> = {};
+  let partyAChoices: Record<string, PreferenceLevel> | null = null;
+  let currentResults: MatchResultItem[] = [];
+
+  // 跨浏览器安全 Base64 编码解码（处理 UTF-8 字符）
+  function encodePayload(data: unknown): string {
+    const json = JSON.stringify(data);
+    const encoded = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+      String.fromCharCode(parseInt(p1, 16))
+    );
+    return btoa(encoded);
+  }
+
+  function decodePayload(str: string): Record<string, PreferenceLevel> | null {
+    try {
+      const binary = atob(str);
+      const json = decodeURIComponent(
+        Array.from(binary)
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const parsed = JSON.parse(json);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed as Record<string, PreferenceLevel>;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 初始化所有题目默认状态为未选或 reject
+  function initChoices(): void {
+    myChoices = {};
+    for (const item of INTIMACY_PREFERENCES) {
+      myChoices[item.id] = 'reject';
+    }
+    updatePillStyles();
+    updateProgressText();
+  }
+
+  // 更新进度条文字
+  function updateProgressText(): void {
+    const progressEl = document.getElementById('blind-match-progress-text');
+    if (!progressEl) return;
+    const answeredCount = Object.keys(myChoices).length;
+    progressEl.textContent = `已选择: ${answeredCount} / ${INTIMACY_PREFERENCES.length} 项`;
+  }
+
+  // 更新胶囊按钮视觉高亮样式
+  function updatePillStyles(): void {
+    const pills = document.querySelectorAll<HTMLButtonElement>('.blind-match-pill-btn');
+    pills.forEach((pill) => {
+      const itemId = pill.getAttribute('data-item-id');
+      const level = pill.getAttribute('data-level') as PreferenceLevel;
+      if (!itemId || !level) return;
+
+      const isSelected = myChoices[itemId] === level;
+
+      // 清除旧高亮
+      pill.classList.remove(
+        'bg-rose-600',
+        'text-white',
+        'border-rose-600',
+        'bg-emerald-700',
+        'border-emerald-700',
+        'bg-stone-800',
+        'border-stone-800',
+        'shadow-xs'
+      );
+
+      if (isSelected) {
+        pill.classList.add('shadow-xs');
+        if (level === 'desire') {
+          pill.classList.add('bg-rose-600', 'text-white', 'border-rose-600');
+        } else if (level === 'willing') {
+          pill.classList.add('bg-emerald-700', 'text-white', 'border-emerald-700');
+        } else {
+          pill.classList.add('bg-stone-800', 'text-white', 'border-stone-800');
+        }
+      } else {
+        // 未选状态恢复默认浅色底
+        pill.classList.remove('text-white');
+        if (!pill.classList.contains('bg-stone-50')) {
+          pill.classList.add('bg-stone-50', 'text-[#5A5448]');
+        }
+      }
+    });
+  }
+
+  // 绑定单个条目意向点击
+  function bindPillEvents(): void {
+    const pills = document.querySelectorAll<HTMLButtonElement>('.blind-match-pill-btn');
+    pills.forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const itemId = pill.getAttribute('data-item-id');
+        const level = pill.getAttribute('data-level') as PreferenceLevel;
+        if (!itemId || !level) return;
+
+        myChoices[itemId] = level;
+        updatePillStyles();
+        updateProgressText();
+      });
+    });
+  }
+
+  // 检查 URL Hash 是否包含 Party A 发起的加密荷载
+  function checkUrlHashPayload(): void {
+    const hash = window.location.hash || '';
+    const matchPrefix = '#match=';
+    const matchIndex = hash.indexOf(matchPrefix);
+
+    if (matchIndex !== -1) {
+      const encodedStr = hash.slice(matchIndex + matchPrefix.length);
+      const decoded = decodePayload(encodedStr);
+      if (decoded) {
+        partyAChoices = decoded;
+        switchToPartyBMode();
+        return;
+      }
+    }
+
+    switchToPartyAMode();
+  }
+
+  // 切换为发起方模式 (Party A)
+  function switchToPartyAMode(): void {
+    const modeBadge = document.getElementById('blind-match-mode-badge');
+    const statusDesc = document.getElementById('blind-match-status-desc');
+    const partyAActions = document.getElementById('blind-match-party-a-actions');
+    const partyBActions = document.getElementById('blind-match-party-b-actions');
+    const formSection = document.getElementById('blind-match-form-section');
+    const revealView = document.getElementById('blind-match-reveal-view');
+
+    if (modeBadge) {
+      modeBadge.textContent = '[ 发起方模式 (Party A) ]';
+      modeBadge.className =
+        'inline-flex items-center gap-1.5 font-mono text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-sm';
+    }
+    if (statusDesc) {
+      statusDesc.textContent =
+        '请独立完成以下 20 项意向评估。选择完成后点击底部“生成双盲核对加密链接”，将加密链接发送给伴侣。伴侣独立选择后，双方即可揭晓共同意愿交集，对方绝不会知晓你的拒绝项。';
+    }
+    if (partyAActions) partyAActions.classList.remove('hidden');
+    if (partyBActions) partyBActions.classList.add('hidden');
+    if (formSection) formSection.classList.remove('hidden');
+    if (revealView) revealView.classList.add('hidden');
+  }
+
+  // 切换为伴侣核对模式 (Party B)
+  function switchToPartyBMode(): void {
+    const modeBadge = document.getElementById('blind-match-mode-badge');
+    const statusDesc = document.getElementById('blind-match-status-desc');
+    const partyAActions = document.getElementById('blind-match-party-a-actions');
+    const partyBActions = document.getElementById('blind-match-party-b-actions');
+    const formSection = document.getElementById('blind-match-form-section');
+    const revealView = document.getElementById('blind-match-reveal-view');
+
+    if (modeBadge) {
+      modeBadge.textContent = '[ 伴侣核对模式 (Party B) ]';
+      modeBadge.className =
+        'inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-sm';
+    }
+    if (statusDesc) {
+      statusDesc.textContent =
+        '伴侣已加密完成偏好选择，请独立选择你的真实意向（对方无法看到你的拒绝项，仅展示双方共同愿意尝试的交集）。选择完成后点击“解密并揭晓交集”。';
+    }
+    if (partyAActions) partyAActions.classList.add('hidden');
+    if (partyBActions) partyBActions.classList.remove('hidden');
+    if (formSection) formSection.classList.remove('hidden');
+    if (revealView) revealView.classList.add('hidden');
+  }
+
+  // 生成双盲加密链接事件
+  function bindGenerateLinkBtn(): void {
+    const genBtn = document.getElementById('blind-match-generate-btn');
+    const shareBox = document.getElementById('blind-match-share-box');
+    const urlInput = document.getElementById('blind-match-url-input') as HTMLInputElement | null;
+
+    if (!genBtn) return;
+    genBtn.addEventListener('click', () => {
+      const encoded = encodePayload(myChoices);
+      const url = new URL(window.location.href);
+      url.searchParams.set('tool', 'blind-match');
+      url.hash = `match=${encoded}`;
+
+      const shareUrl = url.toString();
+      if (urlInput) {
+        urlInput.value = shareUrl;
+      }
+      if (shareBox) {
+        shareBox.classList.remove('hidden');
+        shareBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // 同步更新当前浏览器的 hash（不刷新页面）
+      window.history.replaceState(null, '', shareUrl);
+    });
+  }
+
+  // 复制加密链接事件
+  function bindCopyUrlBtn(): void {
+    const copyBtn = document.getElementById('blind-match-copy-url-btn');
+    const urlInput = document.getElementById('blind-match-url-input') as HTMLInputElement | null;
+
+    if (!copyBtn || !urlInput) return;
+    copyBtn.addEventListener('click', async () => {
+      const textToCopy = urlInput.value;
+      if (!textToCopy) return;
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(textToCopy);
+        } else {
+          urlInput.select();
+          document.execCommand('copy');
+        }
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = '[ 链接已复制到剪贴板 ]';
+        copyBtn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+        copyBtn.classList.add('bg-emerald-700');
+
+        setTimeout(() => {
+          copyBtn.textContent = originalText;
+          copyBtn.classList.remove('bg-emerald-700');
+          copyBtn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+        }, 2200);
+      } catch {
+        urlInput.select();
+      }
+    });
+  }
+
+  // 解密并揭晓交集事件
+  function bindRevealBtn(): void {
+    const revealBtn = document.getElementById('blind-match-reveal-btn');
+    if (!revealBtn) return;
+
+    revealBtn.addEventListener('click', () => {
+      if (!partyAChoices) {
+        alert('未检测到伴侣的发起选择数据，请检查链接完整性。');
+        return;
+      }
+
+      computeAndRenderResults();
+    });
+  }
+
+  // 计算并渲染双方交集
+  function computeAndRenderResults(): void {
+    if (!partyAChoices) return;
+
+    currentResults = [];
+    let bothDesireCount = 0;
+    let consensualWillingCount = 0;
+    let noConsensusCount = 0;
+
+    for (const item of INTIMACY_PREFERENCES) {
+      const choiceA = partyAChoices[item.id] || 'reject';
+      const choiceB = myChoices[item.id] || 'reject';
+
+      let matchType: MatchResultItem['matchType'] = 'no_consensus';
+
+      // 核心防卫交集准则：只要有任意一方选择 reject，即为暂无共识
+      if (choiceA !== 'reject' && choiceB !== 'reject') {
+        if (choiceA === 'desire' && choiceB === 'desire') {
+          matchType = 'both_desire';
+          bothDesireCount++;
+        } else {
+          matchType = 'consensual_willing';
+          consensualWillingCount++;
+        }
+      } else {
+        matchType = 'no_consensus';
+        noConsensusCount++;
+      }
+
+      currentResults.push({
+        item,
+        partyA: choiceA,
+        partyB: choiceB,
+        matchType,
+      });
+    }
+
+    const totalMatches = bothDesireCount + consensualWillingCount;
+
+    // 填充统计卡片数字
+    const statTotal = document.getElementById('stat-total-matches');
+    const statBoth = document.getElementById('stat-both-desire');
+    const statWilling = document.getElementById('stat-willing-matches');
+    const statUnmatched = document.getElementById('stat-unmatched');
+
+    if (statTotal) statTotal.textContent = String(totalMatches);
+    if (statBoth) statBoth.textContent = String(bothDesireCount);
+    if (statWilling) statWilling.textContent = String(consensualWillingCount);
+    if (statUnmatched) statUnmatched.textContent = String(noConsensusCount);
+
+    // 渲染共识卡片列表 (严格零 innerHTML)
+    renderMatchedCards(currentResults.filter((r) => r.matchType !== 'no_consensus'));
+
+    // 渲染无共识条目列表 (严格零 innerHTML，隐匿拒绝者)
+    renderNonConsensusList(currentResults.filter((r) => r.matchType === 'no_consensus'));
+
+    // 切换视图显示
+    const formSection = document.getElementById('blind-match-form-section');
+    const revealView = document.getElementById('blind-match-reveal-view');
+
+    if (formSection) formSection.classList.add('hidden');
+    if (revealView) {
+      revealView.classList.remove('hidden');
+      revealView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // 严格使用 DOM 安全 API 渲染共识项目卡片
+  function renderMatchedCards(matched: MatchResultItem[]): void {
+    const container = document.getElementById('blind-match-reveal-list');
+    if (!container) return;
+
+    const rootEl = document.getElementById('blind-match-container');
+    const baseUrl = rootEl?.getAttribute('data-base-url') || '/';
+
+    // 清空旧节点
+    container.replaceChildren();
+
+    if (matched.length === 0) {
+      const emptyCard = document.createElement('div');
+      emptyCard.className =
+        'rounded-2xl border border-stone-200 bg-white p-6 text-center text-xs text-[#5A5448] space-y-2';
+      const emptyTitle = document.createElement('div');
+      emptyTitle.className = 'font-bold text-[#15140F] text-sm';
+      emptyTitle.textContent = '[ 暂无交集共识条目 ]';
+      const emptyDesc = document.createElement('p');
+      emptyDesc.textContent =
+        '双方在此次评估中暂未形成共同积极意向。这完全正常：尊重彼此当前的生理舒适度与界限是健康关系的最高优先项。建议在更轻松的氛围下做日常情感交流。';
+      emptyCard.appendChild(emptyTitle);
+      emptyCard.appendChild(emptyDesc);
+      container.appendChild(emptyCard);
+      return;
+    }
+
+    matched.forEach(({ item, matchType }) => {
+      const card = document.createElement('article');
+      card.className =
+        'rounded-2xl border border-stone-200/90 bg-white p-4 sm:p-5 shadow-2xs space-y-3';
+
+      // 顶部印章与标题行
+      const topRow = document.createElement('div');
+      topRow.className = 'flex flex-wrap items-center justify-between gap-2';
+
+      const leftBadgeGroup = document.createElement('div');
+      leftBadgeGroup.className = 'flex items-center gap-2';
+
+      // 分类印章
+      const catMeta = INTIMACY_CATEGORIES[item.category];
+      const catBadge = document.createElement('span');
+      catBadge.className =
+        'text-[10px] font-mono font-bold px-2 py-0.5 rounded-sm bg-stone-100 text-[#5A5448] border border-stone-200';
+      catBadge.textContent = catMeta ? catMeta.stamp : `[ ${item.category} ]`;
+      leftBadgeGroup.appendChild(catBadge);
+
+      // 共识类型印章
+      const matchBadge = document.createElement('span');
+      if (matchType === 'both_desire') {
+        matchBadge.className =
+          'text-[11px] font-mono font-bold px-2 py-0.5 rounded-sm bg-rose-50 text-rose-800 border border-rose-300';
+        matchBadge.textContent = '[ 双向奔赴 / 强烈渴望 ]';
+      } else {
+        matchBadge.className =
+          'text-[11px] font-mono font-bold px-2 py-0.5 rounded-sm bg-emerald-50 text-emerald-800 border border-emerald-300';
+        matchBadge.textContent = '[ 知情共识 / 愿意尝试 ]';
+      }
+      leftBadgeGroup.appendChild(matchBadge);
+
+      topRow.appendChild(leftBadgeGroup);
+
+      // 标题
+      const title = document.createElement('h5');
+      title.className = 'font-bold text-sm sm:text-base text-[#15140F]';
+      title.textContent = item.title;
+
+      // 描述
+      const desc = document.createElement('p');
+      desc.className = 'text-xs text-[#5A5448] leading-relaxed';
+      desc.textContent = item.description;
+
+      // 循证提示框
+      const guidanceBox = document.createElement('div');
+      guidanceBox.className =
+        'rounded-xl bg-stone-50 border border-stone-200/80 p-3 text-[11px] text-[#2A2620] space-y-1';
+      const guidanceHeader = document.createElement('div');
+      guidanceHeader.className = 'font-bold text-[10px] font-mono text-stone-600';
+      guidanceHeader.textContent = '[ 循证提示与沟通指引 ]';
+      const guidanceText = document.createElement('p');
+      guidanceText.className = 'leading-relaxed text-[#5A5448]';
+      guidanceText.textContent = item.guidance;
+      guidanceBox.appendChild(guidanceHeader);
+      guidanceBox.appendChild(guidanceText);
+
+      // 科普依据链接
+      const linkRow = document.createElement('div');
+      linkRow.className = 'pt-1 flex items-center justify-between text-xs';
+      const articleLink = document.createElement('a');
+      articleLink.href = `${baseUrl}articles/${item.related_article}`;
+      articleLink.target = '_blank';
+      articleLink.rel = 'noopener noreferrer';
+      articleLink.className =
+        'inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700 hover:underline';
+      articleLink.textContent = `[ 查阅循证文章: ${item.related_article} ]`;
+      linkRow.appendChild(articleLink);
+
+      card.appendChild(topRow);
+      card.appendChild(title);
+      card.appendChild(desc);
+      card.appendChild(guidanceBox);
+      card.appendChild(linkRow);
+
+      container.appendChild(card);
+    });
+  }
+
+  // 严格使用 DOM 安全 API 渲染无共识条目列表（严格隐匿单方拒绝项）
+  function renderNonConsensusList(unmatched: MatchResultItem[]): void {
+    const listEl = document.getElementById('blind-match-non-consensus-list');
+    const titleEl = document.getElementById('blind-match-non-consensus-title');
+    if (!listEl) return;
+
+    if (titleEl) {
+      titleEl.textContent = `[ 查看暂无共识项目 (共 ${unmatched.length} 项) ]`;
+    }
+
+    listEl.replaceChildren();
+
+    if (unmatched.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = '双方全部项目均达成共识，无未达成项目。';
+      listEl.appendChild(li);
+      return;
+    }
+
+    unmatched.forEach(({ item }) => {
+      const li = document.createElement('li');
+      li.className = 'text-xs text-[#5A5448] leading-relaxed';
+
+      const strong = document.createElement('strong');
+      strong.className = 'text-[#2A2620]';
+      strong.textContent = item.title;
+
+      const span = document.createElement('span');
+      span.textContent = ' —— 双方暂无共同意向，暂不尝试';
+
+      li.appendChild(strong);
+      li.appendChild(span);
+      listEl.appendChild(li);
+    });
+  }
+
+  // 导出纸墨交集便签长图 (PNG)
+  function bindExportPngBtn(): void {
+    const exportBtn = document.getElementById('blind-match-export-png-btn');
+    const exportBtnText = document.getElementById('blind-match-export-btn-text');
+    if (!exportBtn) return;
+
+    exportBtn.addEventListener('click', async () => {
+      if (currentResults.length === 0) {
+        alert('当前暂无核对结果可导出。');
+        return;
+      }
+
+      const matched = currentResults.filter((r) => r.matchType !== 'no_consensus');
+      const unmatched = currentResults.filter((r) => r.matchType === 'no_consensus');
+
+      const originalText = exportBtnText?.textContent || '[ 导出纸墨交集便签 (PNG) ]';
+      if (exportBtnText) exportBtnText.textContent = '[ 正在排版长图… ]';
+      exportBtn.setAttribute('disabled', 'disabled');
+
+      try {
+        const sections: Array<{ heading: string; lines: string[] }> = [];
+
+        // 1. 概览概要
+        sections.push({
+          heading: '双方意向双盲核对概要',
+          lines: [
+            `共识探索项目总数：${matched.length} / ${INTIMACY_PREFERENCES.length} 项`,
+            `双向奔赴 / 强烈渴望：${matched.filter((m) => m.matchType === 'both_desire').length} 项`,
+            `知情共识 / 愿意尝试：${matched.filter((m) => m.matchType === 'consensual_willing').length} 项`,
+            `暂无共识 / 保护隐匿：${unmatched.length} 项（单方意向已严格单向保密）`,
+            '核对准则：基于知情同意原则 (FRIES)，同意必须是自愿的、可随时撤回的、充分知情的。',
+          ],
+        });
+
+        // 2. 达成共识的项目条目
+        if (matched.length > 0) {
+          const matchedLines: string[] = [];
+          matched.forEach(({ item, matchType }) => {
+            const tag = matchType === 'both_desire' ? '[强烈渴望]' : '[愿意尝试]';
+            matchedLines.push(
+              `${tag} ${item.title}：${item.description} (指引：${item.guidance})`
+            );
+          });
+          sections.push({
+            heading: '双方共同愿意探索的积极交集',
+            lines: matchedLines,
+          });
+        }
+
+        // 3. 沟通与安全提示
+        sections.push({
+          heading: '亲密沟通与安全防护指引',
+          lines: [
+            '知情同意随时可撤回：即使列入共识项目，在任何实际发生时刻均可随时温柔喊停。',
+            '全程安全防护：严格佩戴正规安全套，足量使用专业润滑剂，关注彼此身体感受。',
+            '疼痛零容忍：出现任何不适感立即暂停沟通，不强忍、不迎合。',
+          ],
+        });
+
+        await exportMemoAsImage({
+          title: '伴侣双人偏好双盲知情探索清单',
+          badge: '[ know-her · 双盲知情交集便签 ]',
+          subtitle: '双方独立双盲评估 · 仅展示共同意愿交集 · 严格隐匿单方拒绝项',
+          sections,
+          disclaimer:
+            '本清单由 know-her 在浏览器本地离线生成。知情同意是持续且随时可撤回的，实施前请再次进行温和口头确认。',
+          fileName: `know-her-intimacy-match-${new Date().toISOString().slice(0, 10)}`,
+        });
+      } catch (err) {
+        console.error('便签导出失败:', err);
+        alert('便签长图导出失败，请重试或在电脑端浏览器中操作。');
+      } finally {
+        if (exportBtnText) exportBtnText.textContent = originalText;
+        exportBtn.removeAttribute('disabled');
+      }
+    });
+  }
+
+  // 重置事件
+  function bindResetBtn(): void {
+    const resetBtn = document.getElementById('blind-match-reset-btn');
+    if (!resetBtn) return;
+
+    resetBtn.addEventListener('click', () => {
+      if (confirm('确认清空当前核对结果并重新发起吗？')) {
+        // 清理 URL hash
+        const url = new URL(window.location.href);
+        url.hash = '';
+        window.history.replaceState(null, '', url.toString());
+
+        partyAChoices = null;
+        currentResults = [];
+        initChoices();
+        switchToPartyAMode();
+
+        const shareBox = document.getElementById('blind-match-share-box');
+        if (shareBox) shareBox.classList.add('hidden');
+
+        const rootEl = document.getElementById('blind-match-container');
+        if (rootEl) {
+          rootEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
+  }
+
+  // 初始化总入口
+  function initBlindMatchTool(): void {
+    initChoices();
+    bindPillEvents();
+    bindGenerateLinkBtn();
+    bindCopyUrlBtn();
+    bindRevealBtn();
+    bindExportPngBtn();
+    bindResetBtn();
+    checkUrlHashPayload();
+
+    window.addEventListener('hashchange', () => {
+      checkUrlHashPayload();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBlindMatchTool);
+  } else {
+    initBlindMatchTool();
+  }
+</script>

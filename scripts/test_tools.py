@@ -18,7 +18,24 @@ CLINIC_DATA_FILE = os.path.join(DATA_DIR, "clinicQuestions.ts")
 POSITION_DATA_FILE = os.path.join(DATA_DIR, "positionMatrix.ts")
 CHECKLIST_DATA_FILE = os.path.join(DATA_DIR, "intimacyChecklist.ts")
 LAB_DATA_FILE = os.path.join(DATA_DIR, "labReportDecoder.ts")
+BLIND_MATCH_DATA_FILE = os.path.join(DATA_DIR, "intimacyPreferences.ts")
+BLIND_MATCH_COMPONENT = os.path.join(COMPONENTS_DIR, "IntimacyBlindMatch.astro")
 DECISION_TREE_FILE = os.path.join(DATA_DIR, "decisionTree.ts")
+
+EMOJI_PATTERN = re.compile(
+    r"[\U0001F600-\U0001F64F"  # emoticons
+    r"\U0001F300-\U0001F5FF"  # symbols & pictographs
+    r"\U0001F680-\U0001F6FF"  # transport & map symbols
+    r"\U0001F700-\U0001F77F"  # alchemical symbols
+    r"\U0001F780-\U0001F7FF"  # geometric shapes extended
+    r"\U0001F800-\U0001F8FF"  # supplemental arrows-c
+    r"\U0001F900-\U0001F9FF"  # supplemental symbols and pictographs
+    r"\U0001FA00-\U0001FA6F"  # chess symbols
+    r"\U0001FA70-\U0001FAFF"  # symbols and pictographs extended-a
+    r"\U00002702-\U000027B0"  # dingbats
+    r"]",
+    flags=re.UNICODE,
+)
 DECISION_GUIDE_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "DecisionGuide.astro")
 MEMO_EXPORTER_FILE = os.path.join(ROOT_DIR, "src", "lib", "ui", "memoImageExporter.ts")
 SEARCH_COMPONENT = os.path.join(ROOT_DIR, "src", "components", "Search.astro")
@@ -35,6 +52,7 @@ REQUIRED_COMPONENTS = [
     ("ContraceptionMatrix.astro", ["matrix-filter-container", "matrix-card", "contraception-condoms"]),
     ("PositionAndIntimacyGuide.astro", ["position-filter-container", "position-card", "intimacy-checklist-root", "pleasure-woman-on-top-mechanics"]),
     ("ReportDecoder.astro", ["decoder-category-tab", "decoder-item-card", "abnormal-uterine-bleeding"]),
+    ("IntimacyBlindMatch.astro", ["blind-match-container", "blind-match-generate-btn", "intimacy-fries-consent"]),
 ]
 
 
@@ -723,6 +741,100 @@ def validate_panic_exit_contract(errors: list):
         errors.append("PanicExit.astro 缺失解锁还原机制")
 
 
+def validate_blind_match_data(errors: list):
+    """验证伴侣双盲知情偏好数据集契约"""
+    if not os.path.exists(BLIND_MATCH_DATA_FILE):
+        errors.append(f"伴侣双盲偏好数据集文件缺失: {BLIND_MATCH_DATA_FILE}")
+        return
+
+    with open(BLIND_MATCH_DATA_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if "INTIMACY_PREFERENCES" not in content or "export const INTIMACY_PREFERENCES" not in content:
+        errors.append("intimacyPreferences.ts 未导出 INTIMACY_PREFERENCES")
+        return
+
+    arr_str = extract_array_block(content, "INTIMACY_PREFERENCES")
+    if not arr_str:
+        errors.append("无法解析 INTIMACY_PREFERENCES 数组定义")
+        return
+
+    items = extract_objects_from_array(arr_str)
+    if len(items) != 20:
+        errors.append(f"INTIMACY_PREFERENCES 应包含 20 项偏好条目，当前为 {len(items)} 项")
+
+    required_fields = ["id", "category", "title", "description", "guidance", "related_article"]
+    valid_categories = {"foreplay", "positions", "sensory", "boundaries", "aftercare"}
+    found_categories = set()
+
+    for idx, block in enumerate(items):
+        for field in required_fields:
+            if not re.search(rf"\b{field}\s*:", block):
+                errors.append(f"偏好条目 [索引 {idx}] 缺失必要字段: '{field}'")
+
+        cat_match = re.search(r"\bcategory\s*:\s*['\"]([^'\"]+)['\"]", block)
+        if cat_match:
+            cat = cat_match.group(1).strip()
+            found_categories.add(cat)
+            if cat not in valid_categories:
+                errors.append(f"偏好条目 [索引 {idx}] category '{cat}' 无效，必须为 {valid_categories}")
+
+        art_match = re.search(r"\brelated_article\s*:\s*['\"]([^'\"]+)['\"]", block)
+        if art_match:
+            slug = art_match.group(1).strip()
+            art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{slug}{ext}")) for ext in [".mdx", ".md"])
+            if not art_found:
+                errors.append(f"偏好条目 [索引 {idx}] 关联的外键文章不存在: {slug}")
+        else:
+            errors.append(f"偏好条目 [索引 {idx}] 未能解析出 related_article 值")
+
+    missing_cats = valid_categories - found_categories
+    if missing_cats:
+        errors.append(f"INTIMACY_PREFERENCES 缺失以下分类条目: {missing_cats}")
+
+
+def validate_blind_match_component(errors: list, page_content: str):
+    """验证伴侣双盲知情核对器交互组件、路由挂载与零 innerHTML/零 emoji 契约"""
+    if not os.path.exists(BLIND_MATCH_COMPONENT):
+        errors.append(f"伴侣双盲知情核对器组件缺失: {BLIND_MATCH_COMPONENT}")
+        return
+
+    with open(BLIND_MATCH_COMPONENT, "r", encoding="utf-8") as f:
+        comp_content = f.read()
+
+    # 1. 严格零 innerHTML 守卫 (防范 XSS)
+    if ".innerHTML" in comp_content:
+        errors.append("IntimacyBlindMatch.astro 严禁使用 innerHTML，必须严格使用 createElement/textContent/replaceChildren")
+
+    # 2. 严格零 emoji 守卫 (学术纸墨风格)
+    emojis = EMOJI_PATTERN.findall(comp_content)
+    if emojis:
+        errors.append(f"IntimacyBlindMatch.astro 存在违规 emoji 字符: {emojis}，必须保持纯净学术编辑排版")
+
+    # 3. 核心控件钩子标识
+    required_ids = [
+        "blind-match-container",
+        "blind-match-generate-btn",
+        "blind-match-copy-url-btn",
+        "blind-match-reveal-btn",
+        "blind-match-export-png-btn",
+        "blind-match-reset-btn",
+    ]
+    for hook in required_ids:
+        if hook not in comp_content:
+            errors.append(f"IntimacyBlindMatch.astro 缺失关键交互标识或按钮: {hook}")
+
+    # 4. tools/index.astro 挂载检验
+    if 'id="sec-blind-match"' not in page_content and "id='sec-blind-match'" not in page_content:
+        errors.append("tools/index.astro 未挂载锚点 #sec-blind-match")
+
+    if "[09] 伴侣双盲知情核对器" not in page_content:
+        errors.append("tools/index.astro 导航锚点缺失 '[09] 伴侣双盲知情核对器' 文案")
+
+    if "'blind-match': 'sec-blind-match'" not in page_content and '"blind-match": "sec-blind-match"' not in page_content:
+        errors.append("tools/index.astro toolSectionMap 缺失 'blind-match' 映射")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -762,8 +874,9 @@ def run_tests():
                 and not token.startswith("clinic-")
                 and not token.startswith("matrix-")
                 and not token.startswith("position-")
-                and not token.startswith("intimacy-")
+                and not token.startswith("blind-match-")
                 and not token.startswith("decoder-")
+                and token != "intimacy-checklist-root"
             ):
                 art_found = any(os.path.exists(os.path.join(ARTICLES_DIR, f"{token}{ext}")) for ext in [".mdx", ".md"])
                 if not art_found:
@@ -804,6 +917,12 @@ def run_tests():
 
     # 13. 验证全局防窥一键伪装避险组件契约
     validate_panic_exit_contract(errors)
+
+    # 14. 验证伴侣双盲知情偏好数据集契约
+    validate_blind_match_data(errors)
+
+    # 15. 验证伴侣双盲知情核对器交互组件与路由挂载契约
+    validate_blind_match_component(errors, page_content)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")

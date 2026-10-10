@@ -12,6 +12,7 @@ import ContraceptionMatrix from '../../components/tools/ContraceptionMatrix.astr
 import ClinicMemo from '../../components/tools/ClinicMemo.astro';
 import PositionAndIntimacyGuide from '../../components/tools/PositionAndIntimacyGuide.astro';
 import ReportDecoder from '../../components/tools/ReportDecoder.astro';
+import IntimacyBlindMatch from '../../components/tools/IntimacyBlindMatch.astro';
 
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -49,7 +50,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
           <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"/>
           </svg>
-          <span>快速定位 8 大实用工具：</span>
+          <span>快速定位 9 大实用工具：</span>
         </span>
         <span class="text-[11px] text-[#8B8676] hidden sm:inline">纯前端计算 · 零隐私上传</span>
       </div>
@@ -111,6 +112,15 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         >
           <span class="font-mono text-[10px] text-rose-600 font-bold">[08]</span>
           <span>妇科检查报告通俗解码台</span>
+        </a>
+        <a
+          href="#sec-blind-match"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[#15140F]/15 bg-white px-3 py-1 text-[#2A2620] hover:border-stone-400 hover:text-rose-600 hover:bg-rose-50/50 active:translate-x-0.5 active:translate-y-0.5 transition-all shadow-2xs"
+          aria-label="[09] 伴侣双盲知情核对器"
+          title="[09] 伴侣双盲知情核对器"
+        >
+          <span class="font-mono text-[10px] text-rose-600 font-bold">[09]</span>
+          <span>伴侣双盲知情核对器</span>
         </a>
       </div>
     </nav>
@@ -215,6 +225,11 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         <section id="sec-report-decoder" class="scroll-mt-20">
           <ReportDecoder />
         </section>
+
+        {/* 工具 9：伴侣双盲知情核对器 */}
+        <section id="sec-blind-match" class="scroll-mt-20">
+          <IntimacyBlindMatch />
+        </section>
       </div>
     </section>
   </main>
@@ -224,6 +239,9 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     (function () {
       var params = new URLSearchParams(window.location.search);
       var toolId = params.get('tool');
+      if (!toolId && window.location.hash && window.location.hash.indexOf('match=') !== -1) {
+        toolId = 'blind-match';
+      }
       if (!toolId) return;
 
       var toolSectionMap = {
@@ -235,6 +253,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         'contraception-matrix': 'sec-contraception-matrix',
         'clinic-memo': 'sec-clinic-memo',
         'report-decoder': 'sec-report-decoder',
+        'blind-match': 'sec-blind-match',
       };
 
       var sectionId = toolSectionMap[toolId];
