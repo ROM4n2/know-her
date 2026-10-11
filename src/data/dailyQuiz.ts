@@ -400,6 +400,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       'FRIES 原则强调同意是自愿的、可撤回的（Reversible）、知情的、热情的且具体的。亲密过程中的同意不是一次签署终身有效的契约，任何一方在任何时候感到不适都可以喊停，且这一界限必须得到伴侣的绝对尊重。',
   },
+  'contraception-oral-contraceptives': {
+    articleId: 'contraception-oral-contraceptives',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
