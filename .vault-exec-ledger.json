@@ -1,71 +1,71 @@
 {
   "version": "1.0.0",
-  "plan_file": "docs/plans/2026-10-10-content-expansion-and-interactive-ux.md",
-  "created_at": "2026-10-11T00:03:45.806677",
-  "last_updated": "2026-10-11T11:56:19.546280",
+  "plan_file": "docs/plans/2026-10-11-phase1-p0-remediation.md",
+  "created_at": "2026-10-11T11:57:24.698126",
+  "last_updated": "2026-10-11T12:34:02.525937",
   "total_tasks": 6,
   "completed_count": 6,
   "active_task_id": null,
   "tasks": [
     {
       "id": "Task-1",
-      "title": "扩充 6 篇深度循证长文与 1:1 知情速测题闭环 [Mode: AFK] [Role: TDD Builder]",
+      "title": "移动端手势冲突与悬浮对比栏物理遮挡修复 [Mode: AFK] [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "2578f4c",
+      "commit_hash": "af0125e",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-10-11T00:03:52.682652"
+      "started_at": "2026-10-11T11:57:32.153233",
+      "completed_at": "2026-10-11T12:04:16.417007"
     },
     {
       "id": "Task-2",
-      "title": "长文阅读体验升级 —— 悬浮目录树与阅读进度条 [Mode: AFK] [Role: TDD Builder]",
+      "title": "解耦生产部署与外部第三方网络依赖 [Mode: AFK] [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "48d67a5",
+      "commit_hash": "eb25855",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-10-11T00:03:52.788547"
+      "started_at": "2026-10-11T12:04:27.007134",
+      "completed_at": "2026-10-11T12:12:08.818879"
     },
     {
       "id": "Task-3",
-      "title": "全局即时搜索模态弹窗与键盘快捷键接入 [Mode: AFK] [Role: TDD Builder]",
+      "title": "消除短效药漏服决策树与计算器的临床指引矛盾 [Mode: AFK] [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "84bf081",
+      "commit_hash": "c774e95",
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-10-11T00:03:52.897703"
+      "started_at": "2026-10-11T12:12:11.852101",
+      "completed_at": "2026-10-11T12:19:32.539660"
     },
     {
       "id": "Task-4",
-      "title": "客户端纯静态一键简繁转换能力 [Mode: AFK] [Role: TDD Builder]",
+      "title": "修复隐私协议页本地做题打卡记录清除漏洞 [Mode: AFK] [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "e0d0f6a",
+      "commit_hash": "ef93baa",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-10-11T00:04:02.310883",
-      "completed_at": "2026-10-11T00:21:39.492153"
+      "started_at": "2026-10-11T12:19:35.506704",
+      "completed_at": "2026-10-11T12:24:14.943506"
     },
     {
       "id": "Task-5",
-      "title": "伴侣双人偏好双盲知情核对器 (IntimacyBlindMatch.astro) [Mode: AFK] [Role: TDD Builder]",
+      "title": "全站零 innerHTML 与零 Emoji 测试门禁覆盖加固 [Mode: AFK] [Role: TDD Builder]",
       "status": "completed",
       "implementer": "TDD",
-      "commit_hash": "4775539",
+      "commit_hash": "ee95701",
       "reviewer_verdict": "PASS",
-      "started_at": "2026-10-11T00:21:53.127359",
-      "completed_at": "2026-10-11T00:40:59.828129"
+      "started_at": "2026-10-11T12:24:21.698979",
+      "completed_at": "2026-10-11T12:32:59.363771"
     },
     {
       "id": "Task-6",
-      "title": "全链路流水线全绿回归与里程碑结项 [Mode: HITL] [Role: Integration Builder]",
+      "title": "P0/P1 加固里程碑全量回归与工作记忆结项 [Mode: HITL] [Role: Integration Builder]",
       "status": "completed",
       "implementer": "TDD",
       "commit_hash": null,
       "reviewer_verdict": "PASS",
-      "started_at": null,
-      "completed_at": "2026-10-11T11:56:19.546247"
+      "started_at": "2026-10-11T12:33:03.139416",
+      "completed_at": "2026-10-11T12:34:02.525907"
     }
   ]
 }

@@ -118,11 +118,13 @@ know-her —— 一个现代、温暖、科学的**每日两性健康科普与�
      - 本地存储异常防护与排版净化：`DailyCard` 增加 `safeGetItem` / `safeSetItem` 的 `try...catch` 降级容灾（防御 Safari 无痕模式崩溃）；净化 `AgePreferenceBanner` 中彩色 Emoji ⏰ 为单色学术印章 `[ 年龄确认 ]`；统一跨端积日模运算公式 `(day - 1) % totalCount` 与稳定排序；
      - CI/CD 拓扑优化与客户端 CSP 注入：`ci.yml` 忽略 master 分支避免双重构建，为 `deploy.yml` 与 `daily-routine.yml` 增加 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头。
 
-  21. Phase 2 现有体验穿透、本土化校准与视觉分发落地（vault-exec 5/5 结项）：
-     - 跨工具状态透传：`decisionTree.ts` 结果卡新增 `directToolLink`（toolId/urlParams/buttonText），工具箱 `/tools/` 解析 `?tool=&hours=&complaint=` 自动平滑滚动聚焦高亮并预填倒计时/门诊主诉 Tab（兼容文章 slug 别名映射）；
-     - 紧急避孕本土校准：72h 窗口首选左炔诺孕酮 OTC（金毓婷 1.5mg 或 0.75mg 双片间隔 12h，药房与外卖 24h 可及）；120h 窗口明确醋酸乌利司他国内零售药房暂未普及（防盲目代购延误时效），次选急诊低剂量米非司酮 (10mg/25mg) 或含铜 IUD；新增服药后 2 小时胃部吸收观察计时器（2h 内呕吐须补服原剂量）；
-     - 纯前端零依赖 Canvas 便签长图导出器 `src/lib/ui/memoImageExporter.ts`（纸墨排版、DPR≥2、toBlob 下载、微信内置浏览器自动新窗长按保存），接入门诊便签与伴侣探索便签；
-     - 首页 6 大突发场景意图胶囊（绕开关键词搜索摩擦）与文章详情页医学名词 In-situ 悬浮速查（原地释义不打断阅读）。
+  22. P0/P1 高危缺陷与交互阻断系统性加固（2026-10-11 Phase 1 落地）：
+     - 移动端双指手势防窥误触解除 (P0-1)：移除 `PanicExit.astro` 中全局双指触碰 (`e.touches.length >= 2`) 粗暴劫持，完整保留移动端 pinch-to-zoom 原生无障碍放大能力；
+     - 避孕对比栏防窥按钮遮挡解除 (P0-2)：将 `ContraceptionMatrix.astro` 移动端悬浮条由 `bottom-20` 提升至 `bottom-24 sm:bottom-6`，彻底避开 `bottom-20` 防窥按钮与右侧操作热区；
+     - 解耦生产部署与外部不可控网络依赖 (P0-3)：拆分 `.github/workflows/deploy.yml` 验证链路，本地 `pnpm curate:check` 保持严格阻断，外网探活 `pnpm curate:links` 配置 `continue-on-error: true`，杜绝第三方外网抖动阻断静态部署；
+     - 消除短效药漏服计算器与决策树临床指引矛盾 (P0-5)：`CocRemedyCalculator.astro` 拆分“漏服1天(1片)”与“连续漏服2天及以上”，与 WHO/CDC 及 `decisionTree.ts` 临床结论完全对齐（仅漏服1天常规无需加用避孕套7天，消除读者恐慌）；
+     - 本地做题与打卡历史全量动态擦除修复 (P1-1)：`privacy.astro` 升级动态遍历收集以 `know_her_` / `know-her` 为前缀的全量历史键，补齐 `know_her_last_date` 与 `know_her_last_quiz_*`，配合 `try...catch` 隔离 Safari 隐身模式异常；
+     - 全仓零 innerHTML 与零原生 Emoji 静态门禁全覆盖 (P1-3)：`test_article_hygiene.py` 扫描范围扩展覆盖全量 pages、layouts、components、lib、32 篇 articles 与 28 篇 glossary，修复词典清空按钮为合规内联 SVG。
 
 ## 高频坑（踩过的雷区）
 

@@ -290,17 +290,18 @@ Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
 5. 全量回归测试：`pnpm test`（含 8 套自动化测试脚本、Astro/TS 检查、文章元数据校验与 36 页静态打包）100% 全绿通过。
 台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean。
 
-### 2026-10-11T01:05:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+### 2026-10-11T12:35:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
 Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
-执行 vault-exec 流水线：落地方案 B《深度内容扩充与现代化交互大闭环》（docs/plans/2026-10-10-content-expansion-and-interactive-ux.md）全部 6 个原子任务。
+执行 vault-exec 流水线：落地《P0 高危缺陷与交互阻断系统性加固》（docs/plans/2026-10-11-phase1-p0-remediation.md）全部 6 个原子任务。
 交付产物：
-1. Task-1 [2578f4c]: 扩充 6 篇深度循证科普长文（PCOS 综合管理、围绝经期激素应对、排卵期 vs 着床出血鉴别、卫生棉条与月经杯安全使用、阴道痉挛脱敏、亲密边界体面拒绝），在 `dailyQuiz.ts` 补充 6 道知情速测题，实现 G1 门禁 32:32 双向 1:1 闭环；
-2. Task-2 [48d67a5]: 落地长文阅读体验系统——`TableOfContents.astro` 目录树（桌面端 sticky 悬浮 + 移动端自适应 details，IntersectionObserver 实时滚动高亮）与 `ReadingProgress.astro` 2px 极简顶层纸墨阅读进度条；新建 `scripts/test_reading_ux.py` 自动化门禁；
-3. Task-3 [84bf081]: 落地全局即时搜索模态弹窗 `SearchModal.astro`（监听 `Cmd+K` / `Ctrl+K` / `/` 毫秒级唤起，Pagefind WASM 全量检索，全键盘上下导航与回车直达，输入态安全防误触，零 innerHTML）；在 `Base.astro` 顶栏挂载快捷胶囊；
-4. Task-4 [e0d0f6a]: 落地客户端纯静态一键简繁转换——安装 `opencc-js`（动态按需 import，大陆简体用户 0KB 首屏负担），编写 `langConverter.ts`（文本节点递归遍历替换、document.title 翻译与 Safari 无痕安全降级），顶栏挂载 Academic Editorial 纸墨图章 `LangSwitcher.astro`；
-5. Task-5 [4775539]: 落地工具箱第 9 大离线交互工具 `IntimacyBlindMatch.astro`（伴侣双人偏好双盲知情核对器），建立 `intimacyPreferences.ts` 20 项探索偏好题库；纯前端 Web Crypto / Base64 URL Hash 密文协议（零网络请求、零数据上传）；仅揭晓共同愿望与共识，单向隐匿任何一方的拒绝项；联动 Canvas 纸墨对比便签长图导出；
-6. Task-6: 全链路流水线全绿回归（pnpm check 0 错误 + 9 套契约门禁 pnpm test:graph + curate:check + 42 页面构建 + Pagefind 全文索引 100% 成功）。
-台账：.vault-exec-ledger.json 6/6 结项（PASS）；工作树干净。
+1. Task-1 [af0125e]: 解决移动端双指缩放被 PanicExit 劫持 (P0-1) 与 ContraceptionMatrix 悬浮对比栏被防窥按钮遮挡 (P0-2)；
+2. Task-2 [eb25855]: 生产部署解耦外部不可控网络依赖 (P0-3)——deploy.yml 拆分 curate:check（严格阻断）与 curate:links（continue-on-error 软失败），补充自动化契约；
+3. Task-3 [c774e95]: 消除短效药漏服计算器与决策树的临床矛盾 (P0-5)——细化单片漏服（常规无需戴套7天）与多片漏服（严格戴套7天），全面对齐 WHO/CDC 标准；
+4. Task-4 [ef93baa]: 修复隐私协议页本地做题打卡记录清除失效漏洞 (P1-1)——动态遍历清除所有 know_her_ 前缀键，补充安全契约；
+5. Task-5 [ee95701]: 全仓零 innerHTML 与全量文章/词条/组件零原生 Emoji 静态门禁全覆盖 (P1-3)，修复词典清空按钮为合规内联 SVG；
+6. Task-6: 全链路回归测试（pnpm test: astro check + 9 套契约测试 + curate:check + 42 页面静态打包）100% 全绿通过。
+台账：.vault-exec-ledger.json 6/6 结项（PASS）；工作树 clean。
+
 
 
 
