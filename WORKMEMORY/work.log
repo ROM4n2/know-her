@@ -302,6 +302,19 @@ Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
 6. Task-6: 全链路回归测试（pnpm test: astro check + 9 套契约测试 + curate:check + 42 页面静态打包）100% 全绿通过。
 台账：.vault-exec-ledger.json 6/6 结项（PASS）；工作树 clean。
 
+### 2026-10-11T12:45:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+修复 GitHub Actions CI 流水线因 4 篇外部权威信源 404 导致的门禁阻断：
+1. 故障根因：CI 任务 (run #38112012187) 执行 `pnpm curate:links` 失败，4 篇新上线的 MDX 文章外链在 WHO 与 MSD 官方网站路径变更导致 404；
+2. 外链修正：
+   - `body-pcos-lifestyle-management.mdx`: 默沙东多囊卵巢综合征链接更新为有效 slug `polyendocrine-metabolic-ovarian-syndrome-pmos`；
+   - `body-tampon-menstrual-cup-tss-safety.mdx`: WHO 青少年健康链接更新为有效实况页面 `adolescents-health-risks-and-solutions`；
+   - `intimacy-sexual-boundary-saying-no.mdx`: WHO 链接更新为有效实况报道 `comprehensive-sexuality-education`；
+   - `pleasure-vaginismus-pelvic-floor-therapy.mdx`: 默沙东痉挛/疼痛障碍更新为有效路径 `sexual-function-and-dysfunction-in-women/genito-pelvic-pain-penetration-disorder`；
+3. 工作流清晰化：`.github/workflows/ci.yml` 拆分元数据校验与外链探测为独立 step；
+4. 验证：本地 `python -X utf8 scripts/curate.py check-links` 全量 32 篇文章在线探测全部合规（零 404），`pnpm test` 全部绿灯。
+
+
 
 
 

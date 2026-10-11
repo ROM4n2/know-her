@@ -46,10 +46,11 @@ jobs:
       - name: Decision Tree & Glossary Consistency Check (图连通性与词典完整性)
         run: pnpm test:graph
 
-      - name: Frontmatter & Links Check（零404外链阻断门禁）
-        run: |
-          pnpm curate:check
-          pnpm curate:links
+      - name: Verify article frontmatter and local metadata (严格阻断)
+        run: pnpm curate:check
+
+      - name: Verify article source links reachability (零404外链门禁)
+        run: pnpm curate:links
 
   build:
     name: pnpm build
