@@ -66,14 +66,15 @@ const base = import.meta.env.BASE_URL.endsWith('/')
     {/* 问题 3：距常规服药时间已延迟多久 */}
     <div class="space-y-1.5">
       <label class="block text-xs font-bold text-[#15140F]">
-        3. 距离你每天固定的服药时间延迟了多久：
+        3. 漏服药片数量与延迟时长：
       </label>
       <select
         id="coc-delay-hours"
         class="w-full rounded-xl border border-[#15140F]/20 bg-[#FAF8F5] px-3.5 py-2.5 text-xs text-[#15140F] focus:border-rose-500 focus:outline-hidden focus:ring-2 focus:ring-rose-100 shadow-2xs cursor-pointer"
       >
-        <option value="under12">未超过 12 小时（如本应昨晚22点，今天早上8点想起）</option>
-        <option value="over12">超过 12 小时（漏服整整1天或多片）</option>
+        <option value="under12">延迟未超过 12 小时（同一天内补服）</option>
+        <option value="missed1">仅漏服 1 天 / 1 片（延迟 12 ~ 24 小时，漏服昨日 1 片）</option>
+        <option value="missed2">连续漏服 2 天或以上（>=2 片，停药超过 48 小时）</option>
       </select>
     </div>
 
@@ -190,45 +191,60 @@ const base = import.meta.env.BASE_URL.endsWith('/')
         resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
         resUrgency.textContent = '轻微延迟';
         stepRemedy.textContent = '想起来时立即补服这一片，今天晚些时候的常规药片仍按原定时间正常服用（即使同一天吃两片）。';
-        stepCondom.textContent = '只要在 12 小时内补齐，血液中激素浓度仍处于排卵抑制区间，不需要额外加用安全套。';
+        stepCondom.textContent = '只要在 12 小时内补齐，血液中激素浓度仍处于排卵抑制区间，无需额外加用避孕套。';
         stepCycle.textContent = '后续按正常流程继续服药，停药期保持不变。';
         emergencyBox.classList.add('hidden');
         return;
       }
 
-      // 延迟超过 12 小时，按周分别处置
+      // 仅漏服 1 天 / 1 片（延迟 12 ~ 24 小时）
+      if (delay === 'missed1') {
+        resultCard.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 space-y-4';
+        resTitle.textContent = '仅漏服 1 天（1 片）：立即补服，避孕保护依然有效';
+        resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+        resUrgency.textContent = '无需恐慌 / 保护有效';
+        stepRemedy.textContent = '想起来的当下立刻补服漏服的那 1 片；今天的下一片药依然在常规固定时间服用（即使在同一天或同时吃下 2 片药也完全合规安全）。';
+        stepCondom.textContent = '根据 WHO 指南与临床药理，仅漏服 1 片时体内下丘脑排卵抑制机制依然在起作用，常规无需额外加用避孕套。若处于第 1 周且伴侣追求绝对保险，可自愿加用避孕套 7 天。无须服用紧急避孕药！';
+        stepCycle.textContent = week === 'w3'
+          ? '按计划规律吃完本盒剩余有效药后正常停药；若希望消除任何微小疑虑，也可吃完本盒活性药后跳过停药期直接无缝开启下一盒。'
+          : '继续按常规每天固定时间服药，吃完本盒后正常进入 7 天停药期（28 片包装者正常服用最后 4 片安慰剂）。';
+        emergencyBox.classList.add('hidden');
+        return;
+      }
+
+      // 连续漏服 2 天或以上（>=2 片，停药超过 48 小时）
       if (week === 'w1') {
         resultCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-5 space-y-4';
-        resTitle.textContent = '第 1 周漏服（高危）：极易打破排卵抑制';
+        resTitle.textContent = '第 1 周连续漏服 2 片及以上（高危）：极易打破排卵抑制';
         resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-100 text-rose-800';
         resUrgency.textContent = '需紧急补救';
-        stepRemedy.textContent = '立刻补服漏掉的药片（哪怕同一天同时服用 2 片），随后按原计划每天按时服用。';
-        stepCondom.textContent = '接下来的 7 天内进行性生活，必须全程严格加用避孕套！';
+        stepRemedy.textContent = '立刻补服最近漏掉的 1 片（舍弃更早漏掉的），今天的常规药片仍按原计划按时服用（即使同一天服用 2 片）。随后每天按时服药。';
+        stepCondom.textContent = '处于停药期后最危险期！接下来的连续 7 天内进行性生活，必须全程严格加用避孕套！';
         stepCycle.textContent = '继续吃完本盒药片，常规进行 7 天停药期。';
 
         if (sex) {
           emergencyBox.classList.remove('hidden');
-          stepEmergency.textContent = '因处于刚开始周期的第 1 周，卵泡极易在激素低谷时重新募集发育。若在漏服前 5~7 天内有无保护行为，必须在 72 小时内考虑服用紧急避孕药（或 120 小时内医院上铜环）！';
+          stepEmergency.textContent = '因处于刚开始周期的第 1 周且连续漏服 2 片以上，卵泡极易在激素低谷时重新募集发育。若在漏服前 5~7 天内有无保护行为，必须在 72 小时内考虑服用紧急避孕药（或 120 小时内医院上铜环）！';
         } else {
           emergencyBox.classList.add('hidden');
         }
       } else if (week === 'w2') {
         resultCard.className = 'rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-4';
-        resTitle.textContent = '第 2 周漏服：立即补服，保守加用安全套 7 天';
+        resTitle.textContent = '第 2 周连续漏服 2 片及以上：立即补服，建议加用避孕套 7 天';
         resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-amber-100 text-amber-800';
         resUrgency.textContent = '中度关注';
-        stepRemedy.textContent = '想起来时立即补服，即使同一天吃两片；随后每天按时继续服用剩余药片。';
-        stepCondom.textContent = '如果过去 7 天连续规律服药，避孕效果依然稳定；但为确保绝对安全，建议未来 7 天仍加用安全套。';
-        stepCycle.textContent = '继续吃完本盒，正常进入停药期。';
+        stepRemedy.textContent = '想起来时立即补服最近漏掉的 1 片，舍弃更早漏掉的药片；今天的常规药片按正常时间服用，随后每天规律吃药。';
+        stepCondom.textContent = '若此前 7 天按时规律服药通常无需紧急避孕，但连续漏服 2 片以上破坏了稳态血药浓度，接下来的 7 天内性生活建议全程严格加用避孕套。';
+        stepCycle.textContent = '继续吃完本盒药片，正常进入 7 天停药期。';
         emergencyBox.classList.add('hidden');
       } else if (week === 'w3') {
         resultCard.className = 'rounded-2xl border border-rose-200 bg-rose-50/70 p-5 space-y-4';
-        resTitle.textContent = '第 3 周漏服：关键原则【吃完本盒立即连开新盒，不可停药】';
+        resTitle.textContent = '第 3 周连续漏服 2 片及以上：核心原则【吃完本盒立即连开新盒，跳过停药期】';
         resUrgency.className = 'rounded-full px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-100 text-rose-800';
         resUrgency.textContent = '需跳过停药期';
-        stepRemedy.textContent = '立即补服漏掉的药片，即使今天同时吃 2 片。随后按常规时间把本盒剩余的有效片吃完。';
-        stepCondom.textContent = '接下来的 7 天内建议全程加用安全套防护。';
-        stepCycle.textContent = '【最核心规则】当吃完本盒最后一片有效药后，绝对不要进入 7 天停药期！次日直接开启新的一盒继续服用。这意味着本次周期不会出现撤退性出血，直到吃完第二盒再停药。';
+        stepRemedy.textContent = '立即补服最近漏掉的 1 片（即使今天同时吃 2 片），随后按常规时间把本盒剩余的有效片吃完。';
+        stepCondom.textContent = '接下来的 7 天内进行性生活，建议全程严格加用避孕套。';
+        stepCycle.textContent = '【最核心规则】当吃完本盒最后一片有效药后，绝对不要进入 7 天停药期！次日直接开启新的一盒继续服用（28片装者直接丢弃最后的安慰剂片）。这意味着本次周期不会出现撤退性出血，直到吃完第二盒再停药。';
         emergencyBox.classList.add('hidden');
       }
     }

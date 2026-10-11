@@ -839,6 +839,48 @@ def validate_blind_match_component(errors: list, page_content: str):
         errors.append("tools/index.astro toolSectionMap 缺失 'blind-match' 映射")
 
 
+def validate_coc_remedy_clinical_consistency(errors: list):
+    """
+    验证短效口服避孕药 (COC) 漏服补救计算器临床指引一致性
+    依据 WHO SPR / CDC / 决策树临床指引：
+    1. 必须区分单片漏服 (missed1: 12~24h / 漏服1片) 与多片漏服 (missed2: >=2片 / 停药>48h)
+    2. 单片漏服 (missed1) 应明确：排卵抑制通常不受破坏，常规无需额外加用避孕套，无须服用紧急避孕药
+    3. 连续漏服 2 片及以上 (missed2) 须给出高危/附加防护指引（如连续 7 天严格加用安全套/避孕套）
+    """
+    coc_path = os.path.join(COMPONENTS_DIR, "CocRemedyCalculator.astro")
+    if not os.path.exists(coc_path):
+        errors.append("短效药补救计算器组件缺失: CocRemedyCalculator.astro")
+        return
+
+    with open(coc_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 1. 检查是否包含 missed1 与 missed2 选项
+    if 'value="missed1"' not in content and "value='missed1'" not in content:
+        errors.append("CocRemedyCalculator 缺少单片漏服 (missed1) 选项")
+    if 'value="missed2"' not in content and "value='missed2'" not in content:
+        errors.append("CocRemedyCalculator 缺少多片漏服 (missed2) 选项")
+
+    # 2. 检查单片漏服是否有明确无需额外加用避孕套/安全套的临床指引
+    has_no_condom_guidance = (
+        "无需额外加用避孕套" in content
+        or "无需加用避孕套" in content
+        or "无需额外加用安全套" in content
+        or "无需加用安全套" in content
+    )
+    if not has_no_condom_guidance:
+        errors.append("CocRemedyCalculator 缺少单片漏服无需额外加用避孕套/安全套的临床指引")
+
+    # 3. 检查连续漏服 2 片以上 (missed2) 的高危避孕套附加防护指引
+    has_missed2_condom = (
+        ("missed2" in content)
+        and ("避孕套" in content or "安全套" in content)
+        and ("7 天" in content or "7天" in content)
+    )
+    if not has_missed2_condom:
+        errors.append("CocRemedyCalculator 缺少连续漏服 2 片及以上时的 7 天避孕套附加防护指引")
+
+
 def run_tests():
     print("🧮 正在检测实用健康工具箱、避孕数据集与问诊契约完整性...")
 
@@ -927,6 +969,9 @@ def run_tests():
 
     # 15. 验证伴侣双盲知情核对器交互组件与路由挂载契约
     validate_blind_match_component(errors, page_content)
+
+    # 16. 验证短效药漏服决策树与计算器的临床指引一致性
+    validate_coc_remedy_clinical_consistency(errors)
 
     if errors:
         print(f"❌ 工具箱与数据契约测试未通过，发现 {len(errors)} 个问题:")
