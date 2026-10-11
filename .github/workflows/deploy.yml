@@ -37,10 +37,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify article sources (零404外链巡检门禁)
-        run: |
-          pnpm curate:check
-          pnpm curate:links
+      - name: Verify article frontmatter and local metadata (严格阻断)
+        run: pnpm curate:check
+
+      - name: Probe external article source URLs (soft-fail on 3rd-party network)
+        continue-on-error: true
+        run: pnpm curate:links
 
       # [S2 修复] 内容门禁（G1~G9：文章↔速测题 1:1、决策树图连通性、词典完整性、草稿模板 MDX 编译…）
       # 原先 deploy 在 build 前**只**跑 curate:check / curate:links / pnpm build，**不含** pnpm test:graph

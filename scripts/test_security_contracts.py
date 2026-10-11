@@ -5,6 +5,7 @@ scripts/test_security_contracts.py — 外链安全协议约束与链路探测�
 覆盖契约：
 1. Zod URL 协议安全约束：严禁 javascript: / data: / ftp: / file: 等高危伪协议，仅允许 http(s)://
 2. curate.py 403 降级探测容错：若初次 403 后重试出现 404/410/网络中断，严禁误报为 True (防爬成功)，必须判定为 False
+3. deploy.yml 生产部署网络弹性解耦：pnpm curate:check 必须严格阻断；pnpm curate:links 若存在必须配置 continue-on-error: true
 """
 import io
 import json
@@ -19,6 +20,7 @@ import urllib.error
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 CONTENT_CONFIG_FILE = os.path.join(PROJECT_ROOT, "src", "content.config.ts")
+DEPLOY_WORKFLOW_FILE = os.path.join(PROJECT_ROOT, ".github", "workflows", "deploy.yml")
 
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
@@ -27,7 +29,7 @@ from curate import check_single_url
 
 
 def test_zod_protocol_validation():
-    print("🔒 [1/2] 正在检验 src/content.config.ts 的 source_url 协议安全性契约...")
+    print("🔒 [1/3] 正在检验 src/content.config.ts 的 source_url 协议安全性契约...")
     if not os.path.exists(CONTENT_CONFIG_FILE):
         return [f"配置文件不存在: {CONTENT_CONFIG_FILE}"]
 
@@ -94,7 +96,7 @@ console.log(JSON.stringify(results));
 
 
 def test_curate_link_resilience():
-    print("🛡️ [2/2] 正在检验 scripts/curate.py 403 重试与 404 漏报防御弹性...")
+    print("🛡️ [2/3] 正在检验 scripts/curate.py 403 重试与 404 漏报防御弹性...")
     errors = []
 
     def make_http_error(url: str, code: int, msg: str):
@@ -165,11 +167,96 @@ def test_curate_link_resilience():
     return errors
 
 
+def validate_deployment_resilience_contract(errors: list | None = None) -> list:
+    print("🛡️ [3/3] 正在检验 .github/workflows/deploy.yml 生产部署解耦与网络弹性契约...")
+    resilience_errors: list[str] = []
+
+    if not os.path.exists(DEPLOY_WORKFLOW_FILE):
+        resilience_errors.append(f"部署工作流文件不存在: {DEPLOY_WORKFLOW_FILE}")
+        if errors is not None:
+            errors.extend(resilience_errors)
+        return resilience_errors
+
+    with open(DEPLOY_WORKFLOW_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 解析 steps 列表
+    steps = []
+    current_step = None
+    in_steps = False
+    base_indent = None
+    for line in content.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if stripped.startswith("steps:"):
+            in_steps = True
+            base_indent = None
+            continue
+        if in_steps:
+            if stripped.startswith("- ") and (base_indent is None or indent == base_indent):
+                if base_indent is None:
+                    base_indent = indent
+                if current_step is not None:
+                    steps.append(current_step)
+                current_step = {"raw": line + "\n", "lines": [stripped[2:]]}
+            elif current_step is not None:
+                if base_indent is not None and indent > base_indent:
+                    current_step["raw"] += line + "\n"
+                    current_step["lines"].append(stripped)
+                elif stripped and not stripped.startswith("#"):
+                    steps.append(current_step)
+                    current_step = None
+                    if base_indent is not None and indent < base_indent:
+                        in_steps = False
+    if current_step is not None:
+        steps.append(current_step)
+
+    # 1. 检验 pnpm curate:check 是否存在且严格阻断
+    check_steps = [s for s in steps if "pnpm curate:check" in s["raw"]]
+    if not check_steps:
+        resilience_errors.append("deploy.yml 缺失本地元数据校验步骤 'pnpm curate:check'（必须保留严格阻断校验）")
+    else:
+        for s in check_steps:
+            has_continue_on_error = bool(re.search(r"continue-on-error:\s*true", s["raw"], re.IGNORECASE))
+            if has_continue_on_error:
+                resilience_errors.append(
+                    "deploy.yml 中的 'pnpm curate:check' 步骤被错误配置为 continue-on-error: true，必须保持严格阻断"
+                )
+            else:
+                print("   ✅ 本地元数据校验 'pnpm curate:check' 存在且为严格阻断")
+
+    # 2. 检验 pnpm curate:links 是否具备软失败防护
+    links_steps = [s for s in steps if "pnpm curate:links" in s["raw"]]
+    if not links_steps:
+        print("   ✅ deploy.yml 未包含外部网络探测步骤 'pnpm curate:links'（已完全解耦）")
+    else:
+        for s in links_steps:
+            if "pnpm curate:check" in s["raw"]:
+                resilience_errors.append(
+                    "deploy.yml 中 'pnpm curate:links' 与 'pnpm curate:check' 混在同一步骤中，"
+                    "外部网络波动将阻塞发布或掩盖本地格式错误，必须拆分步骤并为 links 步骤配置 continue-on-error: true"
+                )
+            else:
+                has_continue_on_error = bool(re.search(r"continue-on-error:\s*true", s["raw"], re.IGNORECASE))
+                if not has_continue_on_error:
+                    resilience_errors.append(
+                        "deploy.yml 中的 'pnpm curate:links' 步骤未配置 continue-on-error: true，"
+                        "外部第三方网络抖动将阻断生产发布 (P0-3 缺陷)"
+                    )
+                else:
+                    print("   ✅ 外部链接探测 'pnpm curate:links' 已配置 continue-on-error: true (非阻断软失败)")
+
+    if errors is not None:
+        errors.extend(resilience_errors)
+    return resilience_errors
+
+
 def main():
     print("🚀 开始执行安全契约与外链弹性门禁测试...\n")
     all_errors = []
     all_errors.extend(test_zod_protocol_validation())
     all_errors.extend(test_curate_link_resilience())
+    validate_deployment_resilience_contract(all_errors)
 
     if all_errors:
         print(f"\n❌ 安全契约检测未通过，共发现 {len(all_errors)} 项违规:")
@@ -177,7 +264,7 @@ def main():
             print(f"   • {err}")
         sys.exit(1)
 
-    print("\n🎉 安全契约与外链弹性测试全部通过！Zod 协议与 curate 403 降级防御均合规！")
+    print("\n🎉 安全契约与部署弹性测试全部通过！Zod 协议、curate 403 降级防御与 deploy.yml 网络弹性均合规！")
     sys.exit(0)
 
 
