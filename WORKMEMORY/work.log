@@ -314,6 +314,17 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 工作流清晰化：`.github/workflows/ci.yml` 拆分元数据校验与外链探测为独立 step；
 4. 验证：本地 `python -X utf8 scripts/curate.py check-links` 全量 32 篇文章在线探测全部合规（零 404），`pnpm test` 全部绿灯。
 
+### 2026-10-11T12:50:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+批量清理日常自动化积压的待审候选 PR 并同步删除远端候选分支：
+1. 目标：关闭 #6 至 #14 共 9 个积压的 Draft 候选导读 PR，恢复每日 Harvest 定时流水线的自动产出能力；
+2. 操作：调用 `gh pr close <n> --delete-branch --comment "批量清理积压候选PR以恢复每日流水线产出"`；
+3. 验证：
+   - `gh pr list`：待审 PR 数量归零（0 open）；
+   - `git ls-remote --heads origin`：远端分支仅保留 `master`，9 个候选分支彻底清理；
+   - `pnpm curate:pool`：候选池正常扫描并列出 47 条候选，无异常。
+
+
 
 
 
