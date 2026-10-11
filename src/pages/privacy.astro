@@ -125,11 +125,26 @@ const base = import.meta.env.BASE_URL.endsWith('/')
   <script is:inline>
     document.getElementById('clear-storage-btn')?.addEventListener('click', () => {
       if (confirm('确定要清除保存在本机的 know-her 打卡天数与速测历史吗？')) {
-        localStorage.removeItem('know_her_streak');
-        localStorage.removeItem('know_her_last_quiz_date');
-        localStorage.removeItem('know_her_quiz_records');
-        alert('本地打卡与速测记录已完全清除！');
-        window.location.reload();
+        try {
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('know_her_') || key.startsWith('know-her'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          // 显式确保核心打卡状态与历史记录被完整清除
+          localStorage.removeItem('know_her_streak');
+          localStorage.removeItem('know_her_last_date');
+          localStorage.removeItem('know_her_last_quiz_date');
+          localStorage.removeItem('know_her_quiz_records');
+          alert('本地打卡与速测记录已完全清除！');
+          window.location.reload();
+        } catch (e) {
+          console.warn('Storage purge failed', e);
+          alert('清除操作异常，请检查浏览器隐私或存储权限设置。');
+        }
       }
     });
   </script>

@@ -6,6 +6,7 @@ scripts/test_security_contracts.py — 外链安全协议约束与链路探测�
 1. Zod URL 协议安全约束：严禁 javascript: / data: / ftp: / file: 等高危伪协议，仅允许 http(s)://
 2. curate.py 403 降级探测容错：若初次 403 后重试出现 404/410/网络中断，严禁误报为 True (防爬成功)，必须判定为 False
 3. deploy.yml 生产部署网络弹性解耦：pnpm curate:check 必须严格阻断；pnpm curate:links 若存在必须配置 continue-on-error: true
+4. privacy.astro 隐私擦除契约：必须清除 know_her_last_date 与所有动态 know_her_last_quiz_* 键，且具备 try...catch 容灾
 """
 import io
 import json
@@ -21,6 +22,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 CONTENT_CONFIG_FILE = os.path.join(PROJECT_ROOT, "src", "content.config.ts")
 DEPLOY_WORKFLOW_FILE = os.path.join(PROJECT_ROOT, ".github", "workflows", "deploy.yml")
+PRIVACY_PAGE_FILE = os.path.join(PROJECT_ROOT, "src", "pages", "privacy.astro")
 
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
@@ -29,7 +31,7 @@ from curate import check_single_url
 
 
 def test_zod_protocol_validation():
-    print("🔒 [1/3] 正在检验 src/content.config.ts 的 source_url 协议安全性契约...")
+    print("🔒 [1/4] 正在检验 src/content.config.ts 的 source_url 协议安全性契约...")
     if not os.path.exists(CONTENT_CONFIG_FILE):
         return [f"配置文件不存在: {CONTENT_CONFIG_FILE}"]
 
@@ -96,7 +98,7 @@ console.log(JSON.stringify(results));
 
 
 def test_curate_link_resilience():
-    print("🛡️ [2/3] 正在检验 scripts/curate.py 403 重试与 404 漏报防御弹性...")
+    print("🛡️ [2/4] 正在检验 scripts/curate.py 403 重试与 404 漏报防御弹性...")
     errors = []
 
     def make_http_error(url: str, code: int, msg: str):
@@ -168,7 +170,7 @@ def test_curate_link_resilience():
 
 
 def validate_deployment_resilience_contract(errors: list | None = None) -> list:
-    print("🛡️ [3/3] 正在检验 .github/workflows/deploy.yml 生产部署解耦与网络弹性契约...")
+    print("🛡️ [3/4] 正在检验 .github/workflows/deploy.yml 生产部署解耦与网络弹性契约...")
     resilience_errors: list[str] = []
 
     if not os.path.exists(DEPLOY_WORKFLOW_FILE):
@@ -251,12 +253,64 @@ def validate_deployment_resilience_contract(errors: list | None = None) -> list:
     return resilience_errors
 
 
+def validate_privacy_erasure_contract(errors: list | None = None) -> list:
+    print("🧹 [4/4] 正在检验 src/pages/privacy.astro 本地打卡记录隐私清除契约 (P1-1)...")
+    erasure_errors: list[str] = []
+
+    if not os.path.exists(PRIVACY_PAGE_FILE):
+        erasure_errors.append(f"隐私政策页面文件不存在: {PRIVACY_PAGE_FILE}")
+        if errors is not None:
+            errors.extend(erasure_errors)
+        return erasure_errors
+
+    with open(PRIVACY_PAGE_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 1. 检验是否清除打卡日期记录键 know_her_last_date
+    if "know_her_last_date" not in content:
+        erasure_errors.append(
+            "privacy.astro 未包含对 'know_her_last_date' 的清除逻辑，用户重置后最后打卡日期仍会残留 (P1-1 缺陷)"
+        )
+    else:
+        print("   ✅ 包含 'know_her_last_date' 打卡日期清除契约")
+
+    # 2. 检验是否具备 localStorage 动态前缀遍历与清除机制（清理每日动态生成的 know_her_last_quiz_YYYY-MM-DD 记录）
+    dynamic_purge_pattern = re.search(
+        r"(?:startsWith\s*\(\s*['\"]know_her_['\"]|startsWith\s*\(\s*['\"]know-her['\"]|know_her_last_quiz_)",
+        content
+    )
+    has_storage_iteration = (
+        ("localStorage.key" in content or "Object.keys(localStorage)" in content or "Object.keys(window.localStorage)" in content)
+        and ("removeItem" in content)
+    )
+
+    if not (dynamic_purge_pattern and has_storage_iteration):
+        erasure_errors.append(
+            "privacy.astro 缺失 localStorage 动态遍历与前缀清除机制 (需遍历并清除以 'know_her_' / 'know_her_last_quiz_' 开头的每日速测记录)"
+        )
+    else:
+        print("   ✅ 包含 localStorage 动态前缀遍历与清除契约 (know_her_* 动态键全量擦除)")
+
+    # 3. 检验是否包含 try...catch 保护，避免 Safari 隐私模式 SecurityError
+    if "try" not in content or "catch" not in content:
+        erasure_errors.append(
+            "privacy.astro 清除操作未包含 try...catch 容灾封装，Safari 无痕模式下可能抛出 SecurityError 崩溃"
+        )
+    else:
+        print("   ✅ 包含 try...catch 容灾保护，防范 Storage API 限制性异常")
+
+    if errors is not None:
+        errors.extend(erasure_errors)
+    return erasure_errors
+
+
 def main():
     print("🚀 开始执行安全契约与外链弹性门禁测试...\n")
     all_errors = []
     all_errors.extend(test_zod_protocol_validation())
     all_errors.extend(test_curate_link_resilience())
     validate_deployment_resilience_contract(all_errors)
+    validate_privacy_erasure_contract(all_errors)
 
     if all_errors:
         print(f"\n❌ 安全契约检测未通过，共发现 {len(all_errors)} 项违规:")
@@ -264,7 +318,7 @@ def main():
             print(f"   • {err}")
         sys.exit(1)
 
-    print("\n🎉 安全契约与部署弹性测试全部通过！Zod 协议、curate 403 降级防御与 deploy.yml 网络弹性均合规！")
+    print("\n🎉 安全契约与部署弹性测试全部通过！Zod 协议、curate 403 降级防御、deploy.yml 网络弹性与 privacy 隐私擦除均合规！")
     sys.exit(0)
 
 
