@@ -1,4 +1,5 @@
 # WORKMEMORY 协议（跨 Agent 共享工作记忆）
+> protocol-version: 1
 
 > 本文件是协议本体，所有能读写文件的 AI agent（Claude Code / Codex / OpenCode / Antigravity / Gemini CLI / CodeBuddy / …）一律遵守。
 > 协议铁律的规范层见 vault：`D:\Obsidian\Coding/01-Rules/CROSS-AGENT-MEMORY.md`。
@@ -30,7 +31,7 @@
 | 类型 | 用途 |
 | --- | --- |
 | `WORK_START` | 开始一段有明确目标的任务；收尾时必须有配对 `WORK_END`。推荐附「不做范围」一行（本任务明确排除的功能/重构/顺手修改），对抗 scope creep |
-| `WORK_END` | 任务收尾：做了什么、验证方式（测试命令+结果）、产出物路径。推荐做「回写检查」：稳定结论已回写（vault/模块文档/INDEX）？临时产物（日志/真实数据/凭据/截图）未入库？ |
+| `WORK_END` | 任务收尾：做了什么、验证方式（测试命令+结果）、产出物路径。推荐做「回写检查」：稳定结论已回写（vault/模块文档/INDEX）？临时产物（日志/真实数据/凭据/截图）未入库？可选附一行「本次被纠正: <1 行>」（ADR-0004 §4.1-7 措辞，零额外步骤）。 |
 | `DECISION` | 架构/实现决策，MUST 含 why 一句话 |
 | `PITFALL` | 踩坑：现象 + 根因 + 解法各一句；成熟后走 vault 蒸馏 |
 | `HANDOFF` | 交接包已写：指向 `handoff_<topic>.md` |
@@ -56,7 +57,7 @@ EOF
 
 1. 读 `INDEX.md`（文件清单 + 主题索引 + Active handoffs）——小文件，先看这里找旧工作。
 2. 读 `PROJECT_OVERVIEW.md`（项目 primer，60 秒建立全局认知）。
-3. `tail -n 50 WORKMEMORY/work.log`（最近事件流）。
+3. `tail -n 50 WORKMEMORY/work.log`（最近事件流）；**顺手 `grep -c '^### ' WORKMEMORY/work.log`，若计数 > `HOT_RETENTION_EVENTS × 1.5` 就先按 §5 轮转再做别的**（把轮转变成读序的第一步，别等有人想起来才做）。
 4. 查旧主题：`grep -i "<关键词>" WORKMEMORY/INDEX.md` → 按索引只加载命中的 archive 文件，禁止通读全部历史。
 
 ## 4. 交接包（handoff_*.md）
@@ -88,10 +89,29 @@ status: open
 - **WARM**：`archive/`，只经 INDEX 索引按需加载。
 - **COLD**：`cold/digest-YYYY-MM.md`，仅在用户显式要求（"把上月总结成 digest"）时由 agent 蒸馏生成，并同步刷新 PROJECT_OVERVIEW.md。
 
+### 5.1 并发守卫（轮转 = 移动，不是改写）
+
+轮转是 `work.log` 唯一被允许的 read-modify-write 操作（§1.3 追加制的唯一例外），也是并发风险最高的一步——2026-09-26 事件已实证：另一并行会话同时在写同一 `work.log`，写方一度用**过期快照整文件覆盖**，抹掉对方 19 行，最终靠 `git restore --source=HEAD` 才复原。故轮转 MUST 遵守：
+
+- **轮转前**：立即重读 `work.log` 尾部（`tail -n $(…)` 或整文件），**禁止**使用会话早期或缓存的快照作为基准。
+- **轮转中**：只做「移出最老事件 + 保留最新 `HOT_RETENTION_EVENTS` 条」，**禁止**顺手改写 / 美化 / 去重 / 重排任何事件正文；移出的分片只做重定位，不改字节。
+- **轮转后**：复核两点——(a) 末条事件与轮转前一致（`### ` 末条头不变）；(b) 「轮转前 union 事件集合 == 轮转后 union 事件集合」，逐 `### ` 头对账：
+
+  ```bash
+  # 轮转前先存基线
+  grep -h '^### ' WORKMEMORY/work.log WORKMEMORY/archive/*.log | sort | uniq -c > /tmp/events.before
+  # …执行轮转…
+  grep -h '^### ' WORKMEMORY/work.log WORKMEMORY/archive/*.log | sort | uniq -c > /tmp/events.after
+  diff /tmp/events.before /tmp/events.after   # 无输出 = 事件集合守恒（不丢、不增、不改）
+  ```
+
+- **若发现写入期间有他方追加**（基线里没有的事件出现，或末条与基线不符）⇒ **以最新状态整体重做轮转**，绝不允许丢事件。
+- 一句话：**轮转的产物是「移动」，不是「改写」**——事件正文在整个生命周期内只追加、不修改。
+
 ## 6. 与 vault 的蒸馏联动
 
 - WORKMEMORY 只存**状态与轨迹**；vault（D:\Obsidian\Coding）只存**规范与结论**。
-- 会话收尾（`/vault-save` 或 agent 主动判定）时：work.log 中成熟的 PITFALL/DECISION → 按 vault 摄取流程沉淀（`save_inbox_draft` 或直写 99-Inbox）→ 在 INDEX.md 蒸馏登记节标注 `vault://<vault 路径>`（用 `vault://` 前缀说明性文字，不写 Obsidian wikilink，避免跨库断链）。
+- 会话收尾（`/dfs-save` 或 agent 主动判定）时：work.log 中成熟的 PITFALL/DECISION → 按 vault 摄取流程沉淀（`save_inbox_draft` 或直写 99-Inbox）→ 在 INDEX.md 蒸馏登记节标注 `vault://<vault 路径>`（用 `vault://` 前缀说明性文字，不写 Obsidian wikilink，避免跨库断链）。
 - 反向：vault 规范更新若影响本项目工作方式，当前 agent 记一条 `NOTE` 指向 vault 路径。
 
 ## 7. 多机 / 云同步附录（默认不启用）
