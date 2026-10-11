@@ -311,13 +311,6 @@
       }
     });
 
-    // 移动端/触屏：双指同时触碰屏幕快速触发避险
-    window.addEventListener('touchstart', (e) => {
-      if (e.touches.length >= 2 && !isMasked) {
-        mask();
-      }
-    }, { passive: true });
-
     // 初始化渲染一次待办数据与时钟预备
     renderTodos();
   })();

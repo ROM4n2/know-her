@@ -474,12 +474,12 @@ def validate_lab_report_data(errors: list):
 
 
 def validate_floating_bars(errors: list):
-    """验证悬浮对比条容器在移动端的吸底避让 (bottom-20)"""
+    """验证悬浮对比条容器在移动端的吸底避让 (ContraceptionMatrix 使用 bottom-24 避让防窥按钮，其他使用 bottom-20)"""
     bars = [
-        ("ContraceptionMatrix.astro", "matrix-floating-bar"),
-        ("PositionAndIntimacyGuide.astro", "position-floating-bar"),
+        ("ContraceptionMatrix.astro", "matrix-floating-bar", "bottom-24"),
+        ("PositionAndIntimacyGuide.astro", "position-floating-bar", "bottom-20"),
     ]
-    for comp_name, bar_id in bars:
+    for comp_name, bar_id, expected_bottom in bars:
         comp_path = os.path.join(COMPONENTS_DIR, comp_name)
         if not os.path.exists(comp_path):
             errors.append(f"组件缺失: {comp_name}")
@@ -487,8 +487,8 @@ def validate_floating_bars(errors: list):
         with open(comp_path, "r", encoding="utf-8") as f:
             content = f.read()
         match = re.search(rf'<div[^>]*id=["\']{bar_id}["\'][^>]*>', content, re.DOTALL)
-        if not match or "bottom-20" not in match.group(0):
-            errors.append(f"组件 {comp_name} 的悬浮对比条 (#{bar_id}) 缺失 'bottom-20' 移动端避让类名")
+        if not match or expected_bottom not in match.group(0):
+            errors.append(f"组件 {comp_name} 的悬浮对比条 (#{bar_id}) 缺失 '{expected_bottom}' 移动端避让类名")
 
 
 def validate_cross_tool_handoff(errors: list, page_content: str):
@@ -739,6 +739,10 @@ def validate_panic_exit_contract(errors: list):
     )
     if not has_unlock_action:
         errors.append("PanicExit.astro 缺失解锁还原机制")
+
+    # 5. 移动端手势冲突校验：禁止粗暴监听双指触屏导致拦截系统原生捏合缩放 (pinch-to-zoom)
+    if "touches.length >= 2" in panic_content or "touches.length > 1" in panic_content:
+        errors.append("PanicExit.astro 包含粗暴的双指 touchstart 避险逻辑 (touches.length >= 2)，会劫持移动端原生双指缩放手势")
 
 
 def validate_blind_match_data(errors: list):
