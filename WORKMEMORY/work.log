@@ -324,6 +324,19 @@ Caps: filesystem-read, filesystem-write, shell-exec
    - `git ls-remote --heads origin`：远端分支仅保留 `master`，9 个候选分支彻底清理；
    - `pnpm curate:pool`：候选池正常扫描并列出 47 条候选，无异常。
 
+### 2026-10-16T21:55:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 know-her 代码库常规工程维护与基线对齐：
+1. 本地 Git 树深度大扫除：
+   - 清理全部 24 个历史 subagent 孤立 worktrees 及嵌套目录，释放磁盘空间；
+   - 批量清理已合并的 34 个 `hermes-subagent/*` 本地分支与历史候选分支；
+   - 归档 4 专家蜂群审查报告至 `docs/audit/`；
+2. 架构上下文与项目级技能更新：
+   - 纳入项目级避坑技能 `.agents/skills/know-her-gotchas/`；
+   - 全面更新 `.agent-context.md` 基线测试指标（32 篇长文、28 篇词典、32 题速测、9 大工具、42 个静态页面、9 套测试套件全部 PASS）及工程红线；
+3. 全链路回归验证：`pnpm test` + `curate.py check-links` 100% 绿灯。
+
+
 
 
 
