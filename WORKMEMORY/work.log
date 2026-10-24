@@ -356,3 +356,18 @@ Caps: filesystem-read, filesystem-write, shell-exec
    - `gh pr list --state open`：待审 PR 数量归零（0 open）；
    - `git ls-remote --heads origin`：远端分支仅保留 `master`，10 个候选分支彻底清理；
    - `pnpm curate:pool`：候选池正常扫描并列出 48 条候选，无异常。
+
+### 2026-10-24T13:25:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行仓库工程维护、故障修复与候选PR策展：
+1. 流水线故障排查与修复 (325aa51)：
+   - 修复 scripts/curate.py 中 cmd_daily 未复用 check_single_url 降级重试机制导致 403 WAF 误报退出的缺陷；
+   - 联动闭环关闭巡检告警 Issue #26。
+2. 候选 PR 策展推进 (PR #27)：
+   - 通读世卫组织实况报道，人工撰写《口服避孕药》5 条核心要点与分型指引（contraception-oral-contraceptives.mdx）；
+   - 在 src/data/dailyQuiz.ts 补齐知情速测题，满足 G1 门禁（文章与速测题 1:1 映射）；
+   - 推送远端分支 candidate/contraception-oral-contraceptives 并转为 Ready for review。
+3. 工作区常规卫生大扫除 (dfs-maintain)：
+   - 清理本地 9 个临时候选追踪分支 (pr-16 ~ pr-24)；
+   - 同步修剪远端已关闭候选分支，远端仅保留 master 与活跃候选分支；
+   - 全链路验证：astro check (0 error, 0 warning) + pnpm test:graph (9 套测试全绿) + curate:check + astro build 静态产物构建全量 PASS；工作区 clean。
