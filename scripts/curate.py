@@ -286,13 +286,11 @@ def cmd_daily(args):
 
     url = today_article.get("source_url", "")
     print(f"🌐 探测今日精选原出处外链可达性...")
-    req = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"✅ [{resp.status} OK] 今日精选外链正常可达！\n")
-    except Exception as e:
-        print(f"❌ 今日精选外链异常: {e}\n")
+    ok = check_single_url(url, today_article["filename"], today_article.get("source_name", ""))
+    if not ok:
+        print(f"❌ 今日精选外链异常，请检查网络或第三方原出处页面变动。\n")
         sys.exit(1)
+    print(f"✅ 今日精选外链健康可达！\n")
 
 def cmd_new(args):
     slug = args.id
