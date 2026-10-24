@@ -344,3 +344,15 @@ Caps: filesystem-read, filesystem-write, shell-exec
 
 
 
+
+### 2026-10-24T12:55:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+批量清理日常自动化积压的待审候选 PR 并同步删除远端候选分支：
+1. 目标：关闭 #15 至 #24 共 10 个积压的 Draft 候选导读 PR，恢复每日 Harvest 定时流水线 (Pipeline B) 自动产出能力；
+2. 操作：
+   - 遍历调用 `gh pr close <n> --delete-branch --comment "批量清理积压候选PR以恢复每日流水线产出"` 关闭 #15~#24；
+   - 联动关闭关联积压报警 Issue #25（"⏸️ [Pipeline B 积压] 10 个候选待人工审阅，机器已停止推进"）；
+3. 验证：
+   - `gh pr list --state open`：待审 PR 数量归零（0 open）；
+   - `git ls-remote --heads origin`：远端分支仅保留 `master`，10 个候选分支彻底清理；
+   - `pnpm curate:pool`：候选池正常扫描并列出 48 条候选，无异常。
