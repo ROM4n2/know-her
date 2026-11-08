@@ -84,7 +84,14 @@ Astro 组件 `<style>` 默认带 `[data-astro-cid-...]` 作用域，`body *` 这
 
 ---
 
-## 7. 关联
+## 7. 内容池与门禁的联动约束 (MUST)
+
+- **扩文章必须同步扩词典**：`test_daily_loop.py` 的 G3 判定 `lcm(文章池, 词典池) >= 90` 且两池互不整除。文章池 32→42 后若词典停在 28，`lcm(42,28)=84` 直接判红「周期坍缩」。扩文章前先算 `lcm(新文章数, 现词典数)`，不达标就在同一次改动里把词典扩到互不整除的规模（如 33 ⇒ lcm=462）。
+- **候选 PR 分支的 `dailyQuiz.ts` 必然冲突**：harvester 生成的分支在 `DAILY_QUIZZES` 尾部追加带 `TODO(human)` 的占位条目，合 master 时与主分支新增键冲突。固定解法：`git checkout --theirs src/data/dailyQuiz.ts`（取 master 版）→ 在对象尾部插入本条真实条目 → 删掉分支占位条目，切勿保留占位文字（`curate:check` 的 `PLACEHOLDER_MARKERS` 与 G1 都会判红）。
+- **每篇新文章必须配速测题**：G1 强制文章 slug 与 `DAILY_QUIZZES` 键双向 1:1，新增 `.mdx` 而漏题即红；题目里的占位文本（`待人工补题`）同样判红。
+- **占位扫描是全库的**：`curate:check` 与 CI 对全量文章扫描 `待人工提炼` / `待人工补题` / `待维护者人工提炼` / `TODO(human)`，同一分支里遗留任何一处都会阻断发布。
+
+## 8. 关联
 
 - 项目工程上下文：`D:\Code\know-her\.agent-context.md`（测试基线、符号地图、红线）
 - 全局编码规范：`D:\Obsidian\Coding\01-Rules\CODING-UNIVERSAL.md`

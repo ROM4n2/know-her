@@ -96,3 +96,18 @@ D10（判据口径修正 + 第一次重新预注册）：gap-criteria §② quer
 Caps: filesystem-read, filesystem-write, shell-exec
 现象：计划把知乎/小红书站内搜索列为"可无痕复现的公开 SERP"取证渠道，实测匿名访问撞登录重定向与风控拦截（知乎 403、小红书 error_code=300012）→ 根因：未做匿名可达性实测就假设站内搜索可无痕复现 → 解法：SERP 取证渠道先过匿名可达性实测再入白名单，站内搜索一律降级为搜索引擎 site: 限定替代。
 
+
+### 2026-11-08 22:56 | deepseek-flash-1m-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+补记说明（协议 §1.7，不回改历史）：本任务开工时未记 WORK_START，现以 NOTE 补记缺口。任务＝处理 Pipeline B 积压的 10 个候选 PR（#27~#36）：逐条实测权威源可达、人工提炼内容后入库站点。不做范围：不改 curate_harvester 流水线逻辑、不改既有存量文章、不新增工具箱组件与交互功能。
+
+### 2026-11-08 23:02 | deepseek-flash-1m-pro__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+积压候选 PR 全量策展入库收尾（PR #27~#36 全部合入 master，open PR 归零）：
+1. 探活：10 条权威源串行实测 HTTP 200（WHO 实况报道 6 篇 / 默沙东大众版 4 篇），HTML 落盘转纯文本后逐篇通读，非抽样非回忆；
+2. 策展入库：10 篇文章逐篇人工重写（3~6 条核心看点 + 深度解读 + 误区破除 + 原文直达），占位标记清零；10 道速测题写全题干/选项/正确项/解析；词典扩容 5 条（盆腔炎性疾病、附件扭转、沙眼衣原体、苄星青霉素、子宫内膜增生）；
+3. 分支纪律：每个候选 PR 独立 merge master → 本地门禁 → push → ready for review → squash merge，未在大批合并中放宽任何门禁；
+4. 验证：pnpm check（48 文件 0 error 0 warning，2 hints 为既有 deprecated 提示）、pnpm test:graph（9 套全绿）、pnpm curate:check（42 篇）、pnpm curate:links（42 条外链零 404，含 1 条 WAF 403 五态降级）、pnpm build（52 页 + Pagefind 52 索引）；
+5. 联动：关闭积压告警 Issue #37（含策展说明）；PROJECT_OVERVIEW 当前状态与第 23 条、.agent-context.md 基线计数已回写，README 无硬编码计数无需改；
+6. PITFALL（G3 周期闸门联动）：文章池由 32 增至 42 后若词典池停在 28，lcm(42,28)=84 < 90 会直接判红「周期坍缩」——扩容文章必须同步扩容词典到与文章池互不整除的规模（本次 33，lcm(42,33)=462）；
+7. PITFALL（候选分支冲突）：harvester 生成的候选分支一定会在 src/data/dailyQuiz.ts 的 DAILY_QUIZZES 尾部与 master 冲突，解法固定为 `git checkout --theirs src/data/dailyQuiz.ts`（取 master 版）后插入本条新键，切勿保留分支占位条目。
