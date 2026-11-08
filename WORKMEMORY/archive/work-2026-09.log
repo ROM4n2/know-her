@@ -1,0 +1,180 @@
+### 2026-09-22 23:15 | mimo-v2.6-pro__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+vault-exec Task-4 结项（f10cf82，经一轮返修 + 增量复核 PASS）：15 条 query（意图 5/5/5，敏感高 6/低 9），6 行渠道改 site: 限定取证（偏差留痕：计划例举的知乎/小红书站内搜索实测不可匿名复现，替换为 必应 site:zhihu.com / site:xiaohongshu.com）。取证波启动：Task-5/6/7 并行（各 5 条 query）；gap-criteria（冻结 1b7c134c…11df）自此只读，判据/阈值调整窗口正式关闭。
+[STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-6/7 结项（b140396/33d0c0d）：SERP 取证组 B/C 经一轮 REVISE→返修→增量复核 PASS。教训：同文档并存 g=2 与 g=5 双口径不可机械复算，须显式并列「机械口径/敏感性口径」逐行加总；无验证物精确断言一律降级（本批降级 10+ 处断言、5 处断链存档引用），禁补造。
+[PITFALL] 2026-09-23T13:39:09+08:00|model=mimo-v2.6-pro__hermes-agent|现象：批量攒稿型取证代理被 provider 内容策略掐断（content_policy_blocked），56 分钟成果尽失 → 根因：敏感页面正文进模型上下文 + 报告攒到最后一次写 → 解法：逐条即时落盘、正文不进上下文（curl+元信号提取）、截图短标签化。
+[PITFALL] 2026-09-23T13:39:09+08:00|model=mimo-v2.6-pro__hermes-agent|现象：必应 site: 返回与 query 无关伪 SERP（生造词对照实验证实）、Google reCAPTCHA+DNS 异常、百度桌面 wappass 墙 → 根因：取证出口反自动化降级，取得非真实 SERP → 解法：取证前先做出口健康检查（生造词对照实验），证据按「有效观察支撑/不可得规则产物」分层，裁决用机械/敏感性双口径防 R 系统性偏高。
+[STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-5 结项：组 A 一轮 REVISE（复核者逐张开图判读揪出截图归属错误与漏录广告条目）→返修 36 处→增量复核 PASS。教训：复用截图必须逐张核对搜索框检索词归属；视口表述以 PNG IHDR 实测为准（14 张均 1366×768）；截图内自述与归属标注形式要对称。非阻断记录：serp-1-1-2 无搜索框未挂〔归属存疑〕标签（披露充分）。
+[STEP] 2026-09-23T13:56:12+08:00|model=mimo-v2.6-pro__hermes-agent|启动 Task-8（VALIDATION.md 汇编）：双口径裁决（机械/敏感性）+ 证据层级分层 + 缺失信息汇总 + 用户拍板矩阵（GO/有条件 GO/NO-GO，含 D1 转策展路线出口），Human Gate 交用户。
+[STEP] 2026-09-23|model=mimo-v2.6-pro__hermes-agent|Task-8 结项：VALIDATION.md 终审 REVISE（3 处引用归属失实：时间戳通则化、自造编号、⑩一致原话）→返修→机械核验零残留→按复核者预授权转 PASS。三读裁决待拍板：机械 g=15→GO；敏感性 g′=5→有条件 GO；严格 g′=4→NO-GO。
+[WORK_END] 2026-09-23T14:23:35+08:00|model=mimo-v2.6-pro__hermes-agent|vault-exec 需求验证子计划 8/8 完成。回写检查：稳定结论已全部入库（docs/ 9 文件 + 62 张截图证据），临时产物（scratch/浏览器工作区）不入库。Human Gate 待用户拍板 GO/有条件 GO/NO-GO。
+[DECISION] 2026-09-23T18:42:46+08:00|model=mimo-v2.6-pro__hermes-agent|D11（Human Gate 拍板）：采纳敏感性口径的**有条件 GO + 补证计划**。理由（用户选 A）：不把环境产物当需求证据用，但也不因取证通道瘸腿否定已观察到的 5/5 有效行缺口；10 行〔不可得规则产物〕（#2/#3/#5/#7/#8/#10/#11/#12/#14/#15）待正常出口环境补证重跑后按 §②.2 重推档位。补证期间判据 gap-criteria（1b7c134c…）继续只读。
+[NOTE] 2026-09-23T22:00:35+08:00|model=gemini-3.8-flash-high|因本地网络出口伪 SERP/DNS 异常未排除，用户决定暂缓补证执行；项目维持「有条件 GO」挂起状态，内容构建暂不启动。
+[WORK_START] 2026-09-23T22:05:03+08:00|model=claude-sonnet-4-6|scope=架构与工程准备子计划（Astro 5 + Zod Schema + CI 四段门禁 + 词条模板）|不做范围：补证取证、医学内容录入、newsletter 实际接入、数据库、任何个人信息收集功能。
+[STEP] 2026-09-23T23:03:34+08:00|model=gemini-3.8-flash-high|Task-3/4/5 并行完成（4c76029 / c6b6d21 / ea202dc）：核心 UI 组件（免责声明、降级横幅、红旗卡、年龄偏好确认）、Pagefind 静态搜索集成与索引生成、_template.mdx 词条模板与写作规范落地；pnpm check 0 错误，pnpm build 成功通过。
+[STEP] 2026-09-23T23:22:45+08:00|model=gemini-3.8-flash-high|Task-6/7 结项（ec92231/0835353）：GitHub Actions CI（无 paths 过滤、零 secrets、双 job 阻断）+ lychee 外链巡检（PR 只查 diff/schedule 全量开 issue）+ 零 PII 纠错/来源 Issue 模板 + 四段审核 PR 自查清单；RSS 2.0 feed（dist/rss.xml，published 过滤）+ ArticleSchema MedicalWebPage JSON-LD。28 项约束校验 ALL PASS，4 YAML safe_load 通过。
+[WORK_END] 2026-09-23T23:22:45+08:00|model=gemini-3.8-flash-high|架构与工程准备子计划 7/7 完成（Astro 7.3.3 + TS strict + Tailwind v4 + Zod v4 superRefine 内容契约 + 4 合规 UI 组件 + Pagefind + 词条模板/写作规范 + CI 双 workflow + Issue/PR 模板 + RSS/Schema.org）。回写检查：稳定结论已入库（代码+docs/plan），临时 fixture/探针文件均未入库；work.log 本事件为收官记录。技术坑留痕：Astro 7 用 src/content.config.ts+glob loader、@tailwindcss/vite 替代 @tailwindcss/astro、Zod v4 独立包（astro:content 的 z 是 v3 弃用）、lychee-action@v2 无 createIssue 输入需配 peter-evans/create-issue-from-file、pnpm/action-setup@v4 需显式 version。
+[WORK_START] 2026-09-24T19:28:26+08:00|model=gemini-3.8-flash-high|scope=内容建设与首批试点词条子计划（词条详情页路由渲染 + 2 篇基于权威源试点词条 + Pagefind/RSS/Schema 全链路验证）|不做范围：补证取证（等网络）、后台管理系统、数据库、个人信息收集。
+[STEP] 2026-09-24T19:41:39+08:00|model=gemini-3.8-flash-high|Task-1 结项（0ec00d2）：/articles/[id]/ 详情页路由与首页清单装配完成（ArticleSchema/UnreviewedBanner/RedFlagCard/Base 组装，经冒烟夹具断言全部属性通过）。启动 Task-2/3 并行。
+[STEP] 2026-09-24T20:13:18+08:00|model=gemini-3.8-flash-high|Task-2/3/4 结项（c7f3e4f / 8dca8fb）：首批 2 篇试点词条落地（异常子宫出血 abnormal-uterine-bleeding / 正常月经周期四大指标 normal-menstrual-cycle），遵循 D4 降级标记（reviewed_medical: false + UnreviewedBanner 横幅）、无第二人称条件句（全部第三人称枚举）、急症红旗双写 1:1 严格对齐、来源可追溯（MSD / WHO / FIGO）。全链路验收 ALL PASS（check 0 错、build 生成 3 静态路由、dist/rss.xml 包含 2 item、Pagefind 索引 3 页、HTML 包含免责/横幅/红旗卡/JSON-LD）。
+[WORK_END] 2026-09-24T20:13:18+08:00|model=gemini-3.8-flash-high|内容建设与首批试点词条子计划 4/4 完成（详情页路由 /articles/[id]/ + 2 试点词条 + 端到端综合验收）。稳定结论与代码已全部入库，工作树 clean。
+[DECISION] 2026-09-24T21:11:40+08:00|model=gemini-3.8-flash-high|ADR-0002 通过：项目定位重大转型，从严肃医学临床知识库全面转向每日性科普与愉悦分享站（避孕、愉悦、生理、亲密四大分类）。双镜共识：D8 定位转型、D9 双轨内容（策展导读为主+开放全文为辅，零版权风险）、D10 Schema 彻底减负瘦身（移除四段医学审核与强门禁）、D11 双轨生产（极简手工提录+可选候选池）。
+### 2026-09-25T01:52:16+08:00 | glm-5-3-flash-260828__claude-code | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch(mcp)
+竞品调研会话（未记 WORK_START，补记说明）：23 代理工作流完成 6 路生态扫描+3 路瓶颈分析+12 仓库深读+1 综合（364 工具调用，12 深读全部 verified、25 存在性核验全通过）。
+核心结论：中文开源无同模式竞品（唯一直接同类 KnowSex 489★ 同栈）；方法论先例 HowToLiveBetter 14k★/18天；最大风险=触达(github.io 大陆可达性实测三次重置+零SEO)、信任承诺与机制落差(harvester 模板合成病句实锤 contraception-condoms.mdx L26、UnreviewedBanner 死代码实锤)、bus factor=1(53 commits 单作者实锤)。
+产出物：调研报告已交付用户；Inbox 草稿 d:/Obsidian/Coding/99-Inbox/2026-09-25-know-her-竞品调研与可行性.md；P0-P3 行动建议 10 条（含止血 harvester/接线横幅/探测降频/SEO 落地）。
+注：用户尚未对建议拍板，P0 项未执行。
+
+### 2026-09-25T12:42:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+紧急状况交互决策树上线（路线 2->1 第一阶段，commit `6df09b9`）：
+1. 依据 WHO、FIGO 与默沙东大众版临床指南编制 `src/data/decisionTree.ts`（3 大类、6 个问题节点、12 个结果卡）；
+2. 编写 `src/components/DecisionGuide.astro` 与独立路由 `/guide/decision-tree/`，提供纯客户端离线交互、3 步循证处置卡、一键复制卡片与站内深度词条联动；
+3. 全站顶栏与首页检索区上线「⚡ 应急速查」入口；
+4. 自动化测试 `scripts/test_decision_tree.py` 验证全图 100% 连通零孤立死胡同；
+5. GitHub Actions CI 与 Deploy to GitHub Pages 双流程通过，线上实测 200 OK。
+
+### 2026-09-25T12:47:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+两性健康与医学术语词典库上线（路线 2->1 第二阶段）：
+1. 在 `src/content.config.ts` 扩展 `glossary` collection 并创建 `src/content/glossary/` 包含 16 篇规范名词（左炔诺孕酮、含铜IUD、COC、储精囊、渗透压、黄体期、FIGO标准、PALM-COEIN等）；
+2. 编写 `src/pages/glossary/index.astro` 独立词典路由，集成即时搜索、分类过滤与首字母 (A-Z) 索引；
+3. 文章详情页 `src/pages/articles/[id].astro` 联动渲染「本文涉及的医学专有名词速查」；
+4. 编写 `scripts/test_glossary.py` 并整合进 CI 与 `package.json` (`pnpm test`)；
+5. 全流程构建验证通过，Pagefind 索引增至 20 篇静态路由。
+
+### 2026-09-25T12:56:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+词条库大幅扩容（11 篇 ➔ 19 篇）：
+1. 落地 8 篇权威导读：痛经、细菌性阴道病BV、外阴阴道假丝酵母菌病、宫内节育器IUD指南、性传播感染STIs防治、同房疼痛与阴道痉挛、亲密伴侣暴力与控制边界、子宫内膜异位症与腺肌病；
+2. 8 篇全部通过真机探针确认 WHO 与默沙东 200 OK 真实链接，全库 19 篇外链 100% 探活成功；
+3. `src/data/dailyQuiz.ts` 题库同步扩充 8 道知情速测题目，覆盖全部 19 篇；
+4. `src/content/glossary/` 同步扩容 6 篇医学名词至 22 词条；
+5. `pnpm test` 门禁（类型检查、图完整性、词典外键、外链探测、静态构建）全绿通过，静态路由达 28 篇。
+
+### 2026-09-25T13:46:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+前端设计规范与 UI/UX 体验重塑：
+1. 借鉴 01-Rules/FRONTEND-DESIGN-PATTERNS.md 规范落地温润纸质感与社论排版体系；
+2. 全局 Design Tokens 注入温润米白底（#FAF8F5）、纯白卡片（#FFFFFF）、柔墨黑正文（#2A2620）与实体硬边阴影；
+3. 移动端上线 44px 触控黄金区吸底操作栏（Mobile Bottom Nav：首页/应急速查/知识词典/随机漫游）；
+4. 每日精选卡、应急决策树、知识词典、文章详情页长文排版及滚动阅读进度条全面升级；
+5. 全量执行 pnpm test、pnpm check、pnpm test:graph 与 pnpm build，28 篇静态路由与 Pagefind 索引构建 100% 成功。
+
+### 2026-09-25T14:02:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+1 2 4 三合一闭环交付（排障、工具箱与版本交接）：
+1. 修复 .github/workflows/harvest-candidates.yml 移除 cache: pip，解决 CI 启动即报错缺陷，本地 dry-run 验证成功抓取 WHO 候选；
+2. 落地纯前端离线循证健康工具箱（/tools/）：
+   - 紧急避孕 72h / 120h 黄金窗口实时计算与处置指引；
+   - 短效口服避孕药 (COC) 漏服分周补救计算器；
+   - 月经四大客观指标（周期、经期、规律性、出血量 AUB-HMB）自测打分器；
+3. 新增 scripts/test_tools.py 自动化测试门禁并接入 pnpm test；
+4. 全站静态路由扩充至 29 个页面，更新 PROJECT_OVERVIEW 踩坑记录。
+
+### 2026-09-25T14:24:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+全站去 Emoji 视觉与社论风格净化（遵循 frontend-design）：
+1. 视觉问题定位：大量彩色原生系统 Emoji（🌸/⚡/📖/🎲/🧮/⏱/💊/🩸/🚨/⚠️/💡/🏠/🎯/🐞/🔒/🛡️）在跨平台呈现下高度割裂，产生廉价模板与 AI 伪劣感，削弱了严肃循证医学网站的公信力；
+2. 架构与 UI 净化：
+   - 顶部导航、移动端吸底栏与免责页脚：去除所有 Emoji，替换为高质感单色几何标记与简洁文字；
+   - 实用工具箱三大计算器（EmergencyCountdown, CocRemedyCalculator, CycleAssessment）：移除全部状态与卡片 Emoji，换用标准单色语义 SVG、结构化状态微徽标（如 `[ 24小时黄金期 · 95%有效率 ]`）与 Academic Modern Editorial 纸墨卡片；
+   - 应急决策树与医学词典：移除卡片与复制小抄中的多余 Emoji，优化为纯排版符号；
+   - 隐私承诺声明与信源准则：重构为温润纸墨视觉风格，采用 `01 // PRINCIPLE`、`WHITELIST`、`BLACKLIST` 微标签与结构化编号；
+3. 内容库深度净化：全库 19 篇 MDX 文章标题与小节统一清除 `💡`、`📖`、`🚨`、`🩺`、`🔗` 等装饰性 Emoji；
+4. 代码清理与验证：移除未使用的图标 DOM 引用变量，运行 `pnpm test`（含 Astro check、全图连通性、词典与工具箱测试、构建）全部零报错通过。
+
+### 2026-09-25T14:40:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+落地 artifact (极光帘幕 Aurora Veil) 交互与社论设计系统（方案 A + B）：
+1. 深入剖析 artifact/index.html 与 DESIGN-HANDOFF.md，解构其 WebGL2 实时光幕渲染与工业级微排版精髓；
+2. 架构落地方案 B（有机呼吸光幕交互）：
+   - 创建 `src/components/AmbientHero.astro`，基于 WebGL2 与 FBM 算法构建原生轻量着色器；
+   - 适配知她温润米白底（#FAF8F5），调配出如真丝绸缎般柔和的珊瑚暖粉（#F43F5E）、杏桃橘与琥珀金三层呼吸水波；
+   - 支持移动端与鼠标悬停引力摇曳（Sway），四周边际柔和羽化；
+   - 兼顾极致性能与无障碍：支持 `prefers-reduced-motion` 降级，`IntersectionObserver` 离屏停止渲染；
+3. 架构落地方案 A（社论高反差字阶与微排版）：
+   - 首页 Hero 标题采用 800 + 300 粗细戏剧性对撞（`KNOW HER` + `两性健康与自主愉悦探索`）；
+   - 元数据引入 `tracking-[0.28em]` 宽字母间距排版与半透毛玻璃徽标（`backdrop-blur-md`）；
+   - 导航与速测题库注入带光晕发光微指示点（`shadow-[0_0_10px_rgba(244,63,94,0.7)]`）；
+4. 运行 `pnpm test`，全站静态构建、类型检查与全图连通性测试 100% 通过。
+
+### 2026-09-25T15:05:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+落地方案 C：愉悦探索专栏扩容（性生理学与技巧循证词条 + 双重控制模型自测盘点器）
+Outcome: SUCCESS
+Key Artifacts:
+- src/content/articles/pleasure-arousal-time-physiology.mdx (时间生理学与帐篷效应)
+- src/content/articles/pleasure-cat-technique-alignment.mdx (CAT协调对位法实操)
+- src/content/articles/pleasure-responsive-desire-dual-control.mdx (响应性欲望与双重控制模型)
+- src/content/glossary/tenting-effect.md, cat-technique.md, dual-control-model.md (25词条)
+- src/components/tools/ArousalBrakesChecklist.astro (第4离线工具)
+- src/data/dailyQuiz.ts (扩充至22道速测题)
+- scripts/test_tools.py (扩展自动化门禁契约)
+Tests: `pnpm test` (0 errors, 0 warnings, 32 static pages generated)
+
+### 2026-09-25T15:25:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 vault-debug 系统性根因排障：解决部分文章正文前误渲染全站页脚文字问题
+Outcome: SUCCESS
+Key Artifacts:
+- scripts/test_article_hygiene.py (文章正文整洁度与布局隔离门禁)
+- package.json (接入 test:graph 自动门禁)
+- scripts/curate_harvester.py (修复候选生成模板中的非法 MedicalDisclaimer 引用)
+- src/content/articles/ (清洗 4 篇受影响的 MDX 文章)
+Tests: `python scripts/test_article_hygiene.py` & `pnpm test` (0 errors, 0 warnings, 32 pages clean)
+
+### 2026-09-26T13:08:00+08:00 | gemini-3.8-flash-high__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 vault-onboard 协议接手仓库：
+1. 基线测试套件验证：运行 `pnpm test`（含 `astro check`、`test:graph` 决策树/词典/工具箱/文章整洁度四维测试、`curate:check`、`astro build`），全套 0 错误 0 警告，32 个静态路由正常生成与 Pagefind 索引完成；
+2. 架构拓扑与符号地图锚定：识别 Astro 7.3.3 + Tailwind v4 + TS strict 架构，基路径 `/know-her` 契约，四大分类与离线无埋点工具链；
+3. 红线与局部 Gotchas 归纳：严禁 MDX 违规引用全局布局（隔离门禁）、外链真实性 200 OK 要求、严格无系统 Emoji 纸墨排版准则；
+4. 机器可读上下文沉淀：根目录生成 `.agent-context.md`。
+
+### 2026-09-26T13:16:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地门诊就诊沟通便签 (ClinicMemo) 与全品类避孕决策矩阵 (ContraceptionMatrix) 4 个子任务。
+不做范围：不改动现有 4 大工具核心逻辑、不引入服务端接口与持久化个人隐私、不新增重型 npm 依赖。
+
+### 2026-09-26T19:24:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地性生理力学矩阵、伴侣知情清单与深度科普体系（方案 C）4 个子任务。
+不做范围：不引入低俗猎奇/男性中心视角、不持久化私密偏好到 localStorage/服务端、不引入重型前端第三方依赖。
+
+### 2026-09-26T20:18:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+完成 vault-exec 流水线，全面落地《性生理力学矩阵、伴侣知情探索清单与深度科普体系》(方案 C)：
+1. Task-1 [e0da636]: 落地 3 篇性生理学深度长文（女上位掌控度与深部痛防护、侧卧匙羹力学与低耗能、后入位曲度与子宫后位避坑）、3 大医学词典词条（子宫后位、深部性交痛、解剖进入角度），扩充每日速测至 25 题闭环；
+2. Task-2 [e3a393c]: 建立 `positionMatrix.ts`（8 种循证体位、3 维力学条形指标、外键文章映射）与 `intimacyChecklist.ts`（5 大脱敏分类 16 项探索点选与非暴力沟通话术），扩展 `scripts/test_tools.py` 自动化测试契约；
+3. Task-3 [e65affa]: 落地第 7 大纯前端离线交互工具 `PositionAndIntimacyGuide.astro`，支持体位 6 维多标签即时筛选、双选横向 PK 对比抽屉、Yes/No/Maybe 亲密沟通便签实时生成、一键复制、纸质打印 (@media print) 与安全无注入 DOM 渲染 (Zero innerHTML)；
+4. Task-4 [7112930]: 挂载组件至 `src/pages/tools/index.astro`「场景二：日常生理与身体自主管理」，更新顶部快速定位微导航为 7 大工具体系；
+5. 全量回归测试通过：`pnpm test`（`astro check` + `test:graph` + `curate:check` + `astro build`），全站静态页面扩充至 35 个路由，Pagefind 全文索引 100% 成功生成，零错误零警告。
+
+### 2026-09-26T21:30:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地全景蜂群审计（vault-team）10 项 P0/P1 高危缺陷加固计划（docs/plans/2026-09-26-phase1-high-risk-hardening.md）。
+不做范围：不推进 0-to-1 新功能、不改动业务主干逻辑与既有页面布局、不引入破坏性架构变更。
+
+### 2026-09-26T22:12:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+完成 vault-exec 流水线，全面落地 5 大高危止血与缺陷加固任务：
+1. Task-1 [1c3753c]: 修复移动底栏遮挡悬浮条（`ContraceptionMatrix` 与 `PositionAndIntimacyGuide` 改为 `bottom-20 sm:bottom-6` 避让 56px 导航），`scripts/test_tools.py` 补充自动化断言；
+2. Task-2 [cd5f479]: 根除 4 处 `innerHTML` 残留（`CycleAssessment`, `ArousalBrakesChecklist`, `DecisionGuide`, `DailyCard` 切换为 `replaceChildren` / `createElement` 纯 DOM 安全构建），`scripts/test_article_hygiene.py` 新增全组件零 innerHTML 静态门禁；
+3. Task-3 [9b184bb]: 修复 `curate.py` 403 异常漏报与 Zod `source_url` 协议校验（拦截 `javascript:` 等伪协议注入，403 重试遇 404/网络中断正确返回 False 阻断），编写 `scripts/test_security_contracts.py` 并接入 `test:graph`；
+4. Task-4 [d05eac3]: 补齐 `DailyCard` 本地存储 `safeGetItem` / `safeSetItem` 的 `try...catch` 降级容灾，净化 `AgePreferenceBanner` 中彩色 Emoji ⏰ 为单色学术印章 `[ 年龄确认 ]`，统一跨端积日模运算公式 `(day - 1) % totalCount` 与确定性二级排序；
+5. Task-5 [4a5de86]: 优化 CI/CD 触发拓扑（`ci.yml` 忽略 master 分支避免与 `deploy.yml` 双重构建），为 `deploy.yml` 与 `daily-routine.yml` 补充 `timeout-minutes: 10` 硬熔断，在 `Base.astro` 注入兼顾 Pagefind WASM 的客户端 CSP 与 Referrer-Policy 标头；
+6. 验证：`pnpm test`（`astro check` + 5 套测试脚本 `test:graph` + `curate:check` + `astro build`）100% 全绿，35 页面静态生成与 Pagefind 索引正常。
+
+### 2026-09-26T23:05:00+08:00 | glm-5-3-flash__codebuddy | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, browser-devtools(mcp)
+完成 vault-exec 流水线 Phase 2《现有体验穿透、本土化校准与视觉分发》5/5 任务（TDD RED→GREEN，docs/plans/2026-09-26-phase2-experience-and-distribution.md）：
+1. Task-1 [1cb5ba2]: 决策树与工具箱跨工具状态透传——`DecisionOutcome.directToolLink` 契约（12 张结果卡中 12 处直达配置）+ `DecisionGuide.astro` `[ 启动工具 → ]` 直达按钮 + `tools/index.astro` 解析 `URLSearchParams`（`tool` 平滑滚动聚焦高亮、`hours` 预填倒计时、`complaint` 激活门诊主诉 Tab，兼容文章 slug 别名映射）；
+2. Task-2 [b33ff5a]: 紧急避孕本土药品可及性校准（72h 窗口标注左炔诺孕酮 OTC 金毓婷 1.5mg/0.75mg×12h 与药房外卖 24h 可及；120h 窗口明确醋酸乌利司他国内零售暂未普及、次选急诊米非司酮 10mg/25mg 或含铜 IUD）+ 落地 `#ec-vomit-timer-container` 服药后 2 小时胃部吸收观察计时器（MM:SS 倒计时、单实例 setInterval 管理、pagehide 释放、到期安心提示与重置）；
+3. Task-3 [a64aeb9]: 新建 `src/lib/ui/memoImageExporter.ts` 纯原生 Canvas 2D 纸墨长图导出器（零第三方依赖、DPR≥2 高清、双线印章徽标、rose-600 栏目标题、逐字折行、免责声明+时间戳、toBlob 下载并在微信内置浏览器自动新窗长按保存），接入 `ClinicMemo` 与 `PositionAndIntimacyGuide` 保存长图按钮（组件级唯一 ID 规避同页重复 ID 冲突）；
+4. Task-4 [7e9399e]: 首页 `search-intent-pills` 6 大突发场景意图胶囊直连决策树/工具箱/科普词条，`Search.astro` 顺带修复 placeholder 死参数；文章详情页顶部 `glossary-inline-term` In-situ 名词速查悬浮卡（纯 CSS group-hover/focus-within 原地释义+出处，不打断阅读心流）；
+5. Task-5 [272e3db / 9717c7c]: 全流水线回归核验 100% 全绿（astro check 0 错误 + 5 套契约门禁 + curate:check + 35 路由构建 + Pagefind 索引）；修复跨平台门禁阻塞——Windows GBK 控制台导致 emoji 输出 UnicodeEncodeError、`test_security_contracts.py` subprocess 未显式 UTF-8 解码，统一改为 `python -X utf8`（package.json）+ 显式 `encoding="utf-8"`；
+6. 额外验证：Node 24 原生 TS 运行时 + 最小 Canvas 桩对 memoImageExporter 做了 9 项运行时断言冒烟（1800x1790 画布、PNG blob、下载文件名非法字符净化、折行/墨框/墨线绘制），全通过后临时文件已清理；构建产物 grep 确认四大任务新钩子全部真实渲染。
+台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean，共 6 个原子提交。
+

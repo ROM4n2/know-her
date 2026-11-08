@@ -1,0 +1,92 @@
+### 2026-10-10T15:35:00+08:00 | claude-sonnet-4-6__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地《妇科检查报告通俗解码台与 PWA 离线防窥急救包》（docs/plans/2026-10-10-lab-decoder-and-offline-pwa.md）全部 5 个原子任务。
+交付产物：
+1. `src/data/labReportDecoder.ts`：4 大分类 15 项指标结构化数据集，严格遵循 FIGO/ACOG 标准，设立三级处置标尺与过度医疗避坑提示；
+2. `src/components/tools/ReportDecoder.astro`：挂载为工具箱第 8 大实用工具，支持通俗人话诊断速解、就诊追问清单与 Canvas 纸墨便签长图导出；
+3. `public/manifest.webmanifest` & `public/sw.js`：原生 PWA 规范基建与离线急救缓存系统（Cache-First 静态资产 + Network-First 离线降级）；
+4. `src/components/PanicExit.astro`：全局防窥一键伪装避险组件（双击 Esc 或双指触碰瞬时重绘为工作待办备忘录并清理 URL）；
+5. 全量回归测试：`pnpm test`（含 8 套自动化测试脚本、Astro/TS 检查、文章元数据校验与 36 页静态打包）100% 全绿通过。
+台账：.vault-exec-ledger.json 5/5 结项（PASS）；仓库工作树 clean。
+
+### 2026-10-11T12:35:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, task-delegation
+执行 vault-exec 流水线：落地《P0 高危缺陷与交互阻断系统性加固》（docs/plans/2026-10-11-phase1-p0-remediation.md）全部 6 个原子任务。
+交付产物：
+1. Task-1 [af0125e]: 解决移动端双指缩放被 PanicExit 劫持 (P0-1) 与 ContraceptionMatrix 悬浮对比栏被防窥按钮遮挡 (P0-2)；
+2. Task-2 [eb25855]: 生产部署解耦外部不可控网络依赖 (P0-3)——deploy.yml 拆分 curate:check（严格阻断）与 curate:links（continue-on-error 软失败），补充自动化契约；
+3. Task-3 [c774e95]: 消除短效药漏服计算器与决策树的临床矛盾 (P0-5)——细化单片漏服（常规无需戴套7天）与多片漏服（严格戴套7天），全面对齐 WHO/CDC 标准；
+4. Task-4 [ef93baa]: 修复隐私协议页本地做题打卡记录清除失效漏洞 (P1-1)——动态遍历清除所有 know_her_ 前缀键，补充安全契约；
+5. Task-5 [ee95701]: 全仓零 innerHTML 与全量文章/词条/组件零原生 Emoji 静态门禁全覆盖 (P1-3)，修复词典清空按钮为合规内联 SVG；
+6. Task-6: 全链路回归测试（pnpm test: astro check + 9 套契约测试 + curate:check + 42 页面静态打包）100% 全绿通过。
+台账：.vault-exec-ledger.json 6/6 结项（PASS）；工作树 clean。
+
+### 2026-10-11T12:45:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+修复 GitHub Actions CI 流水线因 4 篇外部权威信源 404 导致的门禁阻断：
+1. 故障根因：CI 任务 (run #38112012187) 执行 `pnpm curate:links` 失败，4 篇新上线的 MDX 文章外链在 WHO 与 MSD 官方网站路径变更导致 404；
+2. 外链修正：
+   - `body-pcos-lifestyle-management.mdx`: 默沙东多囊卵巢综合征链接更新为有效 slug `polyendocrine-metabolic-ovarian-syndrome-pmos`；
+   - `body-tampon-menstrual-cup-tss-safety.mdx`: WHO 青少年健康链接更新为有效实况页面 `adolescents-health-risks-and-solutions`；
+   - `intimacy-sexual-boundary-saying-no.mdx`: WHO 链接更新为有效实况报道 `comprehensive-sexuality-education`；
+   - `pleasure-vaginismus-pelvic-floor-therapy.mdx`: 默沙东痉挛/疼痛障碍更新为有效路径 `sexual-function-and-dysfunction-in-women/genito-pelvic-pain-penetration-disorder`；
+3. 工作流清晰化：`.github/workflows/ci.yml` 拆分元数据校验与外链探测为独立 step；
+4. 验证：本地 `python -X utf8 scripts/curate.py check-links` 全量 32 篇文章在线探测全部合规（零 404），`pnpm test` 全部绿灯。
+
+### 2026-10-11T12:50:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+批量清理日常自动化积压的待审候选 PR 并同步删除远端候选分支：
+1. 目标：关闭 #6 至 #14 共 9 个积压的 Draft 候选导读 PR，恢复每日 Harvest 定时流水线的自动产出能力；
+2. 操作：调用 `gh pr close <n> --delete-branch --comment "批量清理积压候选PR以恢复每日流水线产出"`；
+3. 验证：
+   - `gh pr list`：待审 PR 数量归零（0 open）；
+   - `git ls-remote --heads origin`：远端分支仅保留 `master`，9 个候选分支彻底清理；
+   - `pnpm curate:pool`：候选池正常扫描并列出 47 条候选，无异常。
+
+### 2026-10-16T21:55:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行 know-her 代码库常规工程维护与基线对齐：
+1. 本地 Git 树深度大扫除：
+   - 清理全部 24 个历史 subagent 孤立 worktrees 及嵌套目录，释放磁盘空间；
+   - 批量清理已合并的 34 个 `hermes-subagent/*` 本地分支与历史候选分支；
+   - 归档 4 专家蜂群审查报告至 `docs/audit/`；
+2. 架构上下文与项目级技能更新：
+   - 纳入项目级避坑技能 `.agents/skills/know-her-gotchas/`；
+   - 全面更新 `.agent-context.md` 基线测试指标（32 篇长文、28 篇词典、32 题速测、9 大工具、42 个静态页面、9 套测试套件全部 PASS）及工程红线；
+3. 全链路回归验证：`pnpm test` + `curate.py check-links` 100% 绿灯。
+
+
+
+
+
+
+
+
+
+
+### 2026-10-24T12:55:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+批量清理日常自动化积压的待审候选 PR 并同步删除远端候选分支：
+1. 目标：关闭 #15 至 #24 共 10 个积压的 Draft 候选导读 PR，恢复每日 Harvest 定时流水线 (Pipeline B) 自动产出能力；
+2. 操作：
+   - 遍历调用 `gh pr close <n> --delete-branch --comment "批量清理积压候选PR以恢复每日流水线产出"` 关闭 #15~#24；
+   - 联动关闭关联积压报警 Issue #25（"⏸️ [Pipeline B 积压] 10 个候选待人工审阅，机器已停止推进"）；
+3. 验证：
+   - `gh pr list --state open`：待审 PR 数量归零（0 open）；
+   - `git ls-remote --heads origin`：远端分支仅保留 `master`，10 个候选分支彻底清理；
+   - `pnpm curate:pool`：候选池正常扫描并列出 48 条候选，无异常。
+
+### 2026-10-24T13:25:00+08:00 | gemini-3.8-flash-high__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+执行仓库工程维护、故障修复与候选PR策展：
+1. 流水线故障排查与修复 (325aa51)：
+   - 修复 scripts/curate.py 中 cmd_daily 未复用 check_single_url 降级重试机制导致 403 WAF 误报退出的缺陷；
+   - 联动闭环关闭巡检告警 Issue #26。
+2. 候选 PR 策展推进 (PR #27)：
+   - 通读世卫组织实况报道，人工撰写《口服避孕药》5 条核心要点与分型指引（contraception-oral-contraceptives.mdx）；
+   - 在 src/data/dailyQuiz.ts 补齐知情速测题，满足 G1 门禁（文章与速测题 1:1 映射）；
+   - 推送远端分支 candidate/contraception-oral-contraceptives 并转为 Ready for review。
+3. 工作区常规卫生大扫除 (dfs-maintain)：
+   - 清理本地 9 个临时候选追踪分支 (pr-16 ~ pr-24)；
+   - 同步修剪远端已关闭候选分支，远端仅保留 master 与活跃候选分支；
+   - 全链路验证：astro check (0 error, 0 warning) + pnpm test:graph (9 套测试全绿) + curate:check + astro build 静态产物构建全量 PASS；工作区 clean。
