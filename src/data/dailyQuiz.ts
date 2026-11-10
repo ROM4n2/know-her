@@ -531,6 +531,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东明确：盆腔肿块在女性中常见，通常为非癌性（育龄期最常见原因是子宫肌瘤与卵泡卵巢囊肿），因此「发现即手术」与「肿块多为恶性」都不成立。有盆腔肿块的育龄期女性应做妊娠试验——即使不太可能怀孕，因为未确诊的妊娠会增加母婴并发症风险，阳性时最常见的解释是妊娠子宫肿大。绝经后女性肿块更容易发生癌变，需额外评估。肿块可以完全没有症状，仅在盆腔检查或影像学检查中发现。',
   },
+  'body-vaginal-bleeding-in-infants-an': {
+    articleId: 'body-vaginal-bleeding-in-infants-an',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
