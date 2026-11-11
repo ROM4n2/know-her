@@ -111,3 +111,14 @@ Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
 5. 联动：关闭积压告警 Issue #37（含策展说明）；PROJECT_OVERVIEW 当前状态与第 23 条、.agent-context.md 基线计数已回写，README 无硬编码计数无需改；
 6. PITFALL（G3 周期闸门联动）：文章池由 32 增至 42 后若词典池停在 28，lcm(42,28)=84 < 90 会直接判红「周期坍缩」——扩容文章必须同步扩容词典到与文章池互不整除的规模（本次 33，lcm(42,33)=462）；
 7. PITFALL（候选分支冲突）：harvester 生成的候选分支一定会在 src/data/dailyQuiz.ts 的 DAILY_QUIZZES 尾部与 master 冲突，解法固定为 `git checkout --theirs src/data/dailyQuiz.ts`（取 master 版）后插入本条新键，切勿保留分支占位条目。
+
+### 2026-11-09 12:05 | deepseek-flash-1m-pro__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+候选 PR 第二批策展入库收尾（PR #38~#39 合入 master，open PR 归零）：
+1. 探活：2 条默沙东大众版权威源实测 HTTP 200，HTML 落盘转纯文本后通读；
+2. 策展入库：新增 2 篇儿科主题导读——《儿童中的女性盆腔肿块》《婴幼儿与儿童阴道出血》，均写全核心看点/深度解读/误区破除，速测题 2 道补齐，占位清零；
+3. 规范化：候选分支截断 slug `body-vaginal-bleeding-in-infants-an` 规范为 `body-vaginal-bleeding-in-infants-and-children`，速测题键同步，避免线上 URL 出现截断名；
+4. 验证：pnpm check（0 error/0 warning）、pnpm test:graph（9 套全绿，G3 lcm(44,33)=132 达标）、pnpm curate:check（44 篇）、pnpm build（54 页 + Pagefind 54 索引）；
+5. 回写：PROJECT_OVERVIEW 当前状态与第 24 条、.agent-context.md 基线计数（44 篇/33 词条/44 题/54 页）；
+6. PITFALL（截断 slug 治理）：harvester 以分支名生成文件名时可能截断，策展时必须先 `ls src/content/articles/` 核对真实文件名与 PR 标题是否一致，否则 quiz 键与文件名不一致会触发 G1 判红或产生截断 URL；
+7. 备注：PR #39 首次 merge 因 GitHub GraphQL EOF 瞬时故障失败，`gh pr ready` 静默失败亦未被察觉——ready 与 merge 均须检查回显，失败时重试。
