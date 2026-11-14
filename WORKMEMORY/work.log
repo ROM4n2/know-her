@@ -122,3 +122,16 @@ Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
 5. 回写：PROJECT_OVERVIEW 当前状态与第 24 条、.agent-context.md 基线计数（44 篇/33 词条/44 题/54 页）；
 6. PITFALL（截断 slug 治理）：harvester 以分支名生成文件名时可能截断，策展时必须先 `ls src/content/articles/` 核对真实文件名与 PR 标题是否一致，否则 quiz 键与文件名不一致会触发 G1 判红或产生截断 URL；
 7. 备注：PR #39 首次 merge 因 GitHub GraphQL EOF 瞬时故障失败，`gh pr ready` 静默失败亦未被察觉——ready 与 merge 均须检查回显，失败时重试。
+
+### 2026-11-14 12:12 | gemini-4-hydrogen__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+补记说明（协议 §1.7，不回改历史）：本任务开工时未记 WORK_START，现以 NOTE 补记缺口。任务＝清理 Pipeline B 积压 PR（#40~#42），检验源站可达并人工提炼后入库站点。不做范围：不改 curate_harvester 代码逻辑、不改存量文章、不新增交互工具组件。
+
+### 2026-11-14 12:15 | gemini-4-hydrogen__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+积压 PR 第三批清理与策展入库收尾（PR #40 合入 master，#41/#42 重复关闭，open PR 归零）：
+1. 重复 PR 排查与清理：PR #40/#41/#42 均指向同一篇默沙东《儿童中的阴道瘙痒或分泌物》，因 generate_slug 取 [:30] 与成人版撞名触发时间戳后缀（-222/-795/-431）绕过分支去重而连续 3 天建单；已关闭 #41/#42 并删远端分支，保留 #40 策展；
+2. 探活与提炼：权威源实测 HTTP 200 OK（HTML 落盘转纯文本通读），人工撰写《儿童外阴瘙痒与阴道分泌物》并补全 1:1 速测题，slug 规范为 body-vaginal-itching-or-vaginal-discharge-in-children；
+3. 验证：pnpm check（48 文件 0 error 0 warning）、pnpm test:graph（9 套全绿，G3 articles=45 glossary=33 lcm=495）、pnpm curate:check（45 篇）、pnpm build（55 页 + Pagefind 55 索引）；curate:links 实测新篇 200 OK（存量 Mayo Clinic 外链本地遇 TLS EOF 瞬断，CI 另行复核）；
+4. 回写与清理：PROJECT_OVERVIEW、.agent-context.md、know-her-gotchas §7（截断撞名查重规则）已更新，本地 12 个旧 cand/* 分支已清理；
+5. PITFALL（harvester 截断撞名）：generate_slug clean_part[:30] + 撞名时间戳后缀会绕过 open PR 分支去重导致重复建单（本次已记入报告建议后续修复，本任务不做范围外改动）。

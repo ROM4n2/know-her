@@ -90,6 +90,7 @@ Astro 组件 `<style>` 默认带 `[data-astro-cid-...]` 作用域，`body *` 这
 - **候选 PR 分支的 `dailyQuiz.ts` 必然冲突**：harvester 生成的分支在 `DAILY_QUIZZES` 尾部追加带 `TODO(human)` 的占位条目，合 master 时与主分支新增键冲突。固定解法：`git checkout --theirs src/data/dailyQuiz.ts`（取 master 版）→ 在对象尾部插入本条真实条目 → 删掉分支占位条目，切勿保留占位文字（`curate:check` 的 `PLACEHOLDER_MARKERS` 与 G1 都会判红）。
 - **每篇新文章必须配速测题**：G1 强制文章 slug 与 `DAILY_QUIZZES` 键双向 1:1，新增 `.mdx` 而漏题即红；题目里的占位文本（`待人工补题`）同样判红。
 - **占位扫描是全库的**：`curate:check` 与 CI 对全量文章扫描 `待人工提炼` / `待人工补题` / `待维护者人工提炼` / `TODO(human)`，同一分支里遗留任何一处都会阻断发布。
+- **截断 slug 撞名与重复 PR 查重**：`curate_harvester.generate_slug` 仅截取 URL 末段前 30 字符，长 URL（如儿童版对比成人版）会与已有文章撞名并触发时间戳后缀（`-222`/`-795`），绕过分支去重而连续多天开出同源重复 PR。处理积压 PR 前**MUST**先按 `source_url` 查重（关闭多余重复单并删远端分支），策展时将截断或带随机后缀的文件名规范化为完整语义 slug 并同步速测题键。
 
 ## 8. 关联
 
