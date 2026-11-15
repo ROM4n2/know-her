@@ -76,15 +76,27 @@ Safari 隐私浏览下 `localStorage` 抛 `SecurityError`。任何存取 **MUST*
 
 硬门禁 **SHOULD** 只保留本地可判定的 schema/元数据校验（`curate:check`）。
 
+**巡检告警三分诊（`weekly-full-audit.yml` 开的「坏链」issue 必须先分型再动手）**：
+
+1. **读超时 / 连接重置**（`NETWORK_ERR: ... timed out`）→ 第三方瞬时抖动，**不是死链**；判据：同一域名**任意**文章路径都失败（含已知正常页）即整站级抖动，另可用官方文档库镜像（如 `unesdoc.unesco.org/ark:/48223/<id>`）交叉验证；
+2. **HTTP 403 且二次确认仍 403**（`BOT_BLOCKED`）→ 反爬墙，按软失败放行；
+3. **404 / 410**（或 403 二次探测转 404）→ 真死链，必须换真实出处回写 `source_url`。
+
+注意 `ci.yml` 的 `curate:links` 目前是**阻断式**（`deploy.yml` 才是软失败），第三方抖动会直接卡 CI；改门禁策略属于策略变更，须先经维护者确认。
+
+## 6. 长行对象字面量的编辑纪律
+
+`patch` 对 `src/data/dailyQuiz.ts` 这类**长单行字符串**的对象字面量容易整体多缩进 2 空格（模糊匹配吃掉首行缩进）。发现缩进漂移时不要连续 patch：用 `awk`/`sed` 或 python 按**行号区间**整段重写（读 `rb`、`splitlines(keepends)` 保留 CRLF），改完再跑 `pnpm check` 与 `test_daily_loop`。
+
 ---
 
-## 6. Astro 作用域事实
+## 7. Astro 作用域事实
 
 Astro 组件 `<style>` 默认带 `[data-astro-cid-...]` 作用域，`body *` 这类选择器**不会**泄漏到兄弟组件。排查样式串扰时不必先怀疑此处。
 
 ---
 
-## 7. 内容池与门禁的联动约束 (MUST)
+## 8. 内容池与门禁的联动约束 (MUST)
 
 - **扩文章必须同步扩词典**：`test_daily_loop.py` 的 G3 判定 `lcm(文章池, 词典池) >= 90` 且两池互不整除。文章池 32→42 后若词典停在 28，`lcm(42,28)=84` 直接判红「周期坍缩」。扩文章前先算 `lcm(新文章数, 现词典数)`，不达标就在同一次改动里把词典扩到互不整除的规模（如 33 ⇒ lcm=462）。
 - **候选 PR 分支的 `dailyQuiz.ts` 必然冲突**：harvester 生成的分支在 `DAILY_QUIZZES` 尾部追加带 `TODO(human)` 的占位条目，合 master 时与主分支新增键冲突。固定解法：`git checkout --theirs src/data/dailyQuiz.ts`（取 master 版）→ 在对象尾部插入本条真实条目 → 删掉分支占位条目，切勿保留占位文字（`curate:check` 的 `PLACEHOLDER_MARKERS` 与 G1 都会判红）。
@@ -92,7 +104,7 @@ Astro 组件 `<style>` 默认带 `[data-astro-cid-...]` 作用域，`body *` 这
 - **占位扫描是全库的**：`curate:check` 与 CI 对全量文章扫描 `待人工提炼` / `待人工补题` / `待维护者人工提炼` / `TODO(human)`，同一分支里遗留任何一处都会阻断发布。
 - **截断 slug 撞名与重复 PR 查重**：`curate_harvester.generate_slug` 仅截取 URL 末段前 30 字符，长 URL（如儿童版对比成人版）会与已有文章撞名并触发时间戳后缀（`-222`/`-795`），绕过分支去重而连续多天开出同源重复 PR。处理积压 PR 前**MUST**先按 `source_url` 查重（关闭多余重复单并删远端分支），策展时将截断或带随机后缀的文件名规范化为完整语义 slug 并同步速测题键。
 
-## 8. 关联
+## 9. 关联
 
 - 项目工程上下文：`D:\Code\know-her\.agent-context.md`（测试基线、符号地图、红线）
 - 全局编码规范：`D:\Obsidian\Coding\01-Rules\CODING-UNIVERSAL.md`
