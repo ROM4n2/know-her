@@ -135,3 +135,16 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 验证：pnpm check（48 文件 0 error 0 warning）、pnpm test:graph（9 套全绿，G3 articles=45 glossary=33 lcm=495）、pnpm curate:check（45 篇）、pnpm build（55 页 + Pagefind 55 索引）；curate:links 实测新篇 200 OK（存量 Mayo Clinic 外链本地遇 TLS EOF 瞬断，CI 另行复核）；
 4. 回写与清理：PROJECT_OVERVIEW、.agent-context.md、know-her-gotchas §7（截断撞名查重规则）已更新，本地 12 个旧 cand/* 分支已清理；
 5. PITFALL（harvester 截断撞名）：generate_slug clean_part[:30] + 撞名时间戳后缀会绕过 open PR 分支去重导致重复建单（本次已记入报告建议后续修复，本任务不做范围外改动）。
+
+### 2026-11-15 17:20 | deepseek-v4-1-flash__hermes-agent | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec
+补记说明（协议 §1.7，不回改历史）：本任务开工时未记 WORK_START，现以 NOTE 补记缺口。任务＝处理 Pipeline B 积压 PR（#43~#44）并闭环巡检告警 Issue #45。不做范围：不改 curate_harvester 流水线逻辑、不改 ci.yml/deploy.yml 门禁策略、不改存量文章。
+
+### 2026-11-15 17:25 | deepseek-v4-1-flash__hermes-agent | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec
+积压 PR 第四批处理完成（PR #43~#44 合入 master，open PR 归零）+ 巡检误报闭环：
+1. 探活：2 条默沙东权威源实测 HTTP 200（HTML 落盘转纯文本通读），人工撰写《盆腔检查全流程》《外阴子宫内膜异位囊肿》并补齐 1:1 速测题，占位清零；
+2. 验证：pnpm test（57 页 + Pagefind 57 索引）、curate:check（47 篇）、test:graph（G1 47:47、G3 lcm(47,33)=1551）、curate:links（47 条零 404）；
+3. 巡检误报（Issue #45）：UNESCO 外链失败形态为读超时非 404；本地连测 3 次均 200，且故障时间窗内 unesco.org 任意文章路径（含已知正常页）均 503 ⇒ 第三方整站级瞬时抖动；同源文档库条目 pf0000392091_chi 实测 200。判定误报、不改 source_url，带证据关闭 Issue #45；
+4. PITFALL（CI 外链硬门禁）：ci.yml 的 curate:links 为阻断式（deploy.yml 已 continue-on-error 软失败），第三方瞬时超时/限流会直接卡住 CI——已作为遗留改进项报告待用户决策，未擅自改门禁策略；
+5. 回写：PROJECT_OVERVIEW 当前状态与第 26 条、.agent-context.md 基线（47 篇/47 题/57 页）。
