@@ -596,6 +596,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东明确：外阴子宫内膜异位囊肿极为少见，是痛性的、充满血液的囊肿；异位的内膜组织同样受激素影响，因此常在月经前与月经期增大并引起疼痛，破裂时会引起剧痛。医生通常在盆腔检查中即可见到或触到病灶而作出诊断，活检并非必需（但可用于确认）。治疗为手术切除，可在手术室完成、也可在诊室局麻下完成；切除的组织需活检以确定不是黑色素瘤（黑色素瘤可发生于外阴和阴道）。病灶常发生于既往手术切口处，如会阴切开术或分娩时撕裂的修复处。',
   },
+  'contraception-overview-of-contraception': {
+    articleId: 'contraception-overview-of-contraception',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
