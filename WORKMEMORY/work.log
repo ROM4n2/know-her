@@ -148,3 +148,17 @@ Caps: filesystem-read, filesystem-write, shell-exec
 3. 巡检误报（Issue #45）：UNESCO 外链失败形态为读超时非 404；本地连测 3 次均 200，且故障时间窗内 unesco.org 任意文章路径（含已知正常页）均 503 ⇒ 第三方整站级瞬时抖动；同源文档库条目 pf0000392091_chi 实测 200。判定误报、不改 source_url，带证据关闭 Issue #45；
 4. PITFALL（CI 外链硬门禁）：ci.yml 的 curate:links 为阻断式（deploy.yml 已 continue-on-error 软失败），第三方瞬时超时/限流会直接卡住 CI——已作为遗留改进项报告待用户决策，未擅自改门禁策略；
 5. 回写：PROJECT_OVERVIEW 当前状态与第 26 条、.agent-context.md 基线（47 篇/47 题/57 页）。
+
+### 2026-11-16 21:10 | hunyuan-hy__codebuddy | NOTE
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+补记说明（协议 §1.7，不回改历史）：本任务开工时未记 WORK_START，现以 NOTE 补记缺口。任务＝处理 open PR #46（Pipeline B 候选导读草稿《避孕概述：权威医学实况与科学指导》）：实测权威源可达、人工通读原文后策展撰写导读与速测题，合并入库。不做范围：不改 curate_harvester 流水线逻辑、不改 ci.yml/deploy.yml 门禁策略、不改存量文章。
+
+### 2026-11-16 21:20 | hunyuan-hy__codebuddy | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+单个候选 PR 策展入库收尾（PR #46 合入 master，open PR 归零）：
+1. 探活与核实：fetch 实测 source_url（默沙东大众版 overview-of-contraception）200 OK 且正文通读，确认主题为避孕总览、库内无同主题文章（已有安全套/紧急避孕/IUD/口服药/人流单篇，无总览篇），属真实增量；
+2. 策展撰写：清除全部机器占位与注释块，重写 title/summary 与正文（核心看点速览 + 五节深度解读 + 原出处直达），人工补 evidence_tier=B / reviewed_by=know-her 策展组 / last_verified_at=2026-11-16；速测题四项写全（围绕依从性差别与避孕套双重防护命题）；
+3. 分支纪律：gh pr checkout → 本地提交推送 → gh pr ready（回显确认非 draft）→ gh pr merge --squash --delete-branch（回显 state=MERGED, mergeCommit=543310e）→ 切回 master 同步，open PR 归零；
+4. 验证：pnpm check（48 文件 0 error/0 warning/2 既有 deprecated hints）、pnpm test:graph（9 套全绿，G1 48:48、G3 articles=48 glossary=33 lcm=528 达标）、pnpm curate:check（48 篇）、pnpm curate:links（48 篇零 404，1 条既有 403 WAF 五态降级）、pnpm build（58 页 + Pagefind 58 索引）；
+5. 回写：PROJECT_OVERVIEW 当前状态与第 27 条、.agent-context.md 基线（48 篇/48 题/58 页）已更新；
+6. 备注：本次为新 agent（hunyuan-hy__codebuddy）首次写本 work.log，model-id 与 harness 组合按协议 schema 推定，若与团队约定不符请纠正。
