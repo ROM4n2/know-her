@@ -609,6 +609,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东指出：避孕效果可用「典型使用」（大多数人真实用法）与「完美使用」（严格遵循说明）两种方式描述——口服避孕药每天都服用非常有效，但漏服会降低效果；IUD 一旦放入在更换前无需其他措施，因此通常典型使用即完美使用；习惯某方法后依从性提高，两者差距会缩小。年龄增长使生育力下降，利福平等抗生素会降低激素类避孕效果（左炔诺孕酮释放型 IUD 除外）。紧急避孕不应作为常规方式。最关键的是：避孕套虽怀孕率偏高，却能预防包括 HIV 在内的所有常见性传播感染，因此即使已用另一种避孕方法也应同时叠加使用。',
   },
+  'contraception-fertility-awareness-based-meth': {
+    articleId: 'contraception-fertility-awareness-based-meth',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
