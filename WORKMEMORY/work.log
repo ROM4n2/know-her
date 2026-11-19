@@ -162,3 +162,17 @@ Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
 4. 验证：pnpm check（48 文件 0 error/0 warning/2 既有 deprecated hints）、pnpm test:graph（9 套全绿，G1 48:48、G3 articles=48 glossary=33 lcm=528 达标）、pnpm curate:check（48 篇）、pnpm curate:links（48 篇零 404，1 条既有 403 WAF 五态降级）、pnpm build（58 页 + Pagefind 58 索引）；
 5. 回写：PROJECT_OVERVIEW 当前状态与第 27 条、.agent-context.md 基线（48 篇/48 题/58 页）已更新；
 6. 备注：本次为新 agent（hunyuan-hy__codebuddy）首次写本 work.log，model-id 与 harness 组合按协议 schema 推定，若与团队约定不符请纠正。
+
+### 2026-11-19 18:00 | hunyuan-hy__codebuddy | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+处理 Pipeline B 积压候选 PR #47~#49（工具避孕 / 易受孕期知晓避孕法 / 紧急避孕措施）：实测权威源并人工通读，撰写循证导读与 1:1 速测题，逐 PR 合入 master。
+不做范围：不改 curate_harvester 流水线逻辑、不改 ci.yml/deploy.yml 门禁策略、不新增交互工具组件、不改存量文章。
+
+### 2026-11-19 18:10 | hunyuan-hy__codebuddy | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+积压候选 PR 第六批策展入库收尾（PR #47~#49 全部 MERGED，open PR 归零）：
+1. 冗余核查：三篇均与库内既有文章（WHO 紧急避孕药、WHO 安全套选用、默沙东避孕概述）主题相邻但信源与重点不同，分别补齐屏障法全谱 / 自然避孕法 / 默沙东紧急避孕全方法失败率，均属真实增量；3 条 source_url 实测 200 并通读原文；
+2. 策展撰写：清除全部机器占位与注释块，人工撰写核心看点+深度解读+原出处直达，补 evidence_tier=B / reviewed_by / last_verified_at=2026-11-19；速测题三项写全（屏障法防 STI 唯一性、易孕窗口 5 天 vs 12 小时、铜 IUD 0.1% 与验孕节点），G1 51:51；
+3. 冲突与合并：#48/#49 基于旧 master，dailyQuiz.ts 末尾追加冲突按项目规则保留双方条目；#48 首次 merge 遇 GitHub「Base branch was modified」（CI pending → UNSTABLE），重试成功；merge commits 3055299 / 8bbc8ec / a198e7a；
+4. 验证：pnpm check（48 文件 0 error/0 warning，2 既有 deprecated hints）、pnpm test（test:graph 9 套全绿，G3 articles=51 glossary=33 lcm=561 达标、curate:check 51 篇、build 61 页 + Pagefind 61 索引）、curate:links 51 条零 404（含 1 条既有 403 WAF 五态降级）；
+5. 回写：PROJECT_OVERVIEW 当前状态与第 28 条、.agent-context.md 基线（51 篇/51 题/61 页）；临时脚本日志落 /tmp，未入库。
