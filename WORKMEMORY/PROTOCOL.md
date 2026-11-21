@@ -2,14 +2,14 @@
 > protocol-version: 1
 
 > 本文件是协议本体，所有能读写文件的 AI agent（Claude Code / Codex / OpenCode / Antigravity / Gemini CLI / CodeBuddy / …）一律遵守。
-> 协议铁律的规范层见 vault：`D:\Obsidian\Coding/01-Rules/CROSS-AGENT-MEMORY.md`。
+> 协议铁律规范层：优先用 `search_vault` MCP 检索 `CROSS-AGENT-MEMORY`（工具自解析知识库根，不依赖任何环境变量路径）；无外部知识库时以本文件为自包含真源。
 
 ---
 
 ## 1. 铁律（MUST）
 
-1. **读序**：每次会话开始处理用户请求前，按序读取：
-   `INDEX.md` → `PROJECT_OVERVIEW.md` → `work.log` 最后 50 行。
+1. **读序**：非只读或涉及状态变更时，按序读取：
+   `INDEX.md` → `PROJECT_OVERVIEW.md` → `work.log` 最新 ≤15 条事件（纯只读问答/审计可按需跳过）。
 2. **发现未闭合 WORK_START 必须先询问用户**：「上一任务 '<X>' 未收尾，继续还是重开？」——禁止自行默默继续或忽略。
 3. **追加制**：`work.log` 只允许追加（append-only），禁止读改写历史事件；唯一例外是 §5 轮转。
 4. **事件 ≤ 4KB**：单事件超限时正文写入独立文件（`NOTES-<slug>.md`）并在事件体里只留一行链接。
@@ -55,10 +55,11 @@ EOF
 
 新会话的固定动作：
 
-1. 读 `INDEX.md`（文件清单 + 主题索引 + Active handoffs）——小文件，先看这里找旧工作。
+1. 读 `INDEX.md`（**HOT 索引**：配置 + 文件清单 + Active/已归档 handoffs）。**本文件 MUST 保持极小**——
+   主题索引与蒸馏登记已下沉到 `INDEX-topics.md`（WARM 层，按需加载），别把它塞回热层。
 2. 读 `PROJECT_OVERVIEW.md`（项目 primer，60 秒建立全局认知）。
-3. `tail -n 50 WORKMEMORY/work.log`（最近事件流）；**顺手 `grep -c '^### ' WORKMEMORY/work.log`，若计数 > `HOT_RETENTION_EVENTS × 1.5` 就先按 §5 轮转再做别的**（把轮转变成读序的第一步，别等有人想起来才做）。
-4. 查旧主题：`grep -i "<关键词>" WORKMEMORY/INDEX.md` → 按索引只加载命中的 archive 文件，禁止通读全部历史。
+3. 读取 `WORKMEMORY/work.log` 最新 ≤15 条事件（如 `tail -n 50 WORKMEMORY/work.log`）；**顺手 `grep -c '^### ' WORKMEMORY/work.log`，若计数 > `HOT_RETENTION_EVENTS × 1.5` 或体积超 24KB 就先按 §5 轮转再做别的**（把轮转变成读序的第一步，别等有人想起来才做）。
+4. 查旧主题：`grep -i "<关键词>" WORKMEMORY/INDEX-topics.md` → 按索引只加载命中的 archive 文件，禁止通读全部历史。（主题索引**不在** `INDEX.md`，热层只留清单与 handoffs。）
 
 ## 4. 交接包（handoff_*.md）
 
@@ -84,9 +85,12 @@ status: open
 
 ## 5. 分层与轮转（HOT / WARM / COLD）
 
-- **HOT**：`work.log`，保留最近 `HOT_RETENTION_EVENTS` 条（配置行在 INDEX.md，默认 50）。
-- **轮转触发**：事件数超 `HOT_RETENTION_EVENTS × 1.5` 时，**下一个开始工作的 agent** 顺手执行：最老事件移入 `archive/work-YYYY-MM-DD.log`（按事件日期分片），并更新 INDEX 主题索引。
-- **WARM**：`archive/`，只经 INDEX 索引按需加载。
+- **HOT**：`work.log`，保留最近 `HOT_RETENTION_EVENTS` 条（配置行在 INDEX.md，默认 15——按「单事件 ≤4KB、热层总量 ≤ 卫生门禁的 24KB 上下文预算」反推，2026-11-17 由 50 下调）。
+- **轮转触发**（满足任一即触发）：① 事件数超 `HOT_RETENTION_EVENTS × 1.5`；② **`work.log` 体积超 24KB 上下文预算**（卫生门禁 `BUDGET` 口径）。触发后由**下一个开始工作的 agent** 顺手执行：最老事件移入 `archive/work-YYYY-MM-DD.log`（按事件日期分片），并更新 INDEX 主题索引。
+  - ② 的存在理由：单事件 ≤4KB 时，光看条数会在撞到 15×1.5=23 条之前就先撞破 24KB（15 条均值就有 ~24KB），条数不是体积的可靠代理。
+- **WARM**：`archive/`（按日分片）+ **`INDEX-topics.md`**（主题索引 / 蒸馏登记），只经索引按需加载。
+- **超限事件正文**：放 `notes/NOTES-<日期>-<时间>-<slug>.md`（事件正文 >4KB 时外置；事件里按文件名引用，
+  若该文件被移入子目录，按名检索仍可命中——事件正文按追加制不回改）。
 - **COLD**：`cold/digest-YYYY-MM.md`，仅在用户显式要求（"把上月总结成 digest"）时由 agent 蒸馏生成，并同步刷新 PROJECT_OVERVIEW.md。
 
 ### 5.1 并发守卫（轮转 = 移动，不是改写）
@@ -110,8 +114,8 @@ status: open
 
 ## 6. 与 vault 的蒸馏联动
 
-- WORKMEMORY 只存**状态与轨迹**；vault（D:\Obsidian\Coding）只存**规范与结论**。
-- 会话收尾（`/dfs-save` 或 agent 主动判定）时：work.log 中成熟的 PITFALL/DECISION → 按 vault 摄取流程沉淀（`save_inbox_draft` 或直写 99-Inbox）→ 在 INDEX.md 蒸馏登记节标注 `vault://<vault 路径>`（用 `vault://` 前缀说明性文字，不写 Obsidian wikilink，避免跨库断链）。
+- WORKMEMORY 只存**状态与轨迹**；vault（本机知识库，不随仓库分发）只存**规范与结论**。
+- 会话收尾（`/dfs-save` 或 agent 主动判定）时：work.log 中成熟的 PITFALL/DECISION → 按 vault 摄取流程沉淀（`save_inbox_draft` 或直写本机知识库收件箱）→ 在 `INDEX-topics.md` 蒸馏登记节按各仓约定标注（说明性文字，不写 wikilink，避免跨库断链）。
 - 反向：vault 规范更新若影响本项目工作方式，当前 agent 记一条 `NOTE` 指向 vault 路径。
 
 ## 7. 多机 / 云同步附录（默认不启用）
