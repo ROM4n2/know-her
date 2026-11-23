@@ -648,6 +648,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东明确：乳胶避孕套是唯一对所有常见性传播感染（淋病、梅毒、HPV、HIV）提供保护的避孕方法，小羊皮女用套不能防病毒故不推荐；隔膜与宫颈帽必须与杀精膏/凝胶同用。杀精剂每天多次使用会刺激并损伤阴道黏膜，反而提高 HIV 等病原体侵入机会；海绵典型使用怀孕率在未育女性约 12%、已育女性约 24%，已育者效果更差。',
   },
+  'body-infertility-problems-with-ovul': {
+    articleId: 'body-infertility-problems-with-ovul',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
