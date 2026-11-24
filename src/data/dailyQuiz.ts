@@ -700,6 +700,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东指出：来曲唑通常是首选，因副作用少于克罗米芬；克罗米芬对 PCOS 排卵问题最有效，约 75%~80% 使用者会排卵、已排卵者约 40%~50% 怀孕，但多胎约 5%、OHSS 不到 1%。LH 峰通常出现在排卵前 24~36 小时，试纸并非 100% 准确。PCOS 是慢性排卵问题最常见原因，与卵巢储备低下不是一回事。促排卵药须在妊娠试验阴性后由医生指导使用，人促性腺激素治疗中重度 OHSS 可达 10%~20%。',
   },
+  'body-infertility-problems-with-the-': {
+    articleId: 'body-infertility-problems-with-the-',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
