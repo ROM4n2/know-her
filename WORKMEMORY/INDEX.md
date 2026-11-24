@@ -2,7 +2,7 @@
 
 ## Configuration
 
-- HOT_RETENTION_EVENTS: 50    # work.log 热层保留事件数；轮转阈值 = 本值 × 1.5
+- HOT_RETENTION_EVENTS: 15    # work.log 热层保留事件数；轮转阈值 = 本值 × 1.5 或体积超 24KB
 
 ## 文件清单
 
@@ -19,9 +19,9 @@
 
 | 主题 | 来源文件 |
 | --- | --- |
-| 2026-09 的超长事件与 ISO 时间头事件 | `archive/work-2026-09.log`（2026-11-03 轮转） |
+| 2026-09 的超长事件与 ISO 时间头事件 | `archive/work-2026-09.log`（2026-11-03、2026-11-24 两次轮转） |
 | 2026-10 的 ISO 时间头事件 | `archive/work-2026-10.log`（2026-11-03 轮转） |
-| 其余早期决策与排障记录 | `work.log`（HOT；保留 21 事件） |
+| 其余早期决策与排障记录 | `work.log`（HOT；保留 11 事件，2026-11-24 体积轮转后） |
 
 ## Active handoffs
 
