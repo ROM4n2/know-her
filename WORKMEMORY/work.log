@@ -95,3 +95,18 @@ Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
 3. 验证：pnpm test 全绿（check 0 error/0 warning + 2 既有 deprecated hints、test:graph 9 套、G1 55:55、G3 lcm(55,33)=165、curate:check 55 篇、build 65 页 + Pagefind 65 索引）；curate:links 两轮均因存量 UNESCO《国际性教育技术指导纲要》外链 `Remote end closed connection without response` 判红（其余 54 条 200/WAF 降级通过），web-fetch 复测该站首页 403、文章路径 fetch failed ⇒ 第三方 WAF/网络故障，按「不改存量文章」范围未改 source_url；
 4. 回写：PROJECT_OVERVIEW 当前状态与第 29 条、.agent-context.md 基线（55 篇/55 题/65 页）、INDEX.md 轮转登记均已更新；
 5. 前置维护：work.log 超 24KB 触发协议轮转，15 个最早事件移入 archive/work-2026-09.log，事件头基线 diff 守恒；INDEX HOT_RETENTION_EVENTS 50→15 与 PROTOCOL 对齐。
+
+### 2026-11-27 09:10 | hunyuan-hy__codebuddy | WORK_START
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+处理 Pipeline B 积压候选 PR #55~#58（输卵管相关不育症、盆腔静脉疾病、过早绝经、月经周期问题概述）：逐条实测权威源并人工通读，撰写循证导读与 1:1 速测题，跑全量门禁后逐个合并。
+不做范围：不改 curate_harvester 流水线逻辑、不改 ci.yml/deploy.yml 门禁策略、不新增交互工具组件、不改存量文章。
+
+### 2026-11-27 15:40 | hunyuan-hy__codebuddy | WORK_END
+Caps: filesystem-read, filesystem-write, shell-exec, web-fetch
+积压候选 PR 第八批策展入库收尾（#55/#56/#57/#58 全部 MERGED，open PR 归零）：
+1. 探活与核实：4 条默沙东大众版 source_url 经 web-fetch 实测可达并通读原文；与库内正常周期指标、围绝经期潮热、盆腔疼痛分诊、排卵/宫颈黏液不孕仅相邻不重叠，属真实增量；
+2. 策展撰写：逐篇重写 title/summary/核心看点/深度解读，补 evidence_tier=B / reviewed_by / last_verified_at=2026-11-27；4 道速测题写全题干/选项/正确项/解析，占位与机器注释清零；
+3. 规范化与冲突：#55/#58 截断 slug 改为 body-infertility-problems-with-fallopian-tubes / body-overview-of-menstrual-cycle-problems 并同步题键；4 次 dailyQuiz.ts 末尾追加冲突按「取 master 版再追加本条」化解，逐分支 pnpm test 全绿后再推送合并；
+4. 最终验证：master 上 pnpm test 全绿（check 0 error/0 warning + 2 既有 deprecated hints、test:graph 9 套、G1 59:59、G3 lcm(59,33)=1947 达标、curate:check 59 篇、build 69 页 + Pagefind 69 索引）；curate:links 59 条中新 4 条全 200，存量 Mayo Clinic 本地 TLS EOF（两次重试 403 WAF），CI 一次全量巡检另遇 UNESCO connection reset，判第三方瞬时抖动，未改存量 source_url；
+5. 回写：PROJECT_OVERVIEW 当前状态与第 30 条、.agent-context.md 基线（59 篇/59 题/69 页）已更新；Issue #53 指向同两条存量外链抖动，按「不改存量文章」范围未擅自关闭；
+6. 未做范围：未改 curate_harvester 流水线、未改 ci.yml/deploy.yml 门禁策略、未新增交互工具组件、未改存量文章。
