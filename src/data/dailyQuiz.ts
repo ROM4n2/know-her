@@ -752,6 +752,15 @@ export const DAILY_QUIZZES: Record<string, QuizItem> = {
     explanation:
       '默沙东指出：下丘脑脉冲式释放 GnRH，垂体分泌 LH 与 FSH，卵巢产生雌激素与孕酮，甲状腺与肾上腺激素同样会影响卵巢功能。月经出血是卵泡期第一天；LH/FSH 激增后通常 32～36 小时排卵；黄体期由黄体分泌孕酮，未受孕时黄体退化、激素下降并再次出血。绝经定义为末次月经后 12 个月，围绝经期通常从末次月经前数年延续到之后 1 年内。育龄期月经不规律、停经或异常出血最常见原因是妊娠；经量过多或过少、持续过久、过于频繁或不规律均属异常，青春期前和绝经后出血尤其应视为异常。',
   },
+  'body-absence-of-menstrual-periods': {
+    articleId: 'body-absence-of-menstrual-periods',
+    // TODO(human): 人工补题锚点 —— 请通读原文后补全题干 / 选项 / 正确项 / 解析。
+    //   机器不得自证：禁止保留占位文字直接合并（G1 门禁强制文章↔速测题 1:1）。
+    question: '【待人工补题】请通读原文后填写速测题干',
+    options: ['【待人工补题】选项 A', '【待人工补题】选项 B'],
+    correctIndex: 0,
+    explanation: '【待人工补题】请填写简明权威原理解释',
+  },
 };
 
 /**
